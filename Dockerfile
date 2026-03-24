@@ -21,18 +21,30 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
     for attempt in 1 2 3 4 5; do \
       rm -rf /var/lib/apt/lists/*; \
-      if apt-get update -o Acquire::Retries=5 \
+      if apt-get update -o Acquire::Retries=5 -o Acquire::By-Hash=yes \
         && apt-get install -y --no-install-recommends \
+          autoconf \
+          autoconf-archive \
+          automake \
           build-essential \
           ca-certificates \
           curl \
           git \
+          libgl1-mesa-dev \
+          libglu1-mesa-dev \
+          libopengl-dev \
+          libglx-dev \
+          libxcursor-dev \
+          libxinerama-dev \
+          libtool \
+          nasm \
           ninja-build \
           pkg-config \
           python3 \
           python3-dev \
           python3-pip \
           unzip \
+          xorg-dev \
           zip \
           wget \
           gcc-14 \
@@ -80,7 +92,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
     for attempt in 1 2 3 4 5; do \
       rm -rf /var/lib/apt/lists/*; \
-      if apt-get update -o Acquire::Retries=5 \
+      if apt-get update -o Acquire::Retries=5 -o Acquire::By-Hash=yes \
         && apt-get install -y --no-install-recommends \
           ca-certificates \
           curl \
@@ -101,7 +113,7 @@ RUN set -eux; \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
     for attempt in 1 2 3 4 5; do \
       rm -rf /var/lib/apt/lists/*; \
-      if apt-get update -o Acquire::Retries=5 \
+      if apt-get update -o Acquire::Retries=5 -o Acquire::By-Hash=yes \
         && apt-get install -y --no-install-recommends nodejs; then \
         break; \
       fi; \

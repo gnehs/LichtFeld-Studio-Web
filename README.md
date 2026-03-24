@@ -35,10 +35,10 @@ node scripts/init-password.mjs your-password
 
 ```bash
 pnpm install
-pnpm dev:backend
-pnpm dev:frontend
+pnpm dev
 ```
 
+`pnpm dev` 會同時啟動前後端。  
 前端預設 `http://localhost:5173`，後端 `http://localhost:3000`。
 
 ## 3. Docker 部署

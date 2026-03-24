@@ -7,6 +7,7 @@
     "bcryptjs": "^3.0.2"
   },
   "scripts": {
+    "dev": "pnpm -r --parallel --filter @lichtfeld/backend --filter @lichtfeld/frontend dev",
     "dev:backend": "pnpm --filter @lichtfeld/backend dev",
     "dev:frontend": "pnpm --filter @lichtfeld/frontend dev",
     "build": "pnpm -r build",

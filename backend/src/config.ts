@@ -1,7 +1,32 @@
 import path from "node:path";
 import fs from "node:fs";
 
-const dataRoot = process.env.DATA_ROOT ?? "/data";
+function unquoteEnvValue(value: string): string {
+  const trimmed = value.trim();
+  if ((trimmed.startsWith("\"") && trimmed.endsWith("\"")) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function loadEnvFile(filePath: string) {
+  if (!fs.existsSync(filePath)) return;
+  const content = fs.readFileSync(filePath, "utf-8");
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    const key = match[1];
+    if (process.env[key] !== undefined) continue;
+    process.env[key] = unquoteEnvValue(match[2]);
+  }
+}
+
+loadEnvFile(path.resolve(process.cwd(), ".env"));
+loadEnvFile(path.resolve(process.cwd(), "..", ".env"));
+
+const dataRoot = process.env.DATA_ROOT ?? path.join(process.cwd(), "data");
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
