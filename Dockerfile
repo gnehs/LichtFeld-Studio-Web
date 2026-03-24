@@ -45,7 +45,7 @@ RUN wget -q https://github.com/Kitware/CMake/releases/download/v4.0.3/cmake-4.0.
     && ./cmake-4.0.3-linux-x86_64.sh --skip-license --prefix=/usr/local \
     && rm -f cmake-4.0.3-linux-x86_64.sh
 
-RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git /opt/vcpkg \
+RUN git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg \
     && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
 WORKDIR /opt/src
