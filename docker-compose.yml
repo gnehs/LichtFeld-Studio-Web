@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        LFS_REPO: ${LFS_REPO:-https://github.com/MrNeRF/LichtFeld-Studio.git}
+        LFS_REF: ${LFS_REF:-main}
+    container_name: lichtfeld-studio-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - SESSION_SECRET=${SESSION_SECRET}
+      - ADMIN_PASSWORD_HASH=${ADMIN_PASSWORD_HASH}
+      - LFS_BIN_PATH=${LFS_BIN_PATH:-/opt/lichtfeld/bin/LichtFeld-Studio}
+      - LFS_DEFAULT_LOG_LEVEL=${LFS_DEFAULT_LOG_LEVEL:-info}
+      - TIMELAPSE_MIN_FREE_GB=${TIMELAPSE_MIN_FREE_GB:-5}
+      - DISK_GUARD_INTERVAL_MS=${DISK_GUARD_INTERVAL_MS:-15000}
+      - DATA_ROOT=/data
+      - DATASETS_DIR=/data/datasets
+      - OUTPUTS_DIR=/data/outputs
+      - DB_PATH=/data/db/app.db
+      - LOGS_DIR=/data/logs
+      - DATASET_ALLOWED_ROOTS=${DATASET_ALLOWED_ROOTS:-/data/datasets}
+    volumes:
+      - ./data:/data
+    gpus: all

@@ -1,0 +1,15 @@
+{
+  "name": "lichtfeld-studio-web",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.28.2",
+  "dependencies": {
+    "bcryptjs": "^3.0.2"
+  },
+  "scripts": {
+    "dev:backend": "pnpm --filter @lichtfeld/backend dev",
+    "dev:frontend": "pnpm --filter @lichtfeld/frontend dev",
+    "build": "pnpm -r build",
+    "test": "pnpm --filter @lichtfeld/backend test"
+  }
+}

@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+**/.turbo
+.env
+.env.*
+!.env.example
+coverage
+*.log
+datasets
+db
+outputs
+logs
+data
+.DS_Store
