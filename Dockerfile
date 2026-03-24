@@ -18,23 +18,36 @@ ARG LFS_REPO=https://github.com/MrNeRF/LichtFeld-Studio.git
 ARG LFS_REF=master
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    ca-certificates \
-    curl \
-    git \
-    ninja-build \
-    pkg-config \
-    python3 \
-    python3-dev \
-    python3-pip \
-    unzip \
-    zip \
-    wget \
-    gcc-14 \
-    g++-14 \
-    gfortran-14 \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+      rm -rf /var/lib/apt/lists/*; \
+      if apt-get update -o Acquire::Retries=5 \
+        && apt-get install -y --no-install-recommends \
+          build-essential \
+          ca-certificates \
+          curl \
+          git \
+          ninja-build \
+          pkg-config \
+          python3 \
+          python3-dev \
+          python3-pip \
+          unzip \
+          zip \
+          wget \
+          gcc-14 \
+          g++-14 \
+          gfortran-14; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 5 ]; then \
+        echo "apt install failed after ${attempt} attempts"; \
+        exit 1; \
+      fi; \
+      echo "apt install failed on attempt ${attempt}, retrying..."; \
+      sleep $((attempt * 5)); \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 60 \
     && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 60 \
@@ -64,16 +77,42 @@ RUN cmake -B build \
 
 FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    unzip \
-    zip \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    for attempt in 1 2 3 4 5; do \
+      rm -rf /var/lib/apt/lists/*; \
+      if apt-get update -o Acquire::Retries=5 \
+        && apt-get install -y --no-install-recommends \
+          ca-certificates \
+          curl \
+          unzip \
+          zip; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 5 ]; then \
+        echo "runtime apt install failed after ${attempt} attempts"; \
+        exit 1; \
+      fi; \
+      echo "runtime apt install failed on attempt ${attempt}, retrying..."; \
+      sleep $((attempt * 5)); \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get update && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
+    for attempt in 1 2 3 4 5; do \
+      rm -rf /var/lib/apt/lists/*; \
+      if apt-get update -o Acquire::Retries=5 \
+        && apt-get install -y --no-install-recommends nodejs; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 5 ]; then \
+        echo "nodejs apt install failed after ${attempt} attempts"; \
+        exit 1; \
+      fi; \
+      echo "nodejs apt install failed on attempt ${attempt}, retrying..."; \
+      sleep $((attempt * 5)); \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=web-build /app /app
