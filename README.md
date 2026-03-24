@@ -69,7 +69,7 @@ Compose 只需要掛載一個資料夾：
 - 預設執行檔：`/opt/lichtfeld/bin/LichtFeld-Studio`
 - 可在 `.env` 覆蓋版本來源：
   - `LFS_REPO`
-  - `LFS_REF`
+  - `LFS_REF`（預設 `master`）
 
 ## 環境變數
 

@@ -15,7 +15,7 @@ RUN pnpm --filter @lichtfeld/frontend build && pnpm --filter @lichtfeld/backend 
 
 FROM nvidia/cuda:12.8.0-devel-ubuntu24.04 AS lfs-build
 ARG LFS_REPO=https://github.com/MrNeRF/LichtFeld-Studio.git
-ARG LFS_REF=main
+ARG LFS_REF=master
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -49,7 +49,10 @@ RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git /opt/vcpkg \
     && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
 
 WORKDIR /opt/src
-RUN git clone --recursive --branch ${LFS_REF} ${LFS_REPO} LichtFeld-Studio
+RUN git clone ${LFS_REPO} LichtFeld-Studio \
+    && cd LichtFeld-Studio \
+    && if [ -n "${LFS_REF}" ]; then git checkout "${LFS_REF}" || echo "LFS_REF not found, using default branch"; fi \
+    && git submodule update --init --recursive
 
 WORKDIR /opt/src/LichtFeld-Studio
 RUN cmake -B build \

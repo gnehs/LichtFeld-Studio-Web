@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
       args:
         LFS_REPO: ${LFS_REPO:-https://github.com/MrNeRF/LichtFeld-Studio.git}
-        LFS_REF: ${LFS_REF:-main}
+        LFS_REF: ${LFS_REF:-master}
     container_name: lichtfeld-studio-web
     restart: unless-stopped
     ports:
