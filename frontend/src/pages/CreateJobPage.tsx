@@ -1,9 +1,10 @@
 import { CreateJobWizard } from "@/features/create/CreateJobWizard";
 import type { Notice } from "@/lib/app-types";
-import type { DatasetRecord } from "@/lib/types";
+import type { DatasetFolderEntry, DatasetRecord } from "@/lib/types";
 
 export function CreateJobPage({
   datasets,
+  datasetFolders,
   onCancel,
   onCreated,
   onDatasetCreated,
@@ -11,6 +12,7 @@ export function CreateJobPage({
   onRefreshDatasets
 }: {
   datasets: DatasetRecord[];
+  datasetFolders: DatasetFolderEntry[];
   onCancel: () => void;
   onCreated: (jobId: string) => Promise<void>;
   onDatasetCreated: (dataset: DatasetRecord) => void;
@@ -21,6 +23,7 @@ export function CreateJobPage({
     <section data-route="create">
       <CreateJobWizard
         datasets={datasets}
+        datasetFolders={datasetFolders}
         onCancel={onCancel}
         onCreated={onCreated}
         onDatasetCreated={onDatasetCreated}

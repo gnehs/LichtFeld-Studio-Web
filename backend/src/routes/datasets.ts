@@ -28,7 +28,7 @@ datasetsRouter.get("/", (_req, res) => {
   } catch (error) {
     console.warn("[datasets] auto register scan failed", error);
   }
-  res.json({ items: datasetService.list() });
+  res.json({ items: datasetService.list(), folders: datasetService.listDatasetFolders() });
 });
 
 datasetsRouter.post("/upload", upload.single("file"), (req, res) => {

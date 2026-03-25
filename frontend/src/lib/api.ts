@@ -1,4 +1,4 @@
-import type { DatasetRecord, DiskGuardStatus, TimelapseFrame, TrainingJob } from "./types";
+import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, TimelapseFrame, TrainingJob } from "./types";
 
 interface UploadDatasetOptions {
   onProgress?: (progress: number) => void;
@@ -28,7 +28,7 @@ export const api = {
   login: (password: string) => request<{ success: boolean }>("/api/auth/login", { method: "POST", body: JSON.stringify({ password }) }),
   logout: () => request<{ success: boolean }>("/api/auth/logout", { method: "POST" }),
 
-  listDatasets: () => request<{ items: DatasetRecord[] }>("/api/datasets"),
+  listDatasets: () => request<{ items: DatasetRecord[]; folders: DatasetFolderEntry[] }>("/api/datasets"),
   uploadDataset: async (file: File, datasetName?: string, options?: UploadDatasetOptions) => {
     const form = new FormData();
     form.append("file", file);

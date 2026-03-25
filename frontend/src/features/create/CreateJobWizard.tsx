@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Database, RefreshCw, Sparkles, UploadCloud } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Notice } from "@/lib/app-types";
-import type { DatasetRecord, TrainingParamsForm } from "@/lib/types";
+import type { DatasetFolderEntry, DatasetRecord, TrainingParamsForm } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   calculateUploadSpeed,
@@ -52,6 +53,28 @@ const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
   totalBytes: 0,
   startedAt: null,
 };
+
+function localizeFolderReason(reason: string | null): string {
+  if (!reason) return "未知原因";
+  if (reason.includes("Missing sparse/")) return "缺少 sparse/ 目錄";
+  if (reason.includes("Missing images/")) return "缺少 images/ 目錄";
+  if (reason.includes("upload in progress")) return "上傳尚未完成";
+  if (reason.includes("still being written")) return "資料夾仍在寫入中";
+  return reason;
+}
+
+function formatFolderMeta(folder: DatasetFolderEntry): string {
+  if (folder.imageCount !== null) {
+    return `${folder.imageCount} 張照片`;
+  }
+  if (folder.health === "uploading") {
+    return "上傳中";
+  }
+  if (folder.health === "stabilizing") {
+    return "寫入穩定中";
+  }
+  return `失敗：${localizeFolderReason(folder.reason)}`;
+}
 
 function ProgressBar({ progress }: { progress: number | null }) {
   const width =
@@ -427,6 +450,7 @@ function ToggleChip({
 
 export function CreateJobWizard({
   datasets,
+  datasetFolders,
   onCancel,
   onCreated,
   onDatasetCreated,
@@ -434,6 +458,7 @@ export function CreateJobWizard({
   onRefreshDatasets,
 }: {
   datasets: DatasetRecord[];
+  datasetFolders: DatasetFolderEntry[];
   onCancel: () => void;
   onCreated: (jobId: string) => Promise<void>;
   onDatasetCreated: (dataset: DatasetRecord) => void;
@@ -448,9 +473,7 @@ export function CreateJobWizard({
   const [uploadInputKey, setUploadInputKey] = useState(0);
   const [uploadNowMs, setUploadNowMs] = useState(() => Date.now());
   const [uploadErrorDialogOpen, setUploadErrorDialogOpen] = useState(false);
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string>(
-    datasets[0]?.id ?? "",
-  );
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
   const [uploadDraft, setUploadDraft] =
     useState<PendingUploadDraft>(EMPTY_UPLOAD_DRAFT);
   const [form, setForm] = useState<CreateWizardValues>({
@@ -471,6 +494,13 @@ export function CreateJobWizard({
   const uploadFile = uploadDraft.file;
   const uploading = uploadDraft.status === "uploading";
   const uploadedDatasetId = uploadDraft.datasetId ?? "";
+  const selectableFolders = useMemo(
+    () =>
+      datasetFolders.filter(
+        (folder) => folder.isRegistered && folder.health === "ready" && Boolean(folder.datasetId),
+      ),
+    [datasetFolders],
+  );
   const activeDatasetId =
     dataSourceMode === "existing" ? selectedDatasetId : uploadedDatasetId;
   const selectedDataset = useMemo(
@@ -492,10 +522,15 @@ export function CreateJobWizard({
       : null;
 
   useEffect(() => {
-    if (datasets.length > 0 && !selectedDatasetId) {
-      setSelectedDatasetId(datasets[0].id);
+    if (selectableFolders.length === 0) {
+      setSelectedDatasetId("");
+      return;
     }
-  }, [datasets, selectedDatasetId]);
+    const currentStillValid = selectableFolders.some((folder) => folder.datasetId === selectedDatasetId);
+    if (!selectedDatasetId || !currentStillValid) {
+      setSelectedDatasetId(selectableFolders[0].datasetId ?? "");
+    }
+  }, [selectableFolders, selectedDatasetId]);
 
   useEffect(() => {
     const timer = setInterval(() => setUploadNowMs(Date.now()), 1000);
@@ -731,9 +766,6 @@ export function CreateJobWizard({
           <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
             <Database className="h-4 w-4" /> Step 1：上傳或選擇資料集
           </div>
-          <p className="mt-1 text-xs text-zinc-400">
-            不需要也不允許手動輸入資料路徑。
-          </p>
         </div>
         <div
           className={`rounded-[1.15rem] border p-4 ${step === 2 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}
@@ -741,9 +773,6 @@ export function CreateJobWizard({
           <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
             <Sparkles className="h-4 w-4" /> Step 2：參數設定
           </div>
-          <p className="mt-1 text-xs text-zinc-400">
-            Timelapse 會自動啟用，只調整間隔即可。
-          </p>
         </div>
       </div>
 
@@ -782,7 +811,7 @@ export function CreateJobWizard({
                 }
                 description={
                   dataSourceMode === "existing"
-                    ? "手動放入伺服器的資料夾必須先符合格式並完成註冊，才會出現在清單。"
+                    ? "會列出 DATASETS_DIR 內全部資料夾；可用者可直接選取，不可用者會附上原因。"
                     : "選取後自動上傳；資料集命名移到參數設定區。"
                 }
                 active
@@ -816,26 +845,47 @@ export function CreateJobWizard({
                   <>
                     <div>
                       <Label>選擇 dataset</Label>
-                      <select
-                        className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
-                        value={selectedDatasetId}
-                        onChange={(e) => setSelectedDatasetId(e.target.value)}
+                      <Select
+                        value={selectedDatasetId || undefined}
+                        onValueChange={setSelectedDatasetId}
                       >
-                        <option value="">請選擇</option>
-                        {datasets.map((dataset) => (
-                          <option key={dataset.id} value={dataset.id}>
-                            {dataset.name} ({dataset.type})
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="請選擇可用 dataset" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectLabel>所有資料夾</SelectLabel>
+                            {datasetFolders.map((folder) => {
+                              const disabled = !folder.isRegistered || folder.health !== "ready" || !folder.datasetId;
+                              const selectableDataset = folder.datasetId
+                                ? datasets.find((dataset) => dataset.id === folder.datasetId)
+                                : null;
+                              const title = selectableDataset?.name ?? folder.name;
+                              return (
+                                <SelectItem
+                                  key={folder.path}
+                                  value={folder.datasetId ?? `folder:${folder.path}`}
+                                  disabled={disabled}
+                                >
+                                  {`${title} - ${formatFolderMeta(folder)}`}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                     </div>
-                    {datasets.length === 0 ? (
+                    {datasetFolders.length === 0 ? (
                       <p className="text-sm text-amber-200">
-                        目前沒有可用 dataset，請改用 ZIP 上傳或先完成註冊。
+                        目前沒有偵測到資料夾，請先上傳 ZIP 或確認 DATASETS_DIR。
+                      </p>
+                    ) : selectableFolders.length === 0 ? (
+                      <p className="text-sm text-amber-200">
+                        目前沒有可建立任務的 dataset，請先排除失敗原因或等待寫入完成。
                       </p>
                     ) : null}
                     <p className="text-xs leading-5 text-zinc-400">
-                      如果你已經把資料集放進伺服器，但清單還沒看到，請確認資料夾格式無誤，然後重新整理資料集列表。
+                      會顯示 DATASETS_DIR 內所有資料夾；可用資料夾顯示照片數量，不可用資料夾顯示失敗原因。
                     </p>
                   </>
                 ) : (

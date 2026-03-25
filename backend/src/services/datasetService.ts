@@ -4,8 +4,13 @@ import AdmZip from "adm-zip";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
 import { repo } from "../db.js";
-import type { DatasetRecord } from "../types/models.js";
-import { evaluateDatasetForAutoRegister, UPLOAD_IN_PROGRESS_MARKER, validateDatasetStructure } from "../lib/datasetAutoRegister.js";
+import type { DatasetFolderEntry, DatasetRecord } from "../types/models.js";
+import {
+  evaluateDatasetForAutoRegister,
+  inspectDatasetFolder,
+  UPLOAD_IN_PROGRESS_MARKER,
+  validateDatasetStructure
+} from "../lib/datasetAutoRegister.js";
 
 function normalizePath(targetPath: string): string {
   return path.resolve(targetPath);
@@ -59,6 +64,34 @@ export const datasetService = {
     }
 
     return created;
+  },
+
+  listDatasetFolders() {
+    const existing = repo.listDatasets();
+    const registeredByPath = new Map(existing.map((dataset) => [normalizePath(dataset.path), dataset]));
+    const entries = fs.readdirSync(config.datasetsDir, { withFileTypes: true });
+    const folders: DatasetFolderEntry[] = [];
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+
+      const datasetPath = normalizePath(path.join(config.datasetsDir, entry.name));
+      const registered = registeredByPath.get(datasetPath);
+      const inspected = inspectDatasetFolder(datasetPath);
+      folders.push({
+        name: entry.name,
+        path: datasetPath,
+        datasetId: registered?.id ?? null,
+        isRegistered: Boolean(registered),
+        health: inspected.status,
+        reason: inspected.reason,
+        imageCount: inspected.imageCount
+      });
+    }
+
+    folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    return folders;
   },
 
   createFromUpload(params: { originalName: string; zipPath: string; datasetName?: string }) {

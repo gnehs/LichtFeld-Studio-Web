@@ -6,6 +6,16 @@ export interface DatasetRecord {
   createdAt: string;
 }
 
+export interface DatasetFolderEntry {
+  name: string;
+  path: string;
+  datasetId: string | null;
+  isRegistered: boolean;
+  health: "ready" | "uploading" | "stabilizing" | "invalid";
+  reason: string | null;
+  imageCount: number | null;
+}
+
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "stopped" | "stopped_low_disk";
 
 export interface TimelapseConfig {

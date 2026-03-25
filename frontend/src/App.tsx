@@ -4,7 +4,7 @@ import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 
 import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
 import type { JobInsight, Notice } from "@/lib/app-types";
-import type { DatasetRecord, TrainingJob } from "@/lib/types";
+import type { DatasetFolderEntry, DatasetRecord, TrainingJob } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
@@ -98,6 +98,7 @@ function App() {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [datasets, setDatasets] = useState<DatasetRecord[]>([]);
+  const [datasetFolders, setDatasetFolders] = useState<DatasetFolderEntry[]>([]);
   const [jobs, setJobs] = useState<TrainingJob[]>([]);
   const [insights, setInsights] = useState<Record<string, JobInsight>>({});
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -117,6 +118,7 @@ function App() {
   const refreshDatasets = useCallback(async () => {
     const res = await api.listDatasets();
     setDatasets(res.items);
+    setDatasetFolders(res.folders ?? []);
   }, []);
 
   const refreshJobs = useCallback(async () => {
@@ -282,6 +284,7 @@ function App() {
             element={
               <CreateJobPage
                 datasets={datasets}
+                datasetFolders={datasetFolders}
                 onCancel={() => navigate("/jobs")}
                 onDatasetCreated={(dataset) => {
                   setDatasets((prev) => {

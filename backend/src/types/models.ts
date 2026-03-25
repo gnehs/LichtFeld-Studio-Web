@@ -14,6 +14,16 @@ export interface DatasetRecord {
   createdAt: string;
 }
 
+export interface DatasetFolderEntry {
+  name: string;
+  path: string;
+  datasetId: string | null;
+  isRegistered: boolean;
+  health: "ready" | "uploading" | "stabilizing" | "invalid";
+  reason: string | null;
+  imageCount: number | null;
+}
+
 export interface TimelapseConfig {
   images: string[];
   every: number;
