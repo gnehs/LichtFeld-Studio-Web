@@ -23,6 +23,11 @@ const renameSchema = z.object({
 export const datasetsRouter = Router();
 
 datasetsRouter.get("/", (_req, res) => {
+  try {
+    datasetService.autoRegisterMissingFromDatasetsDir();
+  } catch (error) {
+    console.warn("[datasets] auto register scan failed", error);
+  }
   res.json({ items: datasetService.list() });
 });
 

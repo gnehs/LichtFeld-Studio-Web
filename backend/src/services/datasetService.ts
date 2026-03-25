@@ -5,21 +5,10 @@ import { nanoid } from "nanoid";
 import { config } from "../config.js";
 import { repo } from "../db.js";
 import type { DatasetRecord } from "../types/models.js";
+import { evaluateDatasetForAutoRegister, UPLOAD_IN_PROGRESS_MARKER, validateDatasetStructure } from "../lib/datasetAutoRegister.js";
 
 function normalizePath(targetPath: string): string {
   return path.resolve(targetPath);
-}
-
-function validateDatasetStructure(datasetPath: string): { valid: boolean; reason?: string } {
-  const sparseDir = path.join(datasetPath, "sparse");
-  const imagesDir = path.join(datasetPath, "images");
-  if (!fs.existsSync(sparseDir)) {
-    return { valid: false, reason: "Missing sparse/ directory" };
-  }
-  if (!fs.existsSync(imagesDir)) {
-    return { valid: false, reason: "Missing images/ directory" };
-  }
-  return { valid: true };
 }
 
 function isAllowedPath(targetPath: string): boolean {
@@ -36,11 +25,49 @@ export const datasetService = {
     return repo.listDatasets();
   },
 
+  autoRegisterMissingFromDatasetsDir() {
+    const existing = repo.listDatasets();
+    const knownPathSet = new Set(existing.map((item) => normalizePath(item.path)));
+    const created: DatasetRecord[] = [];
+    const entries = fs.readdirSync(config.datasetsDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
+
+      const datasetPath = normalizePath(path.join(config.datasetsDir, entry.name));
+      if (knownPathSet.has(datasetPath)) continue;
+
+      const judged = evaluateDatasetForAutoRegister(datasetPath);
+      if (!judged.ok) continue;
+
+      const record: DatasetRecord = {
+        id: nanoid(),
+        name: entry.name,
+        type: "registered",
+        path: datasetPath,
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        const item = repo.createDataset(record);
+        created.push(item);
+        knownPathSet.add(datasetPath);
+      } catch {
+        // Ignore concurrent insert races and keep list endpoint available.
+      }
+    }
+
+    return created;
+  },
+
   createFromUpload(params: { originalName: string; zipPath: string; datasetName?: string }) {
     const id = nanoid();
     const name = params.datasetName?.trim() || params.originalName.replace(/\.[^.]+$/, "");
     const extractDir = path.join(config.datasetsDir, id);
+    const markerPath = path.join(extractDir, UPLOAD_IN_PROGRESS_MARKER);
     fs.mkdirSync(extractDir, { recursive: true });
+    fs.writeFileSync(markerPath, "1");
 
     try {
       const zip = new AdmZip(params.zipPath);
@@ -64,6 +91,7 @@ export const datasetService = {
       removePathSafe(extractDir);
       throw error;
     } finally {
+      removePathSafe(markerPath);
       removePathSafe(params.zipPath);
     }
   },
