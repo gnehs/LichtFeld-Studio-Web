@@ -82,6 +82,7 @@ RUN git clone ${LFS_REPO} LichtFeld-Studio \
 WORKDIR /opt/src/LichtFeld-Studio
 RUN cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_PYTHON_STUBS=OFF \
     -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     && cmake --build build -- -j"$(nproc)" \
