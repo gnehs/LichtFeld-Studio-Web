@@ -80,7 +80,9 @@ RUN git clone ${LFS_REPO} LichtFeld-Studio \
     && git submodule update --init --recursive
 
 WORKDIR /opt/src/LichtFeld-Studio
-RUN cmake -B build \
+RUN grep -q -- "-march=native" src/core/CMakeLists.txt \
+    && sed -i 's/-O3 -DNDEBUG -march=native/-O3 -DNDEBUG/' src/core/CMakeLists.txt \
+    && cmake -B build \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_PYTHON_STUBS=OFF \
     -G Ninja \
