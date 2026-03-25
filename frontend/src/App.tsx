@@ -32,6 +32,10 @@ function DashboardShell({
   const runningCount = jobs.filter((job) => job.status === "running").length;
   const queuedCount = jobs.filter((job) => job.status === "queued").length;
   const gpu = systemMetrics?.gpu.devices[0] ?? null;
+  const vramText =
+    gpu?.memoryUsedMiB !== null && gpu?.memoryUsedMiB !== undefined && gpu?.memoryTotalMiB !== null && gpu?.memoryTotalMiB !== undefined
+      ? `${(gpu.memoryUsedMiB / 1024).toFixed(1)} / ${(gpu.memoryTotalMiB / 1024).toFixed(1)} GB`
+      : "-";
 
   return (
     <div className="min-h-screen bg-app-base pb-8 text-zinc-100">
@@ -74,7 +78,7 @@ function DashboardShell({
                 <h2 className="mt-2 max-w-2xl text-2xl font-semibold leading-tight text-zinc-50">訓練控制台</h2>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">即時監看任務進度、排隊狀態與資料集操作。</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-5">
+              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-6">
                 <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">running</p>
                   <div className="mt-2 text-2xl font-semibold text-zinc-50">{runningCount}</div>
@@ -90,6 +94,11 @@ function DashboardShell({
                 <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">gpu util</p>
                   <div className="mt-2 text-2xl font-semibold text-zinc-50">{gpu?.utilizationGpu ?? "-"}{gpu?.utilizationGpu !== null && gpu?.utilizationGpu !== undefined ? "%" : ""}</div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">vram</p>
+                  <div className="mt-2 text-sm font-semibold text-zinc-50">{vramText}</div>
+                  <div className="mt-1 text-xs text-zinc-400">{gpu?.memoryUsedPercent !== null && gpu?.memoryUsedPercent !== undefined ? `${gpu.memoryUsedPercent.toFixed(1)}%` : ""}</div>
                 </div>
                 <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">memory</p>
