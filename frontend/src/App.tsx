@@ -1,51 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ImagePlus, ListChecks, LogOut, Sparkles, XCircle } from "lucide-react";
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { ImagePlus, ListChecks, LogOut } from "lucide-react";
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
-import type { JobInsight, Notice, MessageTone } from "@/lib/app-types";
+import type { JobInsight, Notice } from "@/lib/app-types";
 import type { DatasetRecord, TrainingJob } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { LoginView } from "@/features/auth/LoginView";
-import { TaskList } from "@/features/jobs/TaskList";
-import { CreateJobWizard } from "@/features/create/CreateJobWizard";
+import { JobsPage } from "@/pages/JobsPage";
+import { CreateJobPage } from "@/pages/CreateJobPage";
 
 function isUnauthorizedError(error: unknown): boolean {
   return error instanceof Error && /unauthorized/i.test(error.message);
 }
 
-function noticeClassName(tone: MessageTone): string {
-  if (tone === "success") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
-  if (tone === "error") return "border-red-500/20 bg-red-500/10 text-red-100";
-  return "border-cyan-400/20 bg-cyan-400/10 text-cyan-100";
-}
-
 function DashboardShell({
   datasets,
-  setDatasets,
-  jobs,
-  insights,
-  nowMs,
-  notice,
-  setNotice,
   setAuthed,
-  refreshDatasets,
-  refreshJobs,
-  setNoticeText
+  jobs
 }: {
   datasets: DatasetRecord[];
-  setDatasets: React.Dispatch<React.SetStateAction<DatasetRecord[]>>;
   jobs: TrainingJob[];
-  insights: Record<string, JobInsight>;
-  nowMs: number;
-  notice: Notice | null;
-  setNotice: React.Dispatch<React.SetStateAction<Notice | null>>;
   setAuthed: React.Dispatch<React.SetStateAction<boolean>>;
-  refreshDatasets: () => Promise<void>;
-  refreshJobs: () => Promise<void>;
-  setNoticeText: (next: Notice) => void;
 }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const onJobsRoute = location.pathname === "/jobs" || location.pathname === "/";
 
   const runningCount = jobs.filter((job) => job.status === "running").length;
@@ -109,96 +87,31 @@ function DashboardShell({
             </div>
           </section>
         ) : null}
-
-        {notice ? (
-          <div className={`rounded-xl border px-4 py-3 text-sm ${noticeClassName(notice.tone)}`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2">
-                {notice.tone === "success" ? <CheckCircle2 className="h-4 w-4" /> : null}
-                {notice.tone === "error" ? <XCircle className="h-4 w-4" /> : null}
-                {notice.tone === "info" ? <Sparkles className="h-4 w-4" /> : null}
-                <span>{notice.text}</span>
-              </div>
-              <button className="text-xs underline underline-offset-4" onClick={() => setNotice(null)}>
-                關閉
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <Routes>
-          <Route path="/" element={<Navigate to="/jobs" replace />} />
-          <Route
-            path="/jobs"
-            element={
-              <TaskList
-                jobs={jobs}
-                insights={insights}
-                nowMs={nowMs}
-                onCreate={() => navigate("/create")}
-                onRefresh={refreshJobs}
-                onStop={async (id) => {
-                  try {
-                    await api.stopJob(id);
-                    setNoticeText({ tone: "success", text: `任務 ${id} 已送出停止指令` });
-                    await refreshJobs();
-                  } catch (error) {
-                    setNoticeText({ tone: "error", text: `停止任務失敗：${(error as Error).message}` });
-                  }
-                }}
-                onDelete={async (id) => {
-                  const ok = window.confirm("確定要刪除此任務？\n按「確定」會保留 Timelapse 檔案。");
-                  if (!ok) return;
-                  try {
-                    await api.deleteJob(id, false);
-                    setNoticeText({ tone: "success", text: `任務 ${id} 已刪除` });
-                    await refreshJobs();
-                  } catch (error) {
-                    setNoticeText({ tone: "error", text: `刪除失敗：${(error as Error).message}` });
-                  }
-                }}
-              />
-            }
-          />
-          <Route
-            path="/create"
-            element={
-              <CreateJobWizard
-                datasets={datasets}
-                onCancel={() => navigate("/jobs")}
-                onDatasetCreated={(dataset) => {
-                  setDatasets((prev) => {
-                    const without = prev.filter((item) => item.id !== dataset.id);
-                    return [dataset, ...without];
-                  });
-                }}
-                onCreated={async () => {
-                  await Promise.all([refreshDatasets(), refreshJobs()]);
-                  navigate("/jobs");
-                }}
-                onNotice={setNoticeText}
-                onRefreshDatasets={refreshDatasets}
-              />
-            }
-          />
-          <Route path="*" element={<Navigate to="/jobs" replace />} />
-        </Routes>
+        <Outlet />
       </main>
     </div>
   );
 }
 
 function App() {
+  const navigate = useNavigate();
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [datasets, setDatasets] = useState<DatasetRecord[]>([]);
   const [jobs, setJobs] = useState<TrainingJob[]>([]);
   const [insights, setInsights] = useState<Record<string, JobInsight>>({});
-  const [notice, setNotice] = useState<Notice | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const setNoticeText = useCallback((next: Notice) => {
-    setNotice(next);
+    if (next.tone === "success") {
+      toast.success(next.text);
+      return;
+    }
+    if (next.tone === "error") {
+      toast.error(next.text);
+      return;
+    }
+    toast.message(next.text);
   }, []);
 
   const refreshDatasets = useCallback(async () => {
@@ -325,19 +238,72 @@ function App() {
   }
 
   return (
-    <DashboardShell
-      datasets={datasets}
-      setDatasets={setDatasets}
-      jobs={jobs}
-      insights={insights}
-      nowMs={nowMs}
-      notice={notice}
-      setNotice={setNotice}
-      setAuthed={setAuthed}
-      refreshDatasets={refreshDatasets}
-      refreshJobs={refreshJobs}
-      setNoticeText={setNoticeText}
-    />
+    <>
+      <Routes>
+        <Route
+          path="/"
+          element={<DashboardShell datasets={datasets} jobs={jobs} setAuthed={setAuthed} />}
+        >
+          <Route index element={<Navigate to="/jobs" replace />} />
+          <Route
+            path="jobs"
+            element={
+              <JobsPage
+                jobs={jobs}
+                insights={insights}
+                nowMs={nowMs}
+                onCreate={() => navigate("/create")}
+                onRefresh={refreshJobs}
+                onStop={async (id) => {
+                  try {
+                    await api.stopJob(id);
+                    setNoticeText({ tone: "success", text: `任務 ${id} 已送出停止指令` });
+                    await refreshJobs();
+                  } catch (error) {
+                    setNoticeText({ tone: "error", text: `停止任務失敗：${(error as Error).message}` });
+                  }
+                }}
+                onDelete={async (id) => {
+                  const ok = window.confirm("確定要刪除此任務？\n按「確定」會保留 Timelapse 檔案。");
+                  if (!ok) return;
+                  try {
+                    await api.deleteJob(id, false);
+                    setNoticeText({ tone: "success", text: `任務 ${id} 已刪除` });
+                    await refreshJobs();
+                  } catch (error) {
+                    setNoticeText({ tone: "error", text: `刪除失敗：${(error as Error).message}` });
+                  }
+                }}
+              />
+            }
+          />
+          <Route
+            path="create"
+            element={
+              <CreateJobPage
+                datasets={datasets}
+                onCancel={() => navigate("/jobs")}
+                onDatasetCreated={(dataset) => {
+                  setDatasets((prev) => {
+                    const without = prev.filter((item) => item.id !== dataset.id);
+                    return [dataset, ...without];
+                  });
+                }}
+                onCreated={async () => {
+                  await Promise.all([refreshDatasets(), refreshJobs()]);
+                  navigate("/jobs");
+                }}
+                onNotice={setNoticeText}
+                onRefreshDatasets={refreshDatasets}
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/jobs" replace />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/jobs" replace />} />
+      </Routes>
+      <Toaster richColors position="top-right" />
+    </>
   );
 }
 

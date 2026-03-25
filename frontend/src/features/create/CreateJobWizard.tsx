@@ -5,7 +5,13 @@ import { api } from "@/lib/api";
 import type { Notice } from "@/lib/app-types";
 import type { DatasetRecord, TrainingParamsForm } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,7 +24,7 @@ import {
   normalizeUploadProgress,
   shouldAllowStepTwoWhileUploading,
   shouldAutoStartUpload,
-  type PendingUploadDraft
+  type PendingUploadDraft,
 } from "@/upload-state";
 
 interface CreateWizardValues {
@@ -44,23 +50,34 @@ const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
   error: null,
   uploadedBytes: 0,
   totalBytes: 0,
-  startedAt: null
+  startedAt: null,
 };
 
 function ProgressBar({ progress }: { progress: number | null }) {
-  const width = progress === null ? 15 : Math.round(normalizeUploadProgress(progress) * 100);
+  const width =
+    progress === null
+      ? 15
+      : Math.round(normalizeUploadProgress(progress) * 100);
   return (
     <div className="h-2 w-full overflow-hidden rounded-full border border-white/8 bg-white/[0.05]">
-      <div className="h-full rounded-full bg-[linear-gradient(90deg,rgba(103,232,249,0.95),rgba(45,212,191,0.92),rgba(255,255,255,0.85))] shadow-[0_0_18px_rgba(103,232,249,0.25)] transition-[width] duration-500" style={{ width: `${width}%` }} />
+      <div
+        className="h-full rounded-full bg-[linear-gradient(90deg,rgba(103,232,249,0.95),rgba(45,212,191,0.92),rgba(255,255,255,0.85))] shadow-[0_0_18px_rgba(103,232,249,0.25)] transition-[width] duration-500"
+        style={{ width: `${width}%` }}
+      />
     </div>
   );
 }
 
 function DatasetStructureGuide() {
   return (
-    <div className="rounded-[1rem] border border-cyan-400/15 bg-cyan-400/[0.08] p-3 text-sm text-zinc-300">
-      <p className="font-medium text-zinc-50">資料集格式需求</p>
-      <p className="mt-1">資料集根目錄必須直接包含 <code className="rounded bg-black/40 px-1 py-0.5 text-xs">images/</code> 與 <code className="rounded bg-black/40 px-1 py-0.5 text-xs">sparse/</code>。</p>
+    <div className=" *: text-sm text-zinc-300">
+      <p>
+        資料集根目錄必須直接包含{" "}
+        <code className="rounded bg-black/40 px-1 py-0.5 text-xs">images/</code>{" "}
+        與{" "}
+        <code className="rounded bg-black/40 px-1 py-0.5 text-xs">sparse/</code>
+        。
+      </p>
       <pre className="scrollbar-dark mt-3 overflow-x-auto rounded-xl border border-white/8 bg-black/80 p-3 text-xs leading-5 text-zinc-100">{`dataset/
 |- images/
 |  |- 0001.jpg
@@ -68,18 +85,35 @@ function DatasetStructureGuide() {
 |  \- ...
 \- sparse/
    \- ...`}</pre>
-      <p className="mt-2 text-xs text-zinc-400">不要多包一層外層資料夾，例如 <code className="rounded bg-black/40 px-1 py-0.5">dataset/images</code>。</p>
+      <p className="mt-2 text-xs text-zinc-400">
+        不要多包一層外層資料夾，例如{" "}
+        <code className="rounded bg-black/40 px-1 py-0.5">dataset/images</code>
+        。
+      </p>
     </div>
   );
 }
 
-function SourcePanel({ eyebrow, title, description, active, actions, children }: { eyebrow: string; title: string; description: string; active: boolean; actions?: React.ReactNode; children: React.ReactNode }) {
+function SourcePanel({
+  title,
+  description,
+  active,
+  actions,
+  children,
+}: {
+  title: string;
+  description: string;
+  active: boolean;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section className={`rounded-[1.25rem] border p-4 transition-colors ${active ? "border-cyan-300/35 bg-cyan-300/[0.05]" : "border-white/10 bg-black/20"}`}>
+    <section
+      className={`rounded-[1.25rem] border p-4 transition-colors ${active ? "border-cyan-300/35 bg-cyan-300/[0.05]" : "border-white/10 bg-black/20"}`}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/8 pb-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-zinc-500">{eyebrow}</p>
-          <h3 className="mt-2 text-sm font-semibold text-zinc-100">{title}</h3>
+          <h3 className="  text-sm font-semibold text-zinc-100">{title}</h3>
           <p className="mt-1 text-xs leading-5 text-zinc-400">{description}</p>
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -89,19 +123,53 @@ function SourcePanel({ eyebrow, title, description, active, actions, children }:
   );
 }
 
-function SourceModeButton({ active, icon, title, description, onClick }: { active: boolean; icon: React.ReactNode; title: string; description: string; onClick: () => void }) {
+function SourceModeButton({
+  active,
+  icon,
+  title,
+  description,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" onClick={onClick} className={`group flex min-w-[220px] flex-1 items-start gap-3 rounded-[1rem] border px-4 py-3 text-left transition ${active ? "border-cyan-300/35 bg-cyan-300/[0.06]" : "border-white/10 bg-black/25 hover:border-white/20 hover:bg-black/35"}`}>
-      <div className={`mt-0.5 rounded-lg border p-2 ${active ? "border-cyan-300/35 bg-cyan-300/[0.12] text-cyan-100" : "border-white/10 bg-black/30 text-zinc-300"}`}>{icon}</div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group flex min-w-[220px] flex-1 items-start gap-3 rounded-[1rem] border px-4 py-3 text-left transition ${active ? "border-cyan-300/35 bg-cyan-300/[0.06]" : "border-white/10 bg-black/25 hover:border-white/20 hover:bg-black/35"}`}
+    >
+      <div
+        className={`mt-0.5 rounded-lg border p-2 ${active ? "border-cyan-300/35 bg-cyan-300/[0.12] text-cyan-100" : "border-white/10 bg-black/30 text-zinc-300"}`}
+      >
+        {icon}
+      </div>
       <div>
         <div className="text-sm font-medium text-zinc-100">{title}</div>
-        <div className="mt-1 text-xs leading-5 text-zinc-400">{description}</div>
+        <div className="mt-1 text-xs leading-5 text-zinc-400">
+          {description}
+        </div>
       </div>
     </button>
   );
 }
 
-function UploadDropzone({ file, dragging, onPick, onFilesDropped, onDragState }: { file: File | null; dragging: boolean; onPick: () => void; onFilesDropped: (files: FileList | null) => void; onDragState: (dragging: boolean) => void }) {
+function UploadDropzone({
+  file,
+  dragging,
+  onPick,
+  onFilesDropped,
+  onDragState,
+}: {
+  file: File | null;
+  dragging: boolean;
+  onPick: () => void;
+  onFilesDropped: (files: FileList | null) => void;
+  onDragState: (dragging: boolean) => void;
+}) {
   return (
     <label
       onDragEnter={(event) => {
@@ -125,10 +193,16 @@ function UploadDropzone({ file, dragging, onPick, onFilesDropped, onDragState }:
     >
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm font-medium text-zinc-100">拖移 ZIP 到這裡，或點擊選擇檔案</p>
-          <p className="mt-1 text-xs leading-5 text-zinc-400">只接受單一 `.zip` 檔案。選取後會自動切到參數設定並開始背景上傳。</p>
+          <p className="text-sm font-medium text-zinc-100">
+            拖移 ZIP 到這裡，或點擊選擇檔案
+          </p>
+          <p className="mt-1 text-xs leading-5 text-zinc-400">
+            只接受單一 `.zip` 檔案。選取後會自動切到參數設定並開始背景上傳。
+          </p>
         </div>
-        <div className="text-xs text-zinc-500">{file ? `已選擇：${file.name}` : "尚未選擇檔案"}</div>
+        <div className="text-xs text-zinc-500">
+          {file ? `已選擇：${file.name}` : "尚未選擇檔案"}
+        </div>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" onClick={onPick}>
@@ -147,34 +221,86 @@ function CircularUploadProgress({ progress }: { progress: number }) {
 
   return (
     <svg viewBox="0 0 72 72" className="h-14 w-14">
-      <circle cx="36" cy="36" r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
-      <circle cx="36" cy="36" r={radius} fill="none" stroke="rgba(103,232,249,0.95)" strokeWidth="4" strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={offset} transform="rotate(-90 36 36)" />
-      <text x="36" y="39" textAnchor="middle" className="fill-zinc-100 text-[11px] font-semibold">{Math.round(normalized * 100)}%</text>
+      <circle
+        cx="36"
+        cy="36"
+        r={radius}
+        fill="none"
+        stroke="rgba(255,255,255,0.08)"
+        strokeWidth="4"
+      />
+      <circle
+        cx="36"
+        cy="36"
+        r={radius}
+        fill="none"
+        stroke="rgba(103,232,249,0.95)"
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        transform="rotate(-90 36 36)"
+      />
+      <text
+        x="36"
+        y="39"
+        textAnchor="middle"
+        className="fill-zinc-100 text-[11px] font-semibold"
+      >
+        {Math.round(normalized * 100)}%
+      </text>
     </svg>
   );
 }
 
-function FixedUploadDock({ draft, nowMs }: { draft: PendingUploadDraft; nowMs: number }) {
-  if (!draft.file || (draft.status !== "uploading" && draft.status !== "uploaded" && draft.status !== "error")) {
+function FixedUploadDock({
+  draft,
+  nowMs,
+}: {
+  draft: PendingUploadDraft;
+  nowMs: number;
+}) {
+  if (
+    !draft.file ||
+    (draft.status !== "uploading" &&
+      draft.status !== "uploaded" &&
+      draft.status !== "error")
+  ) {
     return null;
   }
   if (typeof document === "undefined") return null;
 
   const progress = draft.status === "uploaded" ? 1 : draft.progress;
-  const speed = draft.status === "uploaded" ? null : formatBytesPerSecond(calculateUploadSpeed(draft.uploadedBytes, draft.startedAt, nowMs));
-  const progressLabel = draft.status === "error" ? "上傳失敗" : `${Math.round(progress * 100)}%`;
+  const speed =
+    draft.status === "uploaded"
+      ? null
+      : formatBytesPerSecond(
+          calculateUploadSpeed(draft.uploadedBytes, draft.startedAt, nowMs),
+        );
+  const progressLabel =
+    draft.status === "error" ? "上傳失敗" : `${Math.round(progress * 100)}%`;
 
   return createPortal(
     <div className="pointer-events-none fixed bottom-4 left-1/2 z-[140] w-[min(calc(100vw-1rem),28rem)] -translate-x-1/2">
-      <div className={`pointer-events-auto rounded-[1rem] border px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl ${draft.status === "error" ? "border-red-400/25 bg-red-950/85" : "border-white/10 bg-black/88"}`}>
+      <div
+        className={`pointer-events-auto rounded-[1rem] border px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl ${draft.status === "error" ? "border-red-400/25 bg-red-950/85" : "border-white/10 bg-black/88"}`}
+      >
         <div className="flex items-center gap-3">
           <div className="shrink-0">
             <CircularUploadProgress progress={progress} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-zinc-100">{draft.file.name}</p>
+            <p className="truncate text-sm font-medium text-zinc-100">
+              {draft.file.name}
+            </p>
             <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
-              <span className={draft.status === "error" ? "text-red-100" : "text-zinc-300"}>{progressLabel}</span>
+              <span
+                className={
+                  draft.status === "error" ? "text-red-100" : "text-zinc-300"
+                }
+              >
+                {progressLabel}
+              </span>
               {speed ? (
                 <>
                   <span className="text-zinc-600">/</span>
@@ -182,12 +308,16 @@ function FixedUploadDock({ draft, nowMs }: { draft: PendingUploadDraft; nowMs: n
                 </>
               ) : null}
             </div>
-            {draft.status === "error" ? <p className="mt-1 truncate text-[11px] text-red-100">{draft.error ?? "上傳失敗，請重新選擇 ZIP。"}</p> : null}
+            {draft.status === "error" ? (
+              <p className="mt-1 truncate text-[11px] text-red-100">
+                {draft.error ?? "上傳失敗，請重新選擇 ZIP。"}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -196,7 +326,7 @@ function UploadFailureDialog({
   message,
   onClose,
   onRetry,
-  onReselect
+  onReselect,
 }: {
   open: boolean;
   message: string;
@@ -211,8 +341,9 @@ function UploadFailureDialog({
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-[1.25rem] border border-white/10 bg-zinc-950 px-5 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-zinc-500">upload failed</p>
-        <h3 className="mt-2 text-lg font-semibold text-zinc-50">上傳失敗，要怎麼處理？</h3>
+        <h3 className="  text-lg font-semibold text-zinc-50">
+          上傳失敗，要怎麼處理？
+        </h3>
         <p className="mt-3 text-sm leading-6 text-zinc-300">{message}</p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={onClose}>
@@ -227,16 +358,23 @@ function UploadFailureDialog({
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
-function ParameterPanel({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: React.ReactNode }) {
+function ParameterPanel({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="rounded-[1.25rem] border border-white/10 bg-black/22 p-4">
       <div className="border-b border-white/8 pb-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-zinc-500">{eyebrow}</p>
-        <h3 className="mt-2 text-sm font-semibold text-zinc-100">{title}</h3>
+        <h3 className=" text-sm font-semibold text-zinc-100">{title}</h3>
         <p className="mt-1 text-xs leading-5 text-zinc-400">{description}</p>
       </div>
       <div className="mt-4 space-y-4">{children}</div>
@@ -244,34 +382,77 @@ function ParameterPanel({ eyebrow, title, description, children }: { eyebrow: st
   );
 }
 
-function ParameterMetric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function ParameterMetric({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="rounded-[1rem] border border-white/8 bg-black/30 p-4">
-      <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">{label}</p>
+      <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+        {label}
+      </p>
       <div className="mt-2 text-lg font-semibold text-zinc-100">{value}</div>
       {hint ? <p className="mt-1 text-xs text-zinc-500">{hint}</p> : null}
     </div>
   );
 }
 
-function ToggleChip({ checked, label, onChange }: { checked: boolean; label: string; onChange: (checked: boolean) => void }) {
+function ToggleChip({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
   return (
-    <label className={`flex items-center justify-between gap-3 rounded-[1rem] border px-3 py-3 text-sm transition ${checked ? "border-cyan-300/30 bg-cyan-300/[0.08] text-zinc-100" : "border-white/10 bg-black/20 text-zinc-300"}`}>
+    <label
+      className={`flex items-center justify-between gap-3 rounded-[1rem] border px-3 py-3 text-sm transition ${checked ? "border-cyan-300/30 bg-cyan-300/[0.08] text-zinc-100" : "border-white/10 bg-black/20 text-zinc-300"}`}
+    >
       <span>{label}</span>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
     </label>
   );
 }
 
-export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreated, onNotice, onRefreshDatasets }: { datasets: DatasetRecord[]; onCancel: () => void; onCreated: (jobId: string) => Promise<void>; onDatasetCreated: (dataset: DatasetRecord) => void; onNotice: (notice: Notice) => void; onRefreshDatasets: () => Promise<void> }) {
+export function CreateJobWizard({
+  datasets,
+  onCancel,
+  onCreated,
+  onDatasetCreated,
+  onNotice,
+  onRefreshDatasets,
+}: {
+  datasets: DatasetRecord[];
+  onCancel: () => void;
+  onCreated: (jobId: string) => Promise<void>;
+  onDatasetCreated: (dataset: DatasetRecord) => void;
+  onNotice: (notice: Notice) => void;
+  onRefreshDatasets: () => Promise<void>;
+}) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [dataSourceMode, setDataSourceMode] = useState<"existing" | "upload">("existing");
+  const [dataSourceMode, setDataSourceMode] = useState<"existing" | "upload">(
+    "existing",
+  );
   const [draggingUpload, setDraggingUpload] = useState(false);
   const [uploadInputKey, setUploadInputKey] = useState(0);
   const [uploadNowMs, setUploadNowMs] = useState(() => Date.now());
   const [uploadErrorDialogOpen, setUploadErrorDialogOpen] = useState(false);
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string>(datasets[0]?.id ?? "");
-  const [uploadDraft, setUploadDraft] = useState<PendingUploadDraft>(EMPTY_UPLOAD_DRAFT);
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string>(
+    datasets[0]?.id ?? "",
+  );
+  const [uploadDraft, setUploadDraft] =
+    useState<PendingUploadDraft>(EMPTY_UPLOAD_DRAFT);
   const [form, setForm] = useState<CreateWizardValues>({
     iterations: 30000,
     strategy: "mcmc",
@@ -283,18 +464,32 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
     undistort: false,
     timelapseEvery: 100,
     logLevel: "info",
-    advancedJson: ""
+    advancedJson: "",
   });
   const [submitting, setSubmitting] = useState(false);
 
   const uploadFile = uploadDraft.file;
   const uploading = uploadDraft.status === "uploading";
   const uploadedDatasetId = uploadDraft.datasetId ?? "";
-  const activeDatasetId = dataSourceMode === "existing" ? selectedDatasetId : uploadedDatasetId;
-  const selectedDataset = useMemo(() => datasets.find((item) => item.id === activeDatasetId), [datasets, activeDatasetId]);
-  const activeDatasetLabel = dataSourceMode === "upload" ? uploadDraft.name || selectedDataset?.name || "未選擇" : selectedDataset?.name || "未選擇";
-  const canSubmit = Boolean(activeDatasetId) && !(dataSourceMode === "upload" && uploading) && !submitting;
-  const blockingReason = !activeDatasetId ? "尚未完成資料集選擇或匯入" : dataSourceMode === "upload" && uploading ? "資料集仍在背景上傳中" : null;
+  const activeDatasetId =
+    dataSourceMode === "existing" ? selectedDatasetId : uploadedDatasetId;
+  const selectedDataset = useMemo(
+    () => datasets.find((item) => item.id === activeDatasetId),
+    [datasets, activeDatasetId],
+  );
+  const activeDatasetLabel =
+    dataSourceMode === "upload"
+      ? uploadDraft.name || selectedDataset?.name || "未選擇"
+      : selectedDataset?.name || "未選擇";
+  const canSubmit =
+    Boolean(activeDatasetId) &&
+    !(dataSourceMode === "upload" && uploading) &&
+    !submitting;
+  const blockingReason = !activeDatasetId
+    ? "尚未完成資料集選擇或匯入"
+    : dataSourceMode === "upload" && uploading
+      ? "資料集仍在背景上傳中"
+      : null;
 
   useEffect(() => {
     if (datasets.length > 0 && !selectedDatasetId) {
@@ -331,7 +526,7 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
       error: null,
       uploadedBytes: 0,
       totalBytes: file?.size ?? 0,
-      startedAt: null
+      startedAt: null,
     }));
     setUploadInputKey((prev) => prev + 1);
     if (file) {
@@ -346,27 +541,63 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
     }
 
     setUploadErrorDialogOpen(false);
-    updateUploadDraft({ status: "uploading", progress: 0, error: null, uploadedBytes: 0, totalBytes: uploadFile.size, startedAt: Date.now() });
+    updateUploadDraft({
+      status: "uploading",
+      progress: 0,
+      error: null,
+      uploadedBytes: 0,
+      totalBytes: uploadFile.size,
+      startedAt: Date.now(),
+    });
     try {
       const res = await api.uploadDataset(uploadFile, undefined, {
         onProgress: (progress) => {
-          setUploadDraft((prev) => mergeUploadDraft(prev, { status: "uploading", progress: normalizeUploadProgress(progress), error: null }));
+          setUploadDraft((prev) =>
+            mergeUploadDraft(prev, {
+              status: "uploading",
+              progress: normalizeUploadProgress(progress),
+              error: null,
+            }),
+          );
         },
         onBytesProgress: (loaded, total) => {
-          setUploadDraft((prev) => mergeUploadDraft(prev, { status: "uploading", uploadedBytes: loaded, totalBytes: total, error: null }));
-        }
+          setUploadDraft((prev) =>
+            mergeUploadDraft(prev, {
+              status: "uploading",
+              uploadedBytes: loaded,
+              totalBytes: total,
+              error: null,
+            }),
+          );
+        },
       });
-      setUploadDraft((prev) => mergeUploadDraft(prev, { status: "uploaded", progress: 1, datasetId: res.item.id, error: null, name: prev.name.trim() || res.item.name, uploadedBytes: prev.totalBytes || prev.uploadedBytes, totalBytes: prev.totalBytes || prev.uploadedBytes }));
+      setUploadDraft((prev) =>
+        mergeUploadDraft(prev, {
+          status: "uploaded",
+          progress: 1,
+          datasetId: res.item.id,
+          error: null,
+          name: prev.name.trim() || res.item.name,
+          uploadedBytes: prev.totalBytes || prev.uploadedBytes,
+          totalBytes: prev.totalBytes || prev.uploadedBytes,
+        }),
+      );
       setUploadErrorDialogOpen(false);
       onDatasetCreated(res.item);
       onNotice({ tone: "success", text: `資料集 ${res.item.name} 上傳完成` });
       return res.item.id;
     } catch (error) {
-      updateUploadDraft({ status: "error", error: `上傳失敗：${(error as Error).message}` });
+      updateUploadDraft({
+        status: "error",
+        error: `上傳失敗：${(error as Error).message}`,
+      });
       setStep(1);
       setDataSourceMode("upload");
       setUploadErrorDialogOpen(true);
-      onNotice({ tone: "error", text: `上傳失敗：${(error as Error).message}` });
+      onNotice({
+        tone: "error",
+        text: `上傳失敗：${(error as Error).message}`,
+      });
       return null;
     }
   };
@@ -396,7 +627,10 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
     setStep(2);
   };
 
-  const updateForm = <K extends keyof CreateWizardValues>(key: K, value: CreateWizardValues[K]) => {
+  const updateForm = <K extends keyof CreateWizardValues>(
+    key: K,
+    value: CreateWizardValues[K],
+  ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -406,12 +640,17 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
     if (!nextName || nextName === selectedDataset?.name) return;
     const res = await api.renameDataset(activeDatasetId, nextName);
     onDatasetCreated(res.item);
-    setUploadDraft((prev) => mergeUploadDraft(prev, { datasetId: res.item.id, name: res.item.name }));
+    setUploadDraft((prev) =>
+      mergeUploadDraft(prev, { datasetId: res.item.id, name: res.item.name }),
+    );
   };
 
   const submit = async () => {
     if (dataSourceMode === "upload" && uploading) {
-      onNotice({ tone: "info", text: "資料集仍在背景上傳中，請等上傳完成後再建立任務。" });
+      onNotice({
+        tone: "info",
+        text: "資料集仍在背景上傳中，請等上傳完成後再建立任務。",
+      });
       return;
     }
     if (!activeDatasetId) {
@@ -424,10 +663,14 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
     if (form.advancedJson.trim()) {
       try {
         const parsed = JSON.parse(form.advancedJson);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("進階參數必須是 JSON 物件");
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+          throw new Error("進階參數必須是 JSON 物件");
         advanced = parsed as Partial<TrainingParamsForm>;
       } catch (error) {
-        onNotice({ tone: "error", text: `進階參數 JSON 格式錯誤：${(error as Error).message}` });
+        onNotice({
+          tone: "error",
+          text: `進階參數 JSON 格式錯誤：${(error as Error).message}`,
+        });
         return;
       }
     }
@@ -446,16 +689,22 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
         gut: form.gut,
         undistort: form.undistort,
         logLevel: form.logLevel.trim() || undefined,
-        timelapse: { images: [], every: form.timelapseEvery }
+        timelapse: { images: [], every: form.timelapseEvery },
       };
 
       delete payloadParams.dataPath;
 
-      const res = await api.createJob({ datasetId: activeDatasetId, params: payloadParams });
+      const res = await api.createJob({
+        datasetId: activeDatasetId,
+        params: payloadParams,
+      });
       onNotice({ tone: "success", text: `任務 ${res.item.id} 建立成功` });
       await onCreated(res.item.id);
     } catch (error) {
-      onNotice({ tone: "error", text: `建立任務失敗：${(error as Error).message}` });
+      onNotice({
+        tone: "error",
+        text: `建立任務失敗：${(error as Error).message}`,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -466,19 +715,35 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-zinc-50">建立新任務</h2>
-          <p className="text-sm text-zinc-400">兩步驟流程：先準備資料，再設定訓練參數。</p>
+          <p className="text-sm text-zinc-400">
+            兩步驟流程：先準備資料，再設定訓練參數。
+          </p>
         </div>
-        <Button variant="outline" onClick={onCancel}>返回任務清單</Button>
+        <Button variant="outline" onClick={onCancel}>
+          返回任務清單
+        </Button>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className={`rounded-[1.15rem] border p-4 ${step === 1 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}>
-          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100"><Database className="h-4 w-4" /> Step 1：上傳或選擇資料集</div>
-          <p className="mt-1 text-xs text-zinc-400">不需要也不允許手動輸入資料路徑。</p>
+        <div
+          className={`rounded-[1.15rem] border p-4 ${step === 1 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <Database className="h-4 w-4" /> Step 1：上傳或選擇資料集
+          </div>
+          <p className="mt-1 text-xs text-zinc-400">
+            不需要也不允許手動輸入資料路徑。
+          </p>
         </div>
-        <div className={`rounded-[1.15rem] border p-4 ${step === 2 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}>
-          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100"><Sparkles className="h-4 w-4" /> Step 2：參數設定</div>
-          <p className="mt-1 text-xs text-zinc-400">Timelapse 會自動啟用，只調整間隔即可。</p>
+        <div
+          className={`rounded-[1.15rem] border p-4 ${step === 2 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+            <Sparkles className="h-4 w-4" /> Step 2：參數設定
+          </div>
+          <p className="mt-1 text-xs text-zinc-400">
+            Timelapse 會自動啟用，只調整間隔即可。
+          </p>
         </div>
       </div>
 
@@ -486,35 +751,92 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
         <Card className="border-white/10 bg-white/[0.03]">
           <CardHeader>
             <CardTitle className="text-xl">資料集來源</CardTitle>
-            <CardDescription>你可以直接上傳 zip，或從既有 dataset 清單挑選。</CardDescription>
+            <CardDescription>
+              你可以直接上傳 zip，或從既有 dataset 清單挑選。
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid gap-3 md:grid-cols-2">
-              <SourceModeButton active={dataSourceMode === "existing"} icon={<Database className="h-4 w-4" />} title="既有資料集" description="從已註冊的 dataset 清單中選取。" onClick={() => setDataSourceMode("existing")} />
-              <SourceModeButton active={dataSourceMode === "upload"} icon={<UploadCloud className="h-4 w-4" />} title="拖移 / 上傳 ZIP" description="選取後會自動進入參數設定並背景上傳。" onClick={() => setDataSourceMode("upload")} />
+              <SourceModeButton
+                active={dataSourceMode === "existing"}
+                icon={<Database className="h-4 w-4" />}
+                title="既有資料集"
+                description="從已註冊的 dataset 清單中選取。"
+                onClick={() => setDataSourceMode("existing")}
+              />
+              <SourceModeButton
+                active={dataSourceMode === "upload"}
+                icon={<UploadCloud className="h-4 w-4" />}
+                title="拖移 / 上傳 ZIP"
+                description="選取後會自動進入參數設定並背景上傳。"
+                onClick={() => setDataSourceMode("upload")}
+              />
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
               <SourcePanel
-                eyebrow={dataSourceMode === "existing" ? "registered source" : "zip upload"}
-                title={dataSourceMode === "existing" ? "從既有資料集中選擇" : "以拖移方式上傳 ZIP"}
-                description={dataSourceMode === "existing" ? "手動放入伺服器的資料夾必須先符合格式並完成註冊，才會出現在清單。" : "選取後自動上傳；資料集命名移到參數設定區。"}
+                title={
+                  dataSourceMode === "existing"
+                    ? "從既有資料集中選擇"
+                    : "以拖移方式上傳 ZIP"
+                }
+                description={
+                  dataSourceMode === "existing"
+                    ? "手動放入伺服器的資料夾必須先符合格式並完成註冊，才會出現在清單。"
+                    : "選取後自動上傳；資料集命名移到參數設定區。"
+                }
                 active
-                actions={dataSourceMode === "existing" ? <Button type="button" variant="outline" onClick={() => { void onRefreshDatasets().then(() => onNotice({ tone: "success", text: "資料集清單已重新整理" })).catch((error) => onNotice({ tone: "error", text: `重新整理資料集失敗：${(error as Error).message}` })); }}><RefreshCw className="mr-2 h-4 w-4" /> 重新整理</Button> : null}
+                actions={
+                  dataSourceMode === "existing" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        void onRefreshDatasets()
+                          .then(() =>
+                            onNotice({
+                              tone: "success",
+                              text: "資料集清單已重新整理",
+                            }),
+                          )
+                          .catch((error) =>
+                            onNotice({
+                              tone: "error",
+                              text: `重新整理資料集失敗：${(error as Error).message}`,
+                            }),
+                          );
+                      }}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" /> 重新整理
+                    </Button>
+                  ) : null
+                }
               >
                 {dataSourceMode === "existing" ? (
                   <>
                     <div>
                       <Label>選擇 dataset</Label>
-                      <select className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100" value={selectedDatasetId} onChange={(e) => setSelectedDatasetId(e.target.value)}>
+                      <select
+                        className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
+                        value={selectedDatasetId}
+                        onChange={(e) => setSelectedDatasetId(e.target.value)}
+                      >
                         <option value="">請選擇</option>
                         {datasets.map((dataset) => (
-                          <option key={dataset.id} value={dataset.id}>{dataset.name} ({dataset.type})</option>
+                          <option key={dataset.id} value={dataset.id}>
+                            {dataset.name} ({dataset.type})
+                          </option>
                         ))}
                       </select>
                     </div>
-                    {datasets.length === 0 ? <p className="text-sm text-amber-200">目前沒有可用 dataset，請改用 ZIP 上傳或先完成註冊。</p> : null}
-                    <p className="text-xs leading-5 text-zinc-400">如果你已經把資料集放進伺服器，但清單還沒看到，請確認資料夾格式無誤，然後重新整理資料集列表。</p>
+                    {datasets.length === 0 ? (
+                      <p className="text-sm text-amber-200">
+                        目前沒有可用 dataset，請改用 ZIP 上傳或先完成註冊。
+                      </p>
+                    ) : null}
+                    <p className="text-xs leading-5 text-zinc-400">
+                      如果你已經把資料集放進伺服器，但清單還沒看到，請確認資料夾格式無誤，然後重新整理資料集列表。
+                    </p>
                   </>
                 ) : (
                   <>
@@ -522,21 +844,44 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
                       file={uploadFile}
                       dragging={draggingUpload}
                       onPick={() => {
-                        const input = document.getElementById("dataset-upload-input") as HTMLInputElement | null;
+                        const input = document.getElementById(
+                          "dataset-upload-input",
+                        ) as HTMLInputElement | null;
                         input?.click();
                       }}
                       onDragState={setDraggingUpload}
-                      onFilesDropped={(files) => applyUploadFile(files?.[0] ?? null)}
+                      onFilesDropped={(files) =>
+                        applyUploadFile(files?.[0] ?? null)
+                      }
                     />
-                    <input key={uploadInputKey} id="dataset-upload-input" type="file" accept=".zip" className="hidden" onChange={(e) => applyUploadFile(e.target.files?.[0] ?? null)} />
+                    <input
+                      key={uploadInputKey}
+                      id="dataset-upload-input"
+                      type="file"
+                      accept=".zip"
+                      className="hidden"
+                      onChange={(e) =>
+                        applyUploadFile(e.target.files?.[0] ?? null)
+                      }
+                    />
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button variant="outline" onClick={() => void goStepTwo()} disabled={!uploadFile && !uploadedDatasetId}>先調整參數</Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => void goStepTwo()}
+                        disabled={!uploadFile && !uploadedDatasetId}
+                      >
+                        先調整參數
+                      </Button>
                     </div>
                   </>
                 )}
               </SourcePanel>
 
-              <SourcePanel eyebrow="format contract" title="資料集格式需求" description="建立任務前請先確認資料集根目錄結構正確，避免上傳或註冊後才發現格式不符。" active={false}>
+              <SourcePanel
+                title="資料集格式"
+                description="建立任務前請先確認資料集根目錄結構正確，避免上傳或註冊後才發現格式不符。"
+                active={false}
+              >
                 <DatasetStructureGuide />
               </SourcePanel>
             </div>
@@ -550,32 +895,83 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
         <Card className="border-white/10 bg-white/[0.03]">
           <CardHeader>
             <CardTitle className="text-xl">訓練參數設定</CardTitle>
-            <CardDescription>目前資料集：<span className="font-medium text-zinc-50">{activeDatasetLabel}</span></CardDescription>
+            <CardDescription>
+              目前資料集：
+              <span className="font-medium text-zinc-50">
+                {activeDatasetLabel}
+              </span>
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
               <div className="space-y-4">
-                <ParameterPanel eyebrow="dataset details" title="資料集與命名" description="ZIP 選取後才在這裡命名，避免把來源選擇與命名綁在一起。">
+                <ParameterPanel
+                  title="資料集與命名"
+                  description="ZIP 選取後才在這裡命名，避免把來源選擇與命名綁在一起。"
+                >
                   <div>
                     <Label>資料集名稱</Label>
-                    <Input className="mt-2" value={uploadDraft.name} onChange={(e) => updateUploadDraft({ name: e.target.value })} placeholder="例如：garden-v2" disabled={dataSourceMode !== "upload"} />
+                    <Input
+                      className="mt-2"
+                      value={uploadDraft.name}
+                      onChange={(e) =>
+                        updateUploadDraft({ name: e.target.value })
+                      }
+                      placeholder="例如：garden-v2"
+                      disabled={dataSourceMode !== "upload"}
+                    />
                   </div>
                 </ParameterPanel>
 
-                <ParameterPanel eyebrow="core controls" title="核心訓練參數" description="先決定主要訓練強度與資料讀取策略，維持高頻操作的清楚度。">
+                <ParameterPanel
+                  title="核心訓練參數"
+                  description="先決定主要訓練強度與資料讀取策略，維持高頻操作的清楚度。"
+                >
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <ParameterMetric label="iterations" value={form.iterations.toLocaleString()} hint="steps" />
-                    <ParameterMetric label="max cap" value={form.maxCap.toLocaleString()} hint="memory / density ceiling" />
-                    <ParameterMetric label="resize" value={String(form.resizeFactor)} hint="input scale" />
+                    <ParameterMetric
+                      label="iterations"
+                      value={form.iterations.toLocaleString()}
+                      hint="steps"
+                    />
+                    <ParameterMetric
+                      label="max cap"
+                      value={form.maxCap.toLocaleString()}
+                      hint="memory / density ceiling"
+                    />
+                    <ParameterMetric
+                      label="resize"
+                      value={String(form.resizeFactor)}
+                      hint="input scale"
+                    />
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-[1rem] border border-white/8 bg-black/30 p-4">
                       <Label>Iterations</Label>
-                      <input type="range" min={5000} max={200000} step={1000} value={form.iterations} onChange={(e) => updateForm("iterations", Number(e.target.value))} className="range-dark mt-3 w-full" />
+                      <input
+                        type="range"
+                        min={5000}
+                        max={200000}
+                        step={1000}
+                        value={form.iterations}
+                        onChange={(e) =>
+                          updateForm("iterations", Number(e.target.value))
+                        }
+                        className="range-dark mt-3 w-full"
+                      />
                     </div>
                     <div className="rounded-[1rem] border border-white/8 bg-black/30 p-4">
                       <Label>Max Cap</Label>
-                      <input type="range" min={100000} max={1000000} step={50000} value={form.maxCap} onChange={(e) => updateForm("maxCap", Number(e.target.value))} className="range-dark mt-3 w-full" />
+                      <input
+                        type="range"
+                        min={100000}
+                        max={1000000}
+                        step={50000}
+                        value={form.maxCap}
+                        onChange={(e) =>
+                          updateForm("maxCap", Number(e.target.value))
+                        }
+                        className="range-dark mt-3 w-full"
+                      />
                     </div>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
@@ -583,13 +979,33 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
                       <Label>Strategy</Label>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {(["mcmc", "adc", "igs+"] as const).map((strategy) => (
-                          <Button key={strategy} variant={form.strategy === strategy ? "default" : "outline"} onClick={() => updateForm("strategy", strategy)} type="button">{strategy}</Button>
+                          <Button
+                            key={strategy}
+                            variant={
+                              form.strategy === strategy ? "default" : "outline"
+                            }
+                            onClick={() => updateForm("strategy", strategy)}
+                            type="button"
+                          >
+                            {strategy}
+                          </Button>
                         ))}
                       </div>
                     </div>
                     <div>
                       <Label>Resize Factor</Label>
-                      <select className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100" value={String(form.resizeFactor)} onChange={(e) => updateForm("resizeFactor", e.target.value === "auto" ? "auto" : (Number(e.target.value) as 1 | 2 | 4 | 8))}>
+                      <select
+                        className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
+                        value={String(form.resizeFactor)}
+                        onChange={(e) =>
+                          updateForm(
+                            "resizeFactor",
+                            e.target.value === "auto"
+                              ? "auto"
+                              : (Number(e.target.value) as 1 | 2 | 4 | 8),
+                          )
+                        }
+                      >
                         <option value="auto">auto</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
@@ -600,48 +1016,129 @@ export function CreateJobWizard({ datasets, onCancel, onCreated, onDatasetCreate
                   </div>
                 </ParameterPanel>
 
-                <ParameterPanel eyebrow="runtime details" title="輸出與執行細節" description="控制 timelapse 與日誌行為。">
+                <ParameterPanel
+                  title="輸出與執行細節"
+                  description="控制 timelapse 與日誌行為。"
+                >
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <Label>Timelapse 間隔（自動啟用）</Label>
-                      <Input className="mt-2" type="number" min={10} step={10} value={form.timelapseEvery} onChange={(e) => updateForm("timelapseEvery", Number(e.target.value || 100))} />
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={10}
+                        step={10}
+                        value={form.timelapseEvery}
+                        onChange={(e) =>
+                          updateForm(
+                            "timelapseEvery",
+                            Number(e.target.value || 100),
+                          )
+                        }
+                      />
                     </div>
                     <div>
                       <Label>Log Level</Label>
-                      <Input className="mt-2" value={form.logLevel} onChange={(e) => updateForm("logLevel", e.target.value)} />
+                      <Input
+                        className="mt-2"
+                        value={form.logLevel}
+                        onChange={(e) => updateForm("logLevel", e.target.value)}
+                      />
                     </div>
                   </div>
                 </ParameterPanel>
 
-                <ParameterPanel eyebrow="feature toggles" title="選用旗標" description="把常用布林選項整理成同樣尺寸的切換卡。">
+                <ParameterPanel
+                  title="選用旗標"
+                  description="把常用布林選項整理成同樣尺寸的切換卡。"
+                >
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <ToggleChip checked={form.eval} label="--eval" onChange={(checked) => updateForm("eval", checked)} />
-                    <ToggleChip checked={form.saveEvalImages} label="--save-eval-images" onChange={(checked) => updateForm("saveEvalImages", checked)} />
-                    <ToggleChip checked={form.gut} label="--gut" onChange={(checked) => updateForm("gut", checked)} />
-                    <ToggleChip checked={form.undistort} label="--undistort" onChange={(checked) => updateForm("undistort", checked)} />
+                    <ToggleChip
+                      checked={form.eval}
+                      label="--eval"
+                      onChange={(checked) => updateForm("eval", checked)}
+                    />
+                    <ToggleChip
+                      checked={form.saveEvalImages}
+                      label="--save-eval-images"
+                      onChange={(checked) =>
+                        updateForm("saveEvalImages", checked)
+                      }
+                    />
+                    <ToggleChip
+                      checked={form.gut}
+                      label="--gut"
+                      onChange={(checked) => updateForm("gut", checked)}
+                    />
+                    <ToggleChip
+                      checked={form.undistort}
+                      label="--undistort"
+                      onChange={(checked) => updateForm("undistort", checked)}
+                    />
                   </div>
                 </ParameterPanel>
 
-                <ParameterPanel eyebrow="advanced override" title="進階 JSON 覆寫" description="僅在需要超出預設面板的參數時使用。">
+                <ParameterPanel
+                  title="進階 JSON 覆寫"
+                  description="僅在需要超出預設面板的參數時使用。"
+                >
                   <div>
                     <Label>進階參數 JSON（可選）</Label>
-                    <Textarea className="mt-2 min-h-[160px] font-mono text-xs" placeholder='{"testEvery": 500, "enableMip": true}' value={form.advancedJson} onChange={(e) => updateForm("advancedJson", e.target.value)} />
+                    <Textarea
+                      className="mt-2 min-h-[160px] font-mono text-xs"
+                      placeholder='{"testEvery": 500, "enableMip": true}'
+                      value={form.advancedJson}
+                      onChange={(e) =>
+                        updateForm("advancedJson", e.target.value)
+                      }
+                    />
                   </div>
                 </ParameterPanel>
               </div>
 
               <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-                <ParameterPanel eyebrow="job summary" title="建立任務摘要" description="送出前快速確認資料來源、策略與阻塞原因。">
+                <ParameterPanel
+                  title="建立任務摘要"
+                  description="送出前快速確認資料來源、策略與阻塞原因。"
+                >
                   <div className="space-y-3 text-sm text-zinc-300">
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3"><span className="text-zinc-500">dataset</span><span className="max-w-[60%] truncate text-right text-zinc-100">{activeDatasetLabel}</span></div>
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3"><span className="text-zinc-500">strategy</span><span className="text-zinc-100">{form.strategy}</span></div>
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3"><span className="text-zinc-500">iterations</span><span className="text-zinc-100">{form.iterations.toLocaleString()}</span></div>
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3"><span className="text-zinc-500">timelapse</span><span className="text-zinc-100">every {form.timelapseEvery}</span></div>
+                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                      <span className="text-zinc-500">dataset</span>
+                      <span className="max-w-[60%] truncate text-right text-zinc-100">
+                        {activeDatasetLabel}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                      <span className="text-zinc-500">strategy</span>
+                      <span className="text-zinc-100">{form.strategy}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                      <span className="text-zinc-500">iterations</span>
+                      <span className="text-zinc-100">
+                        {form.iterations.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                      <span className="text-zinc-500">timelapse</span>
+                      <span className="text-zinc-100">
+                        every {form.timelapseEvery}
+                      </span>
+                    </div>
                   </div>
-                  <div className={`rounded-[1rem] border px-3 py-3 text-sm ${blockingReason ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"}`}>{blockingReason ? `目前無法建立：${blockingReason}` : "條件已齊備，可以建立任務。"}</div>
+                  <div
+                    className={`rounded-[1rem] border px-3 py-3 text-sm ${blockingReason ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"}`}
+                  >
+                    {blockingReason
+                      ? `目前無法建立：${blockingReason}`
+                      : "條件已齊備，可以建立任務。"}
+                  </div>
                   <div className="flex flex-col gap-2">
-                    <Button variant="outline" onClick={() => setStep(1)}>返回 Step 1</Button>
-                    <Button onClick={() => void submit()} disabled={!canSubmit}>{submitting ? "建立中..." : "建立任務"}</Button>
+                    <Button variant="outline" onClick={() => setStep(1)}>
+                      返回 Step 1
+                    </Button>
+                    <Button onClick={() => void submit()} disabled={!canSubmit}>
+                      {submitting ? "建立中..." : "建立任務"}
+                    </Button>
                   </div>
                 </ParameterPanel>
               </div>

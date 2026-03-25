@@ -2,7 +2,13 @@ import { useState } from "react";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 export function LoginView({ onLogin }: { onLogin: () => void }) {
@@ -21,18 +27,22 @@ export function LoginView({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div className="mx-auto mt-24 max-w-md px-4">
-      <Card className="relative overflow-hidden border-white/10 bg-black/55">
+    <div className="mx-auto  max-w-md px-4 py-12">
+      <Card className="relative  overflow-hidden border-white/10 bg-black/55">
         <CardHeader>
-          <div className="mb-2 flex items-center gap-2">
-            <Badge variant="outline">secure console</Badge>
-          </div>
-          <CardTitle className="font-semibold text-zinc-50">LichtFeld-Studio Web</CardTitle>
+          <CardTitle className="font-semibold text-zinc-50">
+            LichtFeld-Studio Web
+          </CardTitle>
           <CardDescription>請輸入管理密碼以進入暗色控制台。</CardDescription>
         </CardHeader>
         <form onSubmit={submit}>
           <CardContent className="space-y-3">
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+            />
             {error ? <p className="text-sm text-red-300">{error}</p> : null}
             <Button className="w-full" type="submit">
               Login

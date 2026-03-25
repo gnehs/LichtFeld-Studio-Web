@@ -38,16 +38,26 @@ html {
 }
 
 body {
-  min-height: 100vh;
+  min-height: 100svh;
   background:
-    radial-gradient(circle at top left, rgba(34, 211, 238, 0.1), transparent 24%),
-    radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.055), transparent 18%),
+    radial-gradient(
+      circle at top left,
+      rgba(34, 211, 238, 0.1),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 85% 12%,
+      rgba(255, 255, 255, 0.055),
+      transparent 18%
+    ),
     linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 30%),
     #09090b;
   color: var(--color-foreground);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-family: "IBM Plex Sans", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-family:
+    "IBM Plex Sans", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei",
+    sans-serif;
   letter-spacing: -0.01em;
 }
 
@@ -77,9 +87,21 @@ button:not(:disabled),
 
 .bg-app-base {
   background:
-    radial-gradient(circle at top left, rgba(34, 211, 238, 0.09), transparent 26%),
-    radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.035), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 18%),
+    radial-gradient(
+      circle at top left,
+      rgba(34, 211, 238, 0.09),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(255, 255, 255, 0.035),
+      transparent 24%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.025),
+      rgba(255, 255, 255, 0) 18%
+    ),
     linear-gradient(180deg, #101014 0%, #09090b 100%);
 }
 
@@ -98,10 +120,25 @@ button:not(:disabled),
   opacity: 0.12;
   mix-blend-mode: soft-light;
   background-image:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px),
-    radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px),
-    radial-gradient(circle at 50% 80%, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px);
-  background-size: 18px 18px, 22px 22px, 16px 16px;
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(255, 255, 255, 0.12) 0 1px,
+      transparent 1px
+    ),
+    radial-gradient(
+      circle at 80% 30%,
+      rgba(255, 255, 255, 0.08) 0 1px,
+      transparent 1px
+    ),
+    radial-gradient(
+      circle at 50% 80%,
+      rgba(255, 255, 255, 0.08) 0 1px,
+      transparent 1px
+    );
+  background-size:
+    18px 18px,
+    22px 22px,
+    16px 16px;
 }
 
 .range-dark {
