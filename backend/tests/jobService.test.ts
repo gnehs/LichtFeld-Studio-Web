@@ -87,4 +87,67 @@ describe("jobService disk status", () => {
 
     expect(logContent).toContain("[spawn-error] libmissing.so not found");
   });
+
+  it("returns persisted log lines or stored error message for failed jobs", async () => {
+    vi.resetModules();
+
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lfs-job-service-history-"));
+    const datasetsDir = path.join(root, "datasets");
+    const outputsDir = path.join(root, "outputs");
+    const logsDir = path.join(root, "logs");
+    const dbPath = path.join(root, "db", "app.db");
+    fs.mkdirSync(logsDir, { recursive: true });
+
+    process.env.DATA_ROOT = root;
+    process.env.DATASETS_DIR = datasetsDir;
+    process.env.OUTPUTS_DIR = outputsDir;
+    process.env.LOGS_DIR = logsDir;
+    process.env.DB_PATH = dbPath;
+    process.env.DATASET_ALLOWED_ROOTS = datasetsDir;
+    process.env.LFS_BIN_PATH = "/opt/lichtfeld/bin/LichtFeld-Studio";
+    process.env.SESSION_SECRET = "test-session-secret";
+    process.env.ADMIN_PASSWORD_HASH = "$2a$10$8QfQh49Fzi6zpbW6A2fBXeJvlaQt1zArQXd1LSeXfhBF3nf6/DrxW";
+
+    const { repo } = await import("../src/db.js");
+    const { jobService } = await import("../src/services/jobService.js");
+
+    repo.createJob({
+      id: "job-log-file",
+      datasetId: null,
+      status: "failed",
+      outputPath: path.join(outputsDir, "job-log-file"),
+      argsJson: "[]",
+      paramsJson: "{}",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      startedAt: null,
+      finishedAt: null,
+      pid: null,
+      exitCode: 127,
+      errorMessage: null,
+      stopReason: null,
+    });
+
+    fs.writeFileSync(path.join(logsDir, "job-log-file.log"), "first line\nsecond line\n");
+    expect(jobService.getLogLines("job-log-file")).toEqual(["first line", "second line"]);
+
+    repo.createJob({
+      id: "job-error-only",
+      datasetId: null,
+      status: "failed",
+      outputPath: path.join(outputsDir, "job-error-only"),
+      argsJson: "[]",
+      paramsJson: "{}",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      startedAt: null,
+      finishedAt: null,
+      pid: null,
+      exitCode: 127,
+      errorMessage: "libmissing.so not found",
+      stopReason: null,
+    });
+
+    expect(jobService.getLogLines("job-error-only")).toEqual(["[error] libmissing.so not found"]);
+  });
 });

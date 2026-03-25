@@ -41,7 +41,30 @@ class JobService {
   }
 
   getLogLines(jobId: string) {
-    return this.logs.get(jobId) ?? [];
+    const buffered = this.logs.get(jobId);
+    if (buffered && buffered.length > 0) {
+      return buffered;
+    }
+
+    const persistedLogPath = path.join(config.logsDir, `${jobId}.log`);
+    if (fs.existsSync(persistedLogPath)) {
+      const persisted = fs
+        .readFileSync(persistedLogPath, "utf-8")
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter(Boolean);
+      if (persisted.length > 0) {
+        this.logs.set(jobId, persisted);
+        return persisted;
+      }
+    }
+
+    const job = repo.getJob(jobId);
+    if (job?.errorMessage) {
+      return [`[error] ${job.errorMessage}`];
+    }
+
+    return [];
   }
 
   createJob(input: CreateJobInput) {
