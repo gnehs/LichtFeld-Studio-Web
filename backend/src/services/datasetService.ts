@@ -27,6 +27,10 @@ function isAllowedPath(targetPath: string): boolean {
   return config.allowedDatasetRoots.some((root) => normalized.startsWith(root));
 }
 
+function removePathSafe(targetPath: string) {
+  fs.rmSync(targetPath, { recursive: true, force: true });
+}
+
 export const datasetService = {
   list() {
     return repo.listDatasets();
@@ -38,23 +42,49 @@ export const datasetService = {
     const extractDir = path.join(config.datasetsDir, id);
     fs.mkdirSync(extractDir, { recursive: true });
 
-    const zip = new AdmZip(params.zipPath);
-    zip.extractAllTo(extractDir, true);
+    try {
+      const zip = new AdmZip(params.zipPath);
+      zip.extractAllTo(extractDir, true);
 
-    const structure = validateDatasetStructure(extractDir);
-    if (!structure.valid) {
-      throw new Error(`Invalid dataset: ${structure.reason}`);
+      const structure = validateDatasetStructure(extractDir);
+      if (!structure.valid) {
+        throw new Error(`Invalid dataset: ${structure.reason}`);
+      }
+
+      const record: DatasetRecord = {
+        id,
+        name,
+        type: "upload",
+        path: extractDir,
+        createdAt: new Date().toISOString()
+      };
+
+      return repo.createDataset(record);
+    } catch (error) {
+      removePathSafe(extractDir);
+      throw error;
+    } finally {
+      removePathSafe(params.zipPath);
+    }
+  },
+
+  rename(id: string, datasetName: string) {
+    const existing = repo.getDataset(id);
+    if (!existing) {
+      throw new Error(`Dataset not found: ${id}`);
     }
 
-    const record: DatasetRecord = {
-      id,
-      name,
-      type: "upload",
-      path: extractDir,
-      createdAt: new Date().toISOString()
-    };
+    const nextName = datasetName.trim();
+    if (!nextName) {
+      throw new Error("datasetName is required");
+    }
 
-    return repo.createDataset(record);
+    const updated = repo.updateDatasetName(id, nextName);
+    if (!updated) {
+      throw new Error(`Dataset not found: ${id}`);
+    }
+
+    return updated;
   },
 
   createFromPath(params: { datasetName: string; targetPath: string }) {

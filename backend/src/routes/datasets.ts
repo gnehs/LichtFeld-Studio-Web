@@ -16,6 +16,10 @@ const registerSchema = z.object({
   targetPath: z.string().min(1)
 });
 
+const renameSchema = z.object({
+  datasetName: z.string().min(1)
+});
+
 export const datasetsRouter = Router();
 
 datasetsRouter.get("/", (_req, res) => {
@@ -48,6 +52,20 @@ datasetsRouter.post("/register-path", (req, res) => {
 
   try {
     const item = datasetService.createFromPath(parsed.data);
+    return res.json({ item });
+  } catch (error) {
+    return res.status(400).json({ message: (error as Error).message });
+  }
+});
+
+datasetsRouter.patch("/:id", (req, res) => {
+  const parsed = renameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: parsed.error.message });
+  }
+
+  try {
+    const item = datasetService.rename(req.params.id, parsed.data.datasetName);
     return res.json({ item });
   } catch (error) {
     return res.status(400).json({ message: (error as Error).message });

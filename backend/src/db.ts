@@ -119,6 +119,11 @@ export const repo = {
     return row ? mapDataset(row) : null;
   },
 
+  updateDatasetName(id: string, name: string) {
+    db.prepare("UPDATE datasets SET name = ? WHERE id = ?").run(name, id);
+    return this.getDataset(id);
+  },
+
   createJob(job: JobRecord) {
     db.prepare(
       `INSERT INTO jobs (id, dataset_id, status, output_path, args_json, params_json, created_at, updated_at, started_at, finished_at, pid, exit_code, error_message, stop_reason)

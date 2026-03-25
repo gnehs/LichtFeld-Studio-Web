@@ -1,5 +1,10 @@
 import type { DatasetRecord, DiskGuardStatus, TimelapseFrame, TrainingJob } from "./types";
 
+interface UploadDatasetOptions {
+  onProgress?: (progress: number) => void;
+  onBytesProgress?: (loaded: number, total: number) => void;
+}
+
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     credentials: "include",
@@ -24,29 +29,64 @@ export const api = {
   logout: () => request<{ success: boolean }>("/api/auth/logout", { method: "POST" }),
 
   listDatasets: () => request<{ items: DatasetRecord[] }>("/api/datasets"),
-  uploadDataset: async (file: File, datasetName?: string) => {
+  uploadDataset: async (file: File, datasetName?: string, options?: UploadDatasetOptions) => {
     const form = new FormData();
     form.append("file", file);
     if (datasetName) {
       form.append("datasetName", datasetName);
     }
 
-    const response = await fetch("/api/datasets/upload", {
-      method: "POST",
-      credentials: "include",
-      body: form
-    });
+    return new Promise<{ item: DatasetRecord }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/datasets/upload", true);
+      xhr.withCredentials = true;
 
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.message ?? response.statusText);
-    }
-    return response.json() as Promise<{ item: DatasetRecord }>;
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) {
+          return;
+        }
+        options?.onBytesProgress?.(event.loaded, event.total);
+        options?.onProgress?.(event.loaded / event.total);
+      };
+
+      xhr.onerror = () => {
+        reject(new Error("Network error"));
+      };
+
+      xhr.onload = () => {
+        let body: { item?: DatasetRecord; message?: string } = {};
+        try {
+          body = xhr.responseText ? (JSON.parse(xhr.responseText) as { item?: DatasetRecord; message?: string }) : {};
+        } catch {
+          body = {};
+        }
+
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error(body.message ?? `HTTP ${xhr.status}`));
+          return;
+        }
+
+        if (!body.item) {
+          reject(new Error("Upload succeeded but response is missing dataset item"));
+          return;
+        }
+
+        options?.onProgress?.(1);
+        resolve({ item: body.item });
+      };
+
+      xhr.send(form);
+    });
   },
   registerDatasetPath: (datasetName: string, targetPath: string) =>
     request<{ item: DatasetRecord }>("/api/datasets/register-path", {
       method: "POST",
       body: JSON.stringify({ datasetName, targetPath })
+    }),
+  renameDataset: (id: string, datasetName: string) =>
+    request<{ item: DatasetRecord }>(`/api/datasets/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ datasetName })
     }),
 
   listJobs: () => request<{ items: TrainingJob[] }>("/api/jobs"),
