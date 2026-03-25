@@ -1,36 +1,127 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+TC:wght@400;500;700&display=swap");
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@theme {
+  --color-background: hsl(240 9% 6%);
+  --color-foreground: hsl(210 20% 95%);
+  --color-ring-offset-background: hsl(240 9% 6%);
+  --color-card: hsl(240 10% 9%);
+  --color-card-foreground: hsl(210 20% 95%);
+  --color-primary: hsl(0 0% 96%);
+  --color-primary-foreground: hsl(240 10% 6%);
+  --color-secondary: hsl(240 7% 14%);
+  --color-secondary-foreground: hsl(210 20% 95%);
+  --color-muted: hsl(240 7% 12%);
+  --color-muted-foreground: hsl(220 9% 63%);
+  --color-accent: hsl(191 91% 54%);
+  --color-accent-foreground: hsl(240 10% 6%);
+  --color-destructive: hsl(0 72% 54%);
+  --color-destructive-foreground: hsl(210 20% 95%);
+  --color-border: hsl(240 8% 20%);
+  --color-input: hsl(240 8% 20%);
+  --color-ring: hsl(191 91% 54%);
+
+  --radius-xs: 0.5rem;
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.35rem;
+}
 
 :root {
-  --background: 210 33% 98%;
-  --foreground: 216 28% 16%;
-  --card: 0 0% 100%;
-  --card-foreground: 216 28% 16%;
-  --primary: 204 94% 42%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 212 36% 94%;
-  --secondary-foreground: 216 28% 16%;
-  --muted: 212 36% 94%;
-  --muted-foreground: 216 16% 45%;
-  --accent: 198 76% 92%;
-  --accent-foreground: 216 28% 16%;
-  --destructive: 0 78% 56%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214 28% 86%;
-  --input: 214 28% 86%;
-  --ring: 204 94% 42%;
-  --radius: 0.75rem;
+  --background: var(--color-background);
+  --foreground: var(--color-foreground);
+}
+
+html {
+  color-scheme: dark;
 }
 
 body {
-  @apply bg-background text-foreground antialiased;
-  font-family: "Noto Sans TC", "IBM Plex Sans", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.1), transparent 24%),
+    radial-gradient(circle at 85% 12%, rgba(255, 255, 255, 0.055), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 30%),
+    #09090b;
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: "IBM Plex Sans", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+code,
+pre,
+.font-mono {
+  font-family: "JetBrains Mono", "IBM Plex Mono", monospace;
+}
+
+*,
+::after,
+::before,
+::backdrop,
+::file-selector-button {
+  border-color: var(--color-border);
+}
+
+button:not(:disabled),
+[role="button"]:not(:disabled) {
+  cursor: pointer;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.3);
+  color: white;
 }
 
 .bg-app-base {
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.09), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.035), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 18%),
+    linear-gradient(180deg, #101014 0%, #09090b 100%);
+}
+
+.panel-grid {
   background-image:
-    radial-gradient(circle at 0% 0%, rgba(14, 165, 233, 0.12), transparent 30%),
-    radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.12), transparent 35%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.94) 45%, rgba(241, 245, 249, 0.98) 100%);
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.noise-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  mix-blend-mode: soft-light;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px),
+    radial-gradient(circle at 50% 80%, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px);
+  background-size: 18px 18px, 22px 22px, 16px 16px;
+}
+
+.range-dark {
+  accent-color: #67e8f9;
+}
+
+.scrollbar-dark {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.scrollbar-dark::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: transparent;
 }

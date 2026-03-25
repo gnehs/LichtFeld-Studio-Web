@@ -175,9 +175,9 @@ function progressText(progress: number | null): string {
 function ProgressBar({ progress }: { progress: number | null }) {
   const width = progress === null ? 15 : Math.round(clampProgress(progress) * 100);
   return (
-    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+    <div className="h-2 w-full overflow-hidden rounded-full border border-white/8 bg-white/[0.05]">
       <div
-        className="h-full rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-500 transition-[width] duration-500"
+        className="h-full rounded-full bg-[linear-gradient(90deg,rgba(103,232,249,0.95),rgba(45,212,191,0.92),rgba(255,255,255,0.85))] shadow-[0_0_18px_rgba(103,232,249,0.25)] transition-[width] duration-500"
         style={{ width: `${width}%` }}
       />
     </div>
@@ -188,7 +188,8 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async () => {
+  const submit = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
     try {
       setError(null);
       await api.login(password);
@@ -200,18 +201,23 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
 
   return (
     <div className="mx-auto mt-24 max-w-md px-4">
-      <Card className="border-slate-200 bg-white/95 shadow-xl backdrop-blur">
+      <Card className="relative overflow-hidden border-white/10 bg-black/55">
         <CardHeader>
-          <CardTitle className="font-semibold">LichtFeld-Studio Web</CardTitle>
-          <CardDescription>請輸入管理密碼</CardDescription>
+          <div className="mb-2 flex items-center gap-2">
+            <Badge variant="outline">secure console</Badge>
+          </div>
+          <CardTitle className="font-semibold text-zinc-50">LichtFeld-Studio Web</CardTitle>
+          <CardDescription>請輸入管理密碼以進入暗色控制台。</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          <Button className="w-full" onClick={submit}>
-            Login
-          </Button>
-        </CardContent>
+        <form onSubmit={submit}>
+          <CardContent className="space-y-3">
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" />
+            {error ? <p className="text-sm text-red-300">{error}</p> : null}
+            <Button className="w-full" type="submit">
+              Login
+            </Button>
+          </CardContent>
+        </form>
       </Card>
     </div>
   );
@@ -219,12 +225,12 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/80 p-10 text-center shadow-sm">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-sky-700">
+    <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-white/[0.03] p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-cyan-200">
         <ListChecks className="h-7 w-7" />
       </div>
-      <h2 className="mt-4 text-2xl font-semibold text-slate-900">目前還沒有任務</h2>
-      <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">上傳 zip 或選擇既有 dataset 後，即可建立新任務並在這裡追蹤縮圖、進度、執行時間與 ETA。</p>
+      <h2 className="mt-4 text-2xl font-semibold text-zinc-50">目前還沒有任務</h2>
+      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">上傳 zip 或選擇既有 dataset 後，即可建立新任務並在這裡追蹤縮圖、進度、執行時間與 ETA。</p>
       <Button className="mt-6" onClick={onCreate}>
         <Plus className="mr-2 h-4 w-4" /> 新增任務
       </Button>
@@ -257,8 +263,8 @@ function TaskList({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">任務清單</h2>
-          <p className="text-sm text-slate-600">首頁即時更新目前訓練狀態與 Timelapse 縮圖。</p>
+          <h2 className="text-lg font-semibold text-zinc-50">任務清單</h2>
+          <p className="text-sm text-zinc-400">首頁即時更新目前訓練狀態與 Timelapse 縮圖。</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => void onRefresh()}>
@@ -270,10 +276,10 @@ function TaskList({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-xl">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/80">
+            <TableRow className="bg-white/[0.03]">
               <TableHead>任務</TableHead>
               <TableHead>縮圖</TableHead>
               <TableHead>進度</TableHead>
@@ -299,20 +305,20 @@ function TaskList({
                 <TableRow key={job.id} className="align-top">
                   <TableCell>
                     <div className="space-y-2">
-                      <div className="font-mono text-xs text-slate-700">{job.id}</div>
+                      <div className="font-mono text-[11px] text-zinc-500">{job.id}</div>
                       <Badge variant={statusBadgeVariant(job.status)}>{statusText(job.status)}</Badge>
-                      <div className="text-xs text-slate-500">建立於 {new Date(job.createdAt).toLocaleString()}</div>
+                      <div className="text-xs text-zinc-500">建立於 {new Date(job.createdAt).toLocaleString()}</div>
                     </div>
                   </TableCell>
                   <TableCell>
                     {thumbnail ? (
                       <img
-                        className="h-20 w-32 rounded-lg border border-slate-200 object-cover"
+                        className="h-20 w-32 rounded-xl border border-white/10 object-cover"
                         src={`/api/jobs/${job.id}/timelapse/frame?path=${encodeURIComponent(thumbnail)}`}
                         alt={`job-${job.id}`}
                       />
                     ) : (
-                      <div className="flex h-20 w-32 items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-500">
+                      <div className="flex h-20 w-32 items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-zinc-500">
                         尚無縮圖
                       </div>
                     )}
@@ -320,12 +326,12 @@ function TaskList({
                   <TableCell className="min-w-[180px]">
                     <div className="space-y-2">
                       <ProgressBar progress={metrics.progress} />
-                      <div className="text-xs text-slate-600">{progressText(metrics.progress)}</div>
+                      <div className="text-xs text-zinc-400">{progressText(metrics.progress)}</div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm text-slate-700">{formatDuration(runElapsed)}</TableCell>
-                  <TableCell className="text-sm text-slate-700">{formatDuration(elapsedFromCreate)}</TableCell>
-                  <TableCell className="text-sm text-slate-700">{formatEta(metrics.etaMs)}</TableCell>
+                  <TableCell className="text-sm text-zinc-300">{formatDuration(runElapsed)}</TableCell>
+                  <TableCell className="text-sm text-zinc-300">{formatDuration(elapsedFromCreate)}</TableCell>
+                  <TableCell className="text-sm text-zinc-300">{formatEta(metrics.etaMs)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
                       {(job.status === "queued" || job.status === "running") ? (
@@ -496,8 +502,8 @@ function CreateJobWizard({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">建立新任務</h2>
-          <p className="text-sm text-slate-600">兩步驟流程：先準備資料，再設定訓練參數。</p>
+          <h2 className="text-lg font-semibold text-zinc-50">建立新任務</h2>
+          <p className="text-sm text-zinc-400">兩步驟流程：先準備資料，再設定訓練參數。</p>
         </div>
         <Button variant="outline" onClick={onCancel}>
           返回任務清單
@@ -505,22 +511,22 @@ function CreateJobWizard({
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className={`rounded-xl border p-4 ${step === 1 ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <div className={`rounded-[1.15rem] border p-4 ${step === 1 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}>
+          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
             <Database className="h-4 w-4" /> Step 1：上傳或選擇資料集
           </div>
-          <p className="mt-1 text-xs text-slate-600">不需要也不允許手動輸入資料路徑。</p>
+          <p className="mt-1 text-xs text-zinc-400">不需要也不允許手動輸入資料路徑。</p>
         </div>
-        <div className={`rounded-xl border p-4 ${step === 2 ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"}`}>
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <div className={`rounded-[1.15rem] border p-4 ${step === 2 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}>
+          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
             <Sparkles className="h-4 w-4" /> Step 2：參數設定
           </div>
-          <p className="mt-1 text-xs text-slate-600">Timelapse 會自動啟用，只調整間隔即可。</p>
+          <p className="mt-1 text-xs text-zinc-400">Timelapse 會自動啟用，只調整間隔即可。</p>
         </div>
       </div>
 
       {step === 1 ? (
-        <Card className="border-slate-200 bg-white/90 shadow-sm backdrop-blur">
+        <Card className="border-white/10 bg-white/[0.03]">
           <CardHeader>
             <CardTitle className="text-xl">資料集來源</CardTitle>
             <CardDescription>你可以直接上傳 zip，或從既有 dataset 清單挑選。</CardDescription>
@@ -539,7 +545,7 @@ function CreateJobWizard({
               <div className="space-y-3">
                 <Label>選擇 dataset</Label>
                 <select
-                  className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                  className="h-9 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
                   value={selectedDatasetId}
                   onChange={(e) => setSelectedDatasetId(e.target.value)}
                 >
@@ -550,10 +556,24 @@ function CreateJobWizard({
                     </option>
                   ))}
                 </select>
-                {datasets.length === 0 ? <p className="text-sm text-amber-700">目前沒有可用 dataset，請切換到「上傳 zip」。</p> : null}
+                {datasets.length === 0 ? <p className="text-sm text-amber-200">目前沒有可用 dataset，請切換到「上傳 zip」。</p> : null}
               </div>
             ) : (
-              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="space-y-3 rounded-[1.15rem] border border-white/10 bg-black/20 p-4">
+                <div className="rounded-[1rem] border border-cyan-400/15 bg-cyan-400/[0.08] p-3 text-sm text-zinc-300">
+                  <p className="font-medium text-zinc-50">ZIP 內的資料夾結構需求</p>
+                  <p className="mt-1">解壓後的根目錄必須直接包含 <code className="rounded bg-black/40 px-1 py-0.5 text-xs">images/</code> 與 <code className="rounded bg-black/40 px-1 py-0.5 text-xs">sparse/</code>。</p>
+                  <pre className="scrollbar-dark mt-3 overflow-x-auto rounded-xl border border-white/8 bg-black/80 p-3 text-xs leading-5 text-zinc-100">
+{`dataset.zip
+|- images/
+|  |- 0001.jpg
+|  |- 0002.jpg
+|  \- ...
+\- sparse/
+   \- ...`}
+                  </pre>
+                  <p className="mt-2 text-xs text-zinc-400">請不要再多包一層外層資料夾，例如 <code className="rounded bg-black/40 px-1 py-0.5">dataset/images</code>。</p>
+                </div>
                 <div>
                   <Label>名稱（可選）</Label>
                   <Input value={uploadName} onChange={(e) => setUploadName(e.target.value)} placeholder="例如：garden-v2" />
@@ -566,7 +586,7 @@ function CreateJobWizard({
                   <Button variant="outline" onClick={() => void uploadZip()} disabled={uploading}>
                     <UploadCloud className="mr-2 h-4 w-4" /> {uploading ? "上傳中..." : "先上傳 dataset"}
                   </Button>
-                  {uploadedDatasetId ? <span className="text-xs text-emerald-700">已完成上傳並選取此 dataset</span> : null}
+                  {uploadedDatasetId ? <span className="text-xs text-emerald-200">已完成上傳並選取此 dataset</span> : null}
                 </div>
               </div>
             )}
@@ -579,16 +599,16 @@ function CreateJobWizard({
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-slate-200 bg-white/90 shadow-sm backdrop-blur">
+        <Card className="border-white/10 bg-white/[0.03]">
           <CardHeader>
             <CardTitle className="text-xl">訓練參數設定</CardTitle>
             <CardDescription>
-              目前資料集：<span className="font-medium text-slate-900">{selectedDataset?.name ?? "未選擇"}</span>
+              目前資料集：<span className="font-medium text-zinc-50">{selectedDataset?.name ?? "未選擇"}</span>
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid gap-5 md:grid-cols-2">
-              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+              <div className="space-y-2 rounded-[1.1rem] border border-white/10 bg-black/25 p-4">
                 <Label>Iterations</Label>
                 <input
                   type="range"
@@ -597,12 +617,12 @@ function CreateJobWizard({
                   step={1000}
                   value={form.iterations}
                   onChange={(e) => updateForm("iterations", Number(e.target.value))}
-                  className="w-full accent-sky-600"
+                  className="range-dark w-full"
                 />
-                <div className="text-sm text-slate-600">{form.iterations.toLocaleString()} steps</div>
+                <div className="text-sm text-zinc-400">{form.iterations.toLocaleString()} steps</div>
               </div>
 
-              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+              <div className="space-y-2 rounded-[1.1rem] border border-white/10 bg-black/25 p-4">
                 <Label>Max Cap</Label>
                 <input
                   type="range"
@@ -611,9 +631,9 @@ function CreateJobWizard({
                   step={50000}
                   value={form.maxCap}
                   onChange={(e) => updateForm("maxCap", Number(e.target.value))}
-                  className="w-full accent-sky-600"
+                  className="range-dark w-full"
                 />
-                <div className="text-sm text-slate-600">{form.maxCap.toLocaleString()}</div>
+                <div className="text-sm text-zinc-400">{form.maxCap.toLocaleString()}</div>
               </div>
 
               <div className="space-y-2">
@@ -635,7 +655,7 @@ function CreateJobWizard({
               <div>
                 <Label>Resize Factor</Label>
                 <select
-                  className="mt-2 h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                  className="mt-2 h-9 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
                   value={String(form.resizeFactor)}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -669,16 +689,16 @@ function CreateJobWizard({
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-200">
                 <input type="checkbox" checked={form.eval} onChange={(e) => updateForm("eval", e.target.checked)} /> --eval
               </label>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-200">
                 <input type="checkbox" checked={form.saveEvalImages} onChange={(e) => updateForm("saveEvalImages", e.target.checked)} /> --save-eval-images
               </label>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-200">
                 <input type="checkbox" checked={form.gut} onChange={(e) => updateForm("gut", e.target.checked)} /> --gut
               </label>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-200">
                 <input type="checkbox" checked={form.undistort} onChange={(e) => updateForm("undistort", e.target.checked)} /> --undistort
               </label>
             </div>
@@ -709,9 +729,9 @@ function CreateJobWizard({
 }
 
 function noticeClassName(tone: MessageTone): string {
-  if (tone === "success") return "border-emerald-300 bg-emerald-50 text-emerald-800";
-  if (tone === "error") return "border-red-300 bg-red-50 text-red-800";
-  return "border-sky-300 bg-sky-50 text-sky-800";
+  if (tone === "success") return "border-emerald-400/20 bg-emerald-400/10 text-emerald-100";
+  if (tone === "error") return "border-red-500/20 bg-red-500/10 text-red-100";
+  return "border-cyan-400/20 bg-cyan-400/10 text-cyan-100";
 }
 
 function App() {
@@ -852,7 +872,7 @@ function App() {
   }, []);
 
   if (!ready) {
-    return <div className="p-8">Loading...</div>;
+    return <div className="p-8 text-zinc-300">Loading...</div>;
   }
 
   if (!authed) {
@@ -863,21 +883,14 @@ function App() {
   const queuedCount = jobs.filter((job) => job.status === "queued").length;
 
   return (
-    <div className="min-h-screen bg-app-base pb-8">
-      <header className="border-b border-slate-200 bg-white/85 backdrop-blur-md">
+    <div className="min-h-screen bg-app-base pb-8 text-zinc-100">
+      <header className="border-b border-white/10 bg-black/55 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">LichtFeld-Studio 任務控制台</h1>
-            <p className="text-sm text-slate-600">首頁聚焦任務追蹤與兩步驟建立流程</p>
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-50">LichtFeld-Studio 任務控制台</h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="gap-1 border-slate-300 bg-white">
-              <Clock3 className="h-3.5 w-3.5" /> 執行中 {runningCount}
-            </Badge>
-            <Badge variant="outline" className="gap-1 border-slate-300 bg-white">
-              <Hourglass className="h-3.5 w-3.5" /> 排隊 {queuedCount}
-            </Badge>
             <Button variant={view === "jobs" ? "default" : "outline"} onClick={() => setView("jobs")}>
               <ListChecks className="mr-2 h-4 w-4" /> 任務首頁
             </Button>
@@ -898,6 +911,31 @@ function App() {
       </header>
 
       <main className="mx-auto mt-4 max-w-7xl space-y-4 px-4">
+        {view === "jobs" ? (
+          <section className="panel-grid noise-overlay relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.03] px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.45)]">
+            <div className="grid gap-3 md:grid-cols-[1.6fr_1fr]">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">overview</p>
+                <h2 className="mt-2 max-w-2xl text-2xl font-semibold leading-tight text-zinc-50">訓練控制台</h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">即時監看任務進度、排隊狀態與資料集操作。</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3 md:grid-cols-1 xl:grid-cols-3">
+                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">running</p>
+                  <div className="mt-2 text-2xl font-semibold text-zinc-50">{runningCount}</div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">queued</p>
+                  <div className="mt-2 text-2xl font-semibold text-zinc-50">{queuedCount}</div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">datasets</p>
+                  <div className="mt-2 text-2xl font-semibold text-zinc-50">{datasets.length}</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
         {notice ? (
           <div className={`rounded-xl border px-4 py-3 text-sm ${noticeClassName(notice.tone)}`}>
             <div className="flex items-start justify-between gap-3">
@@ -907,9 +945,9 @@ function App() {
                 {notice.tone === "info" ? <Sparkles className="h-4 w-4" /> : null}
                 <span>{notice.text}</span>
               </div>
-              <button className="text-xs underline" onClick={() => setNotice(null)}>
-                關閉
-              </button>
+                <button className="text-xs underline underline-offset-4" onClick={() => setNotice(null)}>
+                  關閉
+                </button>
             </div>
           </div>
         ) : null}

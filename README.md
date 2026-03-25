@@ -13,7 +13,7 @@
 >
 > 使用者應自行評估、測試與承擔所有風險。對於因使用本專案而造成之任何直接或間接損失（包含但不限於資料遺失、訓練失敗、服務中斷、商業損失、硬體或資安問題），專案作者與貢獻者 **概不負責**。
 
-React + Tailwind + shadcn 風格 UI 的 LichtFeld-Studio 網頁控制台，支援：
+React + Tailwind CSS v4 + shadcn 風格 UI 的 LichtFeld-Studio 網頁控制台，支援：
 
 - 單租戶密碼保護
 - 首頁任務清單（縮圖、進度、執行時間、經過時間、ETA）
