@@ -113,6 +113,7 @@ RUN set -eux; \
           libgl1 \
           libglu1-mesa \
           libglvnd0 \
+          libgomp1 \
           libice6 \
           libnss3 \
           libopengl0 \
