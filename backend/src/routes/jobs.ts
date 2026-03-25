@@ -111,6 +111,34 @@ jobsRouter.get("/:id/logs/stream", (req, res) => {
   registerSseClient(job.id, res);
 });
 
+jobsRouter.get("/:id/model/download", (req, res) => {
+  const job = repo.getJob(req.params.id);
+  if (!job) {
+    return res.status(404).json({ message: "Job not found" });
+  }
+
+  const outputRoot = path.resolve(job.outputPath);
+  if (!fs.existsSync(outputRoot)) {
+    return res.status(404).json({ message: "Model output not found" });
+  }
+
+  const archive = archiver("zip", { zlib: { level: 9 } });
+  archive.on("error", (err) => {
+    res.status(500).end(err.message);
+  });
+
+  res.setHeader("Content-Disposition", `attachment; filename="${job.id}-model.zip"`);
+  res.setHeader("Content-Type", "application/zip");
+
+  archive.pipe(res);
+  archive.glob("**/*", {
+    cwd: outputRoot,
+    dot: true,
+    ignore: ["timelapse/**"]
+  });
+  archive.finalize();
+});
+
 jobsRouter.get("/:id/timelapse/cameras", (req, res) => {
   const job = repo.getJob(req.params.id);
   if (!job) {
@@ -146,9 +174,13 @@ jobsRouter.get("/:id/timelapse/latest", async (req, res) => {
     return res.status(404).json({ message: "Job not found" });
   }
 
-  const items = repo.getTimelapseLatest(job.id);
-  const disk = await jobService.getDiskStatus(job.outputPath);
-  return res.json({ items, disk });
+  try {
+    const items = repo.getTimelapseLatest(job.id);
+    const disk = await jobService.getDiskStatus(job.outputPath);
+    return res.json({ items, disk });
+  } catch (error) {
+    return res.status(500).json({ message: `Failed to read disk status: ${(error as Error).message}` });
+  }
 });
 
 jobsRouter.get("/:id/timelapse/download", (req, res) => {

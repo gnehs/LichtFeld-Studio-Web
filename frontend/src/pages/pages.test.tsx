@@ -1,7 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
+import { JobDetailPage } from "@/pages/JobDetailPage";
 import type { DatasetFolderEntry, DatasetRecord, TrainingJob } from "@/lib/types";
 
 describe("route pages", () => {
@@ -16,6 +18,7 @@ describe("route pages", () => {
         onRefresh={vi.fn(async () => {})}
         onStop={vi.fn(async () => {})}
         onDelete={vi.fn(async () => {})}
+        onOpenDetail={vi.fn()}
       />
     );
 
@@ -38,5 +41,17 @@ describe("route pages", () => {
     );
 
     expect(markup).toContain("data-route=\"create\"");
+  });
+
+  test("job detail page renders route marker", () => {
+    const markup = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/jobs/job-1"]}>
+        <Routes>
+          <Route path="/jobs/:id" element={<JobDetailPage onNotice={vi.fn()} />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(markup).toContain("data-route=\"job-detail\"");
   });
 });

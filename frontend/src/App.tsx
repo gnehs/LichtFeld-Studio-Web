@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
+import { JobDetailPage } from "@/pages/JobDetailPage";
 
 function isUnauthorizedError(error: unknown): boolean {
   return error instanceof Error && /unauthorized/i.test(error.message);
@@ -24,7 +25,7 @@ function DashboardShell({
   setAuthed: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const location = useLocation();
-  const onJobsRoute = location.pathname === "/jobs" || location.pathname === "/";
+  const onJobsRoute = location.pathname === "/" || location.pathname.startsWith("/jobs");
 
   const runningCount = jobs.filter((job) => job.status === "running").length;
   const queuedCount = jobs.filter((job) => job.status === "queued").length;
@@ -276,9 +277,11 @@ function App() {
                     setNoticeText({ tone: "error", text: `刪除失敗：${(error as Error).message}` });
                   }
                 }}
+                onOpenDetail={(id) => navigate(`/jobs/${id}`)}
               />
             }
           />
+          <Route path="jobs/:id" element={<JobDetailPage onNotice={setNoticeText} />} />
           <Route
             path="create"
             element={

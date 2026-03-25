@@ -98,7 +98,8 @@ class JobService {
   }
 
   async getDiskStatus(targetPath = config.outputsDir): Promise<DiskGuardStatus> {
-    const result = await checkDiskSpace(targetPath);
+    const diskCheckTarget = path.resolve(targetPath);
+    const result = await checkDiskSpace(diskCheckTarget);
     const freeGb = Number((result.free / 1024 / 1024 / 1024).toFixed(2));
     return {
       freeGb,

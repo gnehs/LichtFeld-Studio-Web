@@ -119,7 +119,8 @@ export function TaskList({
   onCreate,
   onRefresh,
   onStop,
-  onDelete
+  onDelete,
+  onOpenDetail
 }: {
   jobs: TrainingJob[];
   insights: Record<string, JobInsight>;
@@ -128,6 +129,7 @@ export function TaskList({
   onRefresh: () => Promise<void>;
   onStop: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onOpenDetail: (id: string) => void;
 }) {
   if (jobs.length === 0) return <EmptyState onCreate={onCreate} />;
 
@@ -207,6 +209,9 @@ export function TaskList({
                       ) : null}
                       <Button variant="outline" size="sm" onClick={() => void onDelete(job.id)}>
                         <Trash2 className="mr-1 h-3.5 w-3.5" /> 刪除
+                      </Button>
+                      <Button size="sm" onClick={() => onOpenDetail(job.id)}>
+                        查看詳細
                       </Button>
                     </div>
                   </TableCell>

@@ -9,7 +9,8 @@ export function JobsPage({
   onCreate,
   onRefresh,
   onStop,
-  onDelete
+  onDelete,
+  onOpenDetail
 }: {
   jobs: TrainingJob[];
   insights: Record<string, JobInsight>;
@@ -18,10 +19,20 @@ export function JobsPage({
   onRefresh: () => Promise<void>;
   onStop: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onOpenDetail: (id: string) => void;
 }) {
   return (
     <section data-route="jobs">
-      <TaskList jobs={jobs} insights={insights} nowMs={nowMs} onCreate={onCreate} onRefresh={onRefresh} onStop={onStop} onDelete={onDelete} />
+      <TaskList
+        jobs={jobs}
+        insights={insights}
+        nowMs={nowMs}
+        onCreate={onCreate}
+        onRefresh={onRefresh}
+        onStop={onStop}
+        onDelete={onDelete}
+        onOpenDetail={onOpenDetail}
+      />
     </section>
   );
 }
