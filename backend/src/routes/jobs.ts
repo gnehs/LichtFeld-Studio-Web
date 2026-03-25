@@ -34,6 +34,39 @@ const createJobSchema = z.object({
 
 export const jobsRouter = Router();
 
+function findLatestModelPly(rootDir: string): string | null {
+  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+  let bestPath: string | null = null;
+  let bestMtime = -1;
+
+  for (const entry of entries) {
+    const fullPath = path.join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "timelapse") continue;
+      const nested = findLatestModelPly(fullPath);
+      if (!nested) continue;
+      const stat = fs.statSync(nested);
+      const mtime = stat.mtimeMs;
+      if (mtime > bestMtime) {
+        bestMtime = mtime;
+        bestPath = nested;
+      }
+      continue;
+    }
+
+    if (!entry.isFile()) continue;
+    if (!entry.name.toLowerCase().endsWith(".ply")) continue;
+    const stat = fs.statSync(fullPath);
+    const mtime = stat.mtimeMs;
+    if (mtime > bestMtime) {
+      bestMtime = mtime;
+      bestPath = fullPath;
+    }
+  }
+
+  return bestPath;
+}
+
 jobsRouter.get("/", (_req, res) => {
   res.json({ items: jobService.listJobs() });
 });
@@ -122,21 +155,14 @@ jobsRouter.get("/:id/model/download", (req, res) => {
     return res.status(404).json({ message: "Model output not found" });
   }
 
-  const archive = archiver("zip", { zlib: { level: 9 } });
-  archive.on("error", (err) => {
-    res.status(500).end(err.message);
-  });
+  const modelPath = findLatestModelPly(outputRoot);
+  if (!modelPath) {
+    return res.status(404).json({ message: "Model .ply not found" });
+  }
 
-  res.setHeader("Content-Disposition", `attachment; filename="${job.id}-model.zip"`);
-  res.setHeader("Content-Type", "application/zip");
-
-  archive.pipe(res);
-  archive.glob("**/*", {
-    cwd: outputRoot,
-    dot: true,
-    ignore: ["timelapse/**"]
-  });
-  archive.finalize();
+  const downloadName = path.basename(modelPath);
+  res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
+  return res.sendFile(modelPath);
 });
 
 jobsRouter.get("/:id/timelapse/cameras", (req, res) => {

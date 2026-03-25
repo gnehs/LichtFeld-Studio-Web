@@ -150,6 +150,10 @@ my-dataset/
 - `GET /api/jobs/:id/timelapse/latest`
 - `GET /api/jobs/:id/timelapse/download?camera=...|all`
 
+## Model API
+
+- `GET /api/jobs/:id/model/download`（下載該任務輸出目錄中最新的 `.ply` 模型檔）
+
 ## 測試
 
 ```bash
