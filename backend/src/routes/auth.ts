@@ -19,7 +19,12 @@ authRouter.post("/login", async (req, res) => {
   }
 
   req.session.authenticated = true;
-  return res.json({ success: true });
+  return req.session.save((error) => {
+    if (error) {
+      return res.status(500).json({ message: "Failed to persist session" });
+    }
+    return res.json({ success: true });
+  });
 });
 
 authRouter.post("/logout", (req, res) => {

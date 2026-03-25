@@ -5,6 +5,7 @@ import * as checkDiskSpaceModule from "check-disk-space";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
 import { repo } from "../db.js";
+import { buildAutoTimelapse } from "../lib/autoTimelapse.js";
 import { buildLfsArgs } from "../lib/cliBuilder.js";
 import { scanTimelapseDir, toTimelapseFrame } from "../lib/timelapse.js";
 import { emitJobEvent } from "../sse.js";
@@ -54,6 +55,12 @@ class JobService {
     if (!params.outputPath) {
       params.outputPath = path.join(config.outputsDir, `job-${Date.now()}`);
     }
+
+    params.timelapse = buildAutoTimelapse({
+      dataPath: params.dataPath,
+      every: params.timelapse?.every,
+      existingImages: params.timelapse?.images
+    });
 
     fs.mkdirSync(params.outputPath, { recursive: true });
 

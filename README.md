@@ -16,10 +16,11 @@
 React + Tailwind + shadcn 風格 UI 的 LichtFeld-Studio 網頁控制台，支援：
 
 - 單租戶密碼保護
-- Dataset 上傳與路徑註冊
+- 首頁任務清單（縮圖、進度、執行時間、經過時間、ETA）
+- 兩步驟建立任務（Step 1: 上傳 ZIP 或選擇 Dataset、Step 2: 參數設定）
 - Node 透過 CLI 啟動/停止 headless 訓練
 - 單任務序列 queue
-- Timelapse 全流程（建立參數、即時監看、分組下載）
+- Timelapse 自動啟用（由後端自動挑選 dataset 影像，前端不提供啟用開關）
 - Disk Guard（低於門檻自動停止任務，狀態 `stopped_low_disk`）
 
 ## 1. 先建立密碼雜湊
@@ -60,6 +61,11 @@ Compose 只需要掛載一個資料夾：
   - `/data/db`
   - `/data/logs`
 
+登入 session cookie 會自動依連線情境調整：
+
+- 直接用 `http://主機:3000` 存取 Docker 服務時，不會強制 `Secure`，避免正確密碼也無法登入
+- 若前面有 HTTPS reverse proxy，請保留 `X-Forwarded-Proto`，cookie 會自動標成 `Secure`
+
 ### Docker build 會自動編譯 LichtFeld-Studio
 
 - 在 image build 階段會自動：
@@ -75,7 +81,7 @@ Compose 只需要掛載一個資料夾：
 
 - `LFS_BIN_PATH`：LichtFeld-Studio 執行檔路徑
 - `TIMELAPSE_MIN_FREE_GB`：低於此值會自動中止任務
-- `DATASET_ALLOWED_ROOTS`：可註冊的伺服器資料路徑白名單（逗號分隔）
+- `DATASET_ALLOWED_ROOTS`：後端允許註冊的伺服器資料路徑白名單（主要給 API/進階流程使用）
 
 ## Timelapse API
 

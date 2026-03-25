@@ -3,26 +3,34 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  --background: 210 33% 98%;
+  --foreground: 216 28% 16%;
   --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
+  --card-foreground: 216 28% 16%;
+  --primary: 204 94% 42%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 212 36% 94%;
+  --secondary-foreground: 216 28% 16%;
+  --muted: 212 36% 94%;
+  --muted-foreground: 216 16% 45%;
+  --accent: 198 76% 92%;
+  --accent-foreground: 216 28% 16%;
+  --destructive: 0 78% 56%;
   --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
+  --border: 214 28% 86%;
+  --input: 214 28% 86%;
+  --ring: 204 94% 42%;
   --radius: 0.75rem;
 }
 
 body {
   @apply bg-background text-foreground antialiased;
+  font-family: "Noto Sans TC", "IBM Plex Sans", "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+
+.bg-app-base {
+  background-image:
+    radial-gradient(circle at 0% 0%, rgba(14, 165, 233, 0.12), transparent 30%),
+    radial-gradient(circle at 100% 100%, rgba(16, 185, 129, 0.12), transparent 35%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(248, 250, 252, 0.94) 45%, rgba(241, 245, 249, 0.98) 100%);
 }
