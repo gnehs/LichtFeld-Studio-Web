@@ -7,10 +7,10 @@ COPY backend/package.json ./backend/package.json
 COPY frontend/package.json ./frontend/package.json
 RUN pnpm install --frozen-lockfile=false
 
-COPY backend ./backend
-COPY frontend ./frontend
 COPY scripts ./scripts
 COPY .env.example ./.env.example
+COPY backend ./backend
+COPY frontend ./frontend
 RUN pnpm --filter @lichtfeld/frontend build && pnpm --filter @lichtfeld/backend build
 
 FROM nvidia/cuda:12.8.0-devel-ubuntu24.04 AS lfs-build
@@ -128,8 +128,8 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=web-build /app /app
 COPY --from=lfs-build /opt/lichtfeld /opt/lichtfeld
+COPY --from=web-build /app /app
 
 ENV LFS_BIN_PATH=/opt/lichtfeld/bin/LichtFeld-Studio
 
