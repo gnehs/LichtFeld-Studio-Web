@@ -199,7 +199,7 @@ export function TaskList({
                   </TableCell>
                   <TableCell className="text-sm text-zinc-300">{formatDuration(runElapsed)}</TableCell>
                   <TableCell className="text-sm text-zinc-300">{formatDuration(elapsedFromCreate)}</TableCell>
-                  <TableCell className="text-sm text-zinc-300">{formatEta(metrics.etaMs)}</TableCell>
+                  <TableCell className="text-sm text-zinc-300">{job.status === "completed" ? "已完成" : formatEta(metrics.etaMs)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
                       {job.status === "queued" || job.status === "running" ? (

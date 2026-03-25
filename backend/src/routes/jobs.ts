@@ -6,6 +6,8 @@ import { z } from "zod";
 import { repo } from "../db.js";
 import { registerSseClient } from "../sse.js";
 import { jobService } from "../services/jobService.js";
+import { config } from "../config.js";
+import { removeJobOutputDir } from "../lib/outputCleanup.js";
 
 const createJobSchema = z.object({
   datasetId: z.string().optional(),
@@ -111,16 +113,15 @@ jobsRouter.delete("/:id", (req, res) => {
     return res.status(409).json({ message: "Running job cannot be deleted" });
   }
 
-  const deleteTimelapse = String(req.query.deleteTimelapse ?? "false") === "true";
-  if (deleteTimelapse) {
-    const dir = path.join(job.outputPath, "timelapse");
-    if (fs.existsSync(dir)) {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+  const deletedOutput = removeJobOutputDir(job.outputPath, config.outputsDir);
+  if (!deletedOutput && fs.existsSync(path.resolve(job.outputPath))) {
+    return res.status(400).json({
+      message: "Refuse to delete output directory outside OUTPUTS_DIR"
+    });
   }
 
   repo.deleteJob(job.id);
-  return res.json({ success: true, deleteTimelapse });
+  return res.json({ success: true, deletedOutput });
 });
 
 jobsRouter.get("/:id/logs/stream", (req, res) => {
