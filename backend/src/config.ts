@@ -26,6 +26,18 @@ function loadEnvFile(filePath: string) {
 loadEnvFile(path.resolve(process.cwd(), ".env"));
 loadEnvFile(path.resolve(process.cwd(), "..", ".env"));
 
+function ensureLibraryPath(paths: string[]) {
+  const currentEntries = (process.env.LD_LIBRARY_PATH ?? "")
+    .split(":")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  const nextEntries = [...paths, ...currentEntries].filter((entry, index, all) => all.indexOf(entry) === index);
+  process.env.LD_LIBRARY_PATH = nextEntries.join(":");
+}
+
+ensureLibraryPath(["/opt/lichtfeld/lib", "/opt/lichtfeld/lib64"]);
+
 const dataRoot = process.env.DATA_ROOT ?? path.join(process.cwd(), "data");
 
 function required(name: string, fallback?: string): string {

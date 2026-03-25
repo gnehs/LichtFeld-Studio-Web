@@ -41,7 +41,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` 會同時啟動前後端。  
+`pnpm dev` 會同時啟動前後端。
 前端預設 `http://localhost:5173`，後端 `http://localhost:3000`。
 
 ## 3. Docker 部署
@@ -68,7 +68,7 @@ docker run -d --name lichtfeld-studio-web \
   --gpus all \
   -p 3000:3000 \
   --env-file .env \
-  -v "$(pwd)/data:/data" \
+  -v "$(pwd)/data:/app/data" \
   ghcr.io/gnehs/lichtfeld-studio-web:latest
 ```
 
@@ -80,7 +80,7 @@ docker compose up -d
 
 Compose 只需要掛載一個資料夾：
 
-- `./data:/data`
+- `./data:/app/data`
 - 其中會自動建立：
   - `/data/datasets`
   - `/data/outputs`
@@ -96,9 +96,15 @@ Compose 只需要掛載一個資料夾：
 ### Docker 與 GPU
 
 - 預設 image 已內含 LichtFeld-Studio，執行檔路徑為 `/opt/lichtfeld/bin/LichtFeld-Studio`
+- container 啟動時會自動把 `/opt/lichtfeld/lib` 與 `/opt/lichtfeld/lib64` 加入 `LD_LIBRARY_PATH`，避免訓練時找不到 `liblfs_mcp.so` 等共享函式庫
 - Docker 啟動時已支援 CUDA GPU；請確認主機已安裝 NVIDIA Driver 與 NVIDIA Container Toolkit
 - `docker run` 請帶 `--gpus all`
 - `docker compose.yml` 已包含 `gpus: all`
+
+### Docker 排錯
+
+- 若訓練時出現 `/opt/lichtfeld/bin/LichtFeld-Studio: error while loading shared libraries: liblfs_mcp.so: cannot open shared object file: No such file or directory`，通常代表 image 尚未套用新版啟動設定
+- 請重新 build 或重新 pull image 後再啟動 container，讓後端在啟動時自動補上 LichtFeld-Studio 的動態函式庫搜尋路徑
 
 ## 環境變數
 

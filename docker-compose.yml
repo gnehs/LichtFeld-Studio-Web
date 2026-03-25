@@ -19,12 +19,12 @@ services:
       - LFS_DEFAULT_LOG_LEVEL=${LFS_DEFAULT_LOG_LEVEL:-info}
       - TIMELAPSE_MIN_FREE_GB=${TIMELAPSE_MIN_FREE_GB:-5}
       - DISK_GUARD_INTERVAL_MS=${DISK_GUARD_INTERVAL_MS:-15000}
-      - DATA_ROOT=/data
-      - DATASETS_DIR=/data/datasets
-      - OUTPUTS_DIR=/data/outputs
-      - DB_PATH=/data/db/app.db
-      - LOGS_DIR=/data/logs
-      - DATASET_ALLOWED_ROOTS=${DATASET_ALLOWED_ROOTS:-/data/datasets}
+      - DATA_ROOT=/app/data
+      - DATASETS_DIR=/app/data/datasets
+      - OUTPUTS_DIR=/app/data/outputs
+      - DB_PATH=/app/data/db/app.db
+      - LOGS_DIR=/app/data/logs
+      - DATASET_ALLOWED_ROOTS=${DATASET_ALLOWED_ROOTS:-/app/data/datasets}
     volumes:
-      - ./data:/data
+      - ./data:/app/data
     gpus: all
