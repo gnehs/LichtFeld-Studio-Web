@@ -165,6 +165,12 @@ class JobService {
     const args = JSON.parse(job.argsJson) as string[];
     const logPath = path.join(config.logsDir, `${job.id}.log`);
     const logStream = fs.createWriteStream(logPath, { flags: "a" });
+    let spawnErrorMessage: string | null = null;
+
+    const writeJobLog = (chunk: string) => {
+      logStream.write(chunk);
+      this.appendLog(job.id, chunk);
+    };
 
     const child = spawn(config.lfsBinPath, args, {
       cwd: process.cwd(),
@@ -186,19 +192,16 @@ class JobService {
     this.startDiskGuard(job.id, job.outputPath);
 
     child.stdout.on("data", (chunk) => {
-      const msg = chunk.toString();
-      logStream.write(msg);
-      this.appendLog(job.id, msg);
+      writeJobLog(chunk.toString());
     });
 
     child.stderr.on("data", (chunk) => {
-      const msg = chunk.toString();
-      logStream.write(msg);
-      this.appendLog(job.id, msg);
+      writeJobLog(chunk.toString());
     });
 
     child.on("error", (error) => {
-      this.appendLog(job.id, `[spawn-error] ${error.message}\n`);
+      spawnErrorMessage = error.message;
+      writeJobLog(`[spawn-error] ${error.message}\n`);
     });
 
     child.on("close", (code) => {
@@ -217,9 +220,9 @@ class JobService {
         status = "stopped_low_disk";
       } else if (reason === "stopped") {
         status = "stopped";
-      } else if (code !== 0) {
+      } else if (code !== 0 || spawnErrorMessage) {
         status = "failed";
-        errorMessage = `Process exited with code ${code}`;
+        errorMessage = spawnErrorMessage ?? `Process exited with code ${code}`;
       }
 
       repo.updateJobStatus(job.id, status, {
