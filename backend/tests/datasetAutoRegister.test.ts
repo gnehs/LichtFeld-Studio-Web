@@ -16,6 +16,12 @@ function createDatasetRoot(): string {
   return root;
 }
 
+function writeAlphaPng(targetPath: string) {
+  const pngBase64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC";
+  fs.writeFileSync(targetPath, Buffer.from(pngBase64, "base64"));
+}
+
 describe("dataset auto register guard", () => {
   it("returns invalid when upload marker exists", () => {
     const datasetPath = createDatasetRoot();
@@ -63,6 +69,36 @@ describe("dataset auto register guard", () => {
     expect(result.status).toBe("ready");
     expect(result.imageCount).toBe(2);
     expect(result.reason).toBeNull();
+  });
+
+  it("detects upstream-compatible masks folders", () => {
+    const datasetPath = createDatasetRoot();
+    fs.writeFileSync(path.join(datasetPath, "images", "0001.jpg"), "image");
+    fs.mkdirSync(path.join(datasetPath, "masks"), { recursive: true });
+    fs.writeFileSync(path.join(datasetPath, "masks", "0001.png"), "mask");
+
+    const result = inspectDatasetFolder(datasetPath, {
+      nowMs: Date.now() + DATASET_STABLE_WINDOW_MS + 1
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      status: "ready",
+      hasMasks: true
+    }));
+  });
+
+  it("detects rgba images as implicit mask source", () => {
+    const datasetPath = createDatasetRoot();
+    writeAlphaPng(path.join(datasetPath, "images", "0001.png"));
+
+    const result = inspectDatasetFolder(datasetPath, {
+      nowMs: Date.now() + DATASET_STABLE_WINDOW_MS + 1
+    });
+
+    expect(result).toEqual(expect.objectContaining({
+      status: "ready",
+      hasAlphaImages: true
+    }));
   });
 
   it("reports invalid reason for malformed dataset", () => {

@@ -22,6 +22,8 @@ export interface DatasetFolderEntry {
   health: "ready" | "uploading" | "stabilizing" | "invalid";
   reason: string | null;
   imageCount: number | null;
+  hasMasks: boolean;
+  hasAlphaImages: boolean;
 }
 
 export interface TimelapseConfig {

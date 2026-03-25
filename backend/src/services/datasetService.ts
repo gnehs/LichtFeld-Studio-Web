@@ -86,7 +86,9 @@ export const datasetService = {
         isRegistered: Boolean(registered),
         health: inspected.status,
         reason: inspected.reason,
-        imageCount: inspected.imageCount
+        imageCount: inspected.imageCount,
+        hasMasks: inspected.hasMasks,
+        hasAlphaImages: inspected.hasAlphaImages
       });
     }
 

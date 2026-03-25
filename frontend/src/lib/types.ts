@@ -14,6 +14,8 @@ export interface DatasetFolderEntry {
   health: "ready" | "uploading" | "stabilizing" | "invalid";
   reason: string | null;
   imageCount: number | null;
+  hasMasks: boolean;
+  hasAlphaImages: boolean;
 }
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "stopped" | "stopped_low_disk";

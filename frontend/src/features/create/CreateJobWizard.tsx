@@ -17,6 +17,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  applyVisibleStrategyDefaults,
+  getStrategyDefaults,
+  shouldShowMaskSettings,
+  UPSTREAM_MASK_FOLDERS,
+  type CreateJobStrategyDefaults,
+} from "./create-job-defaults";
+import {
   calculateUploadSpeed,
   formatBytesPerSecond,
   formatUploadPhase,
@@ -28,18 +35,16 @@ import {
   type PendingUploadDraft,
 } from "@/upload-state";
 
-interface CreateWizardValues {
-  iterations: number;
-  strategy: "mcmc" | "adc" | "igs+";
-  maxCap: number;
-  resizeFactor: "auto" | 1 | 2 | 4 | 8;
-  eval: boolean;
-  saveEvalImages: boolean;
-  gut: boolean;
-  undistort: boolean;
-  timelapseEvery: number;
-  logLevel: string;
+interface CreateWizardValues extends CreateJobStrategyDefaults {
   advancedJson: string;
+}
+
+function parseStringList(value: string): string[] | undefined {
+  const items = value
+    .split(/\r?\n|,/) 
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return items.length > 0 ? items : undefined;
 }
 
 const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
@@ -448,6 +453,10 @@ function ToggleChip({
   );
 }
 
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return <p className="mt-2 text-xs leading-5 text-zinc-500">{children}</p>;
+}
+
 export function CreateJobWizard({
   datasets,
   datasetFolders,
@@ -476,19 +485,10 @@ export function CreateJobWizard({
   const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
   const [uploadDraft, setUploadDraft] =
     useState<PendingUploadDraft>(EMPTY_UPLOAD_DRAFT);
-  const [form, setForm] = useState<CreateWizardValues>({
-    iterations: 30000,
-    strategy: "mcmc",
-    maxCap: 500000,
-    resizeFactor: "auto",
-    eval: false,
-    saveEvalImages: false,
-    gut: false,
-    undistort: false,
-    timelapseEvery: 100,
-    logLevel: "info",
+  const [form, setForm] = useState<CreateWizardValues>(() => ({
+    ...getStrategyDefaults("mcmc"),
     advancedJson: "",
-  });
+  }));
   const [submitting, setSubmitting] = useState(false);
 
   const uploadFile = uploadDraft.file;
@@ -506,6 +506,14 @@ export function CreateJobWizard({
   const selectedDataset = useMemo(
     () => datasets.find((item) => item.id === activeDatasetId),
     [datasets, activeDatasetId],
+  );
+  const selectedDatasetFolder = useMemo(
+    () => datasetFolders.find((folder) => folder.datasetId === activeDatasetId) ?? null,
+    [datasetFolders, activeDatasetId],
+  );
+  const showMaskSettings = shouldShowMaskSettings(
+    selectedDatasetFolder?.hasMasks ?? false,
+    selectedDatasetFolder?.hasAlphaImages ?? false,
   );
   const activeDatasetLabel =
     dataSourceMode === "upload"
@@ -531,6 +539,23 @@ export function CreateJobWizard({
       setSelectedDatasetId(selectableFolders[0].datasetId ?? "");
     }
   }, [selectableFolders, selectedDatasetId]);
+
+  useEffect(() => {
+    if (showMaskSettings) {
+      return;
+    }
+    setForm((prev) => {
+      if (prev.maskMode === "none" && !prev.invertMasks && !prev.noAlphaAsMask) {
+        return prev;
+      }
+      return {
+        ...prev,
+        maskMode: "none",
+        invertMasks: false,
+        noAlphaAsMask: false,
+      };
+    });
+  }, [showMaskSettings]);
 
   useEffect(() => {
     const timer = setInterval(() => setUploadNowMs(Date.now()), 1000);
@@ -619,6 +644,7 @@ export function CreateJobWizard({
       );
       setUploadErrorDialogOpen(false);
       onDatasetCreated(res.item);
+      await onRefreshDatasets().catch(() => undefined);
       onNotice({ tone: "success", text: `資料集 ${res.item.name} 上傳完成` });
       return res.item.id;
     } catch (error) {
@@ -717,14 +743,40 @@ export function CreateJobWizard({
         ...advanced,
         iterations: form.iterations,
         strategy: form.strategy,
+        shDegree: form.shDegree,
+        shDegreeInterval: form.shDegreeInterval,
         maxCap: form.maxCap,
+        minOpacity: form.minOpacity,
+        stepsScaler: form.stepsScaler,
+        tileMode: form.tileMode,
+        random: form.random,
+        initNumPts: form.initNumPts || undefined,
+        initExtent: form.initExtent || undefined,
+        images: form.images.trim() || undefined,
+        testEvery: form.testEvery,
         resizeFactor: form.resizeFactor,
+        maxWidth: form.maxWidth || undefined,
+        noCpuCache: form.noCpuCache,
+        noFsCache: form.noFsCache,
         eval: form.eval,
         saveEvalImages: form.saveEvalImages,
+        saveDepth: form.saveDepth,
         gut: form.gut,
         undistort: form.undistort,
-        logLevel: form.logLevel.trim() || undefined,
-        timelapse: { images: [], every: form.timelapseEvery },
+        maskMode: showMaskSettings ? form.maskMode : undefined,
+        invertMasks: showMaskSettings ? form.invertMasks : undefined,
+        noAlphaAsMask: showMaskSettings ? form.noAlphaAsMask : undefined,
+        enableSparsity: form.enableSparsity,
+        sparsifySteps: form.sparsifySteps || undefined,
+        initRho: form.initRho || undefined,
+        pruneRatio: form.pruneRatio || undefined,
+        enableMip: form.enableMip,
+        bilateralGrid: form.bilateralGrid,
+        ppisp: form.ppisp,
+        ppispController: form.ppispController,
+        ppispFreeze: form.ppispFreeze,
+        ppispSidecar: form.ppispSidecar.trim() || undefined,
+        bgModulation: form.bgModulation,
       };
 
       delete payloadParams.dataPath;
@@ -1026,6 +1078,125 @@ export function CreateJobWizard({
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
+                      <Label>SH Degree</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={form.shDegree}
+                        onChange={(e) => updateForm("shDegree", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>球諧函數階數，控制外觀表達能力；值越高，顏色/光照表現越細，但成本也越高。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>SH Degree Interval</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        step={100}
+                        value={form.shDegreeInterval}
+                        onChange={(e) => updateForm("shDegreeInterval", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>MCMC 會依間隔逐步提升 SH 階數；數值越小，越早增加外觀複雜度。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>Min Opacity</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        step="0.001"
+                        value={form.minOpacity}
+                        onChange={(e) => updateForm("minOpacity", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>不透明度下限，用來抑制過淡的高斯；調高可能讓模型更乾淨，但也可能吃掉細節。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>Steps Scaler</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        value={form.stepsScaler}
+                        onChange={(e) => updateForm("stepsScaler", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>依資料量放大訓練節奏；官方說明是依影像數量自動估算，調大通常代表更長的優化與延後某些階段切換。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>Tile Mode</Label>
+                      <select
+                        className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
+                        value={String(form.tileMode)}
+                        onChange={(e) => updateForm("tileMode", Number(e.target.value) as 1 | 2 | 4)}
+                      >
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="4">4</option>
+                      </select>
+                      <FieldHint>大圖分塊渲染模式；較大的 tile 常有助於穩定處理高解析影像，但也會影響效能與記憶體行為。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>Init Num Pts</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        step={1000}
+                        value={form.initNumPts}
+                        onChange={(e) => updateForm("initNumPts", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>隨機初始化時使用的點數；只有搭配 `--random` 才有意義。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>Init Extent</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        value={form.initExtent}
+                        onChange={(e) => updateForm("initExtent", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>隨機初始化邊界盒大小；值越大，初始點雲分布範圍越廣。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>Images Folder</Label>
+                      <Input
+                        className="mt-2"
+                        value={form.images}
+                        onChange={(e) => updateForm("images", e.target.value)}
+                        placeholder="例如：images"
+                      />
+                      <FieldHint>官方 CLI 的 `--images` 是影像子資料夾名稱，預設為 `images`，不是檔名萬用字元。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>Test Every</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        step={10}
+                        value={form.testEvery}
+                        onChange={(e) => updateForm("testEvery", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>每隔多少 iteration 做一次測試/評估；設太小會增加額外開銷。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>Max Width</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        step={64}
+                        value={form.maxWidth}
+                        onChange={(e) => updateForm("maxWidth", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>限制輸入影像最大寬度（像素）；可用來降低顯存與加快訓練。</FieldHint>
+                    </div>
+                    <div>
                       <Label>Strategy</Label>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {(["mcmc", "adc", "igs+"] as const).map((strategy) => (
@@ -1034,13 +1205,16 @@ export function CreateJobWizard({
                             variant={
                               form.strategy === strategy ? "default" : "outline"
                             }
-                            onClick={() => updateForm("strategy", strategy)}
+                            onClick={() =>
+                              setForm((prev) => applyVisibleStrategyDefaults(prev, strategy))
+                            }
                             type="button"
                           >
                             {strategy}
                           </Button>
                         ))}
                       </div>
+                      <FieldHint>訓練/密度化策略；`mcmc` 通常最通用，`gut` 與 `adc` / `igs+` 可能存在相容性限制。</FieldHint>
                     </div>
                     <div>
                       <Label>Resize Factor</Label>
@@ -1062,39 +1236,109 @@ export function CreateJobWizard({
                         <option value="4">4</option>
                         <option value="8">8</option>
                       </select>
+                      <FieldHint>先對訓練影像降採樣；數字越大，解析度越低，速度越快但細節可能減少。</FieldHint>
                     </div>
                   </div>
                 </ParameterPanel>
 
                 <ParameterPanel
-                  title="輸出與執行細節"
-                  description="控制 timelapse 與日誌行為。"
+                  title="資料處理與進階訓練"
+                  description="整理遮罩、稀疏化、MIP、PPISP 與背景調變相關選項。"
                 >
                   <div className="grid gap-4 md:grid-cols-2">
+                    {showMaskSettings ? (
+                      <div>
+                        <Label>Mask Mode</Label>
+                        <select
+                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
+                          value={form.maskMode}
+                          onChange={(e) => updateForm("maskMode", e.target.value as CreateWizardValues["maskMode"])}
+                        >
+                          <option value="none">none</option>
+                          <option value="segment">segment</option>
+                          <option value="ignore">ignore</option>
+                          <option value="alpha_consistent">alpha_consistent</option>
+                        </select>
+                        <FieldHint>決定如何使用注意力遮罩，例如分割、忽略背景或維持 alpha 一致性。</FieldHint>
+                      </div>
+                    ) : (
+                      <div className="rounded-[1rem] border border-dashed border-white/10 bg-black/20 p-4 md:col-span-2">
+                        <p className="text-sm text-zinc-200">目前 dataset 未偵測到可自動讀取的 masks 資料夾，因此隱藏 mask 相關設定。</p>
+                        <FieldHint>參考 upstream，自動搜尋的資料夾名稱包含 {UPSTREAM_MASK_FOLDERS.join(" / ")}；若影像本身帶有 RGBA alpha，也會自動作為遮罩來源。</FieldHint>
+                      </div>
+                    )}
                     <div>
-                      <Label>Timelapse 間隔（自動啟用）</Label>
+                      <Label>Sparsify Steps</Label>
                       <Input
                         className="mt-2"
                         type="number"
-                        min={10}
-                        step={10}
-                        value={form.timelapseEvery}
-                        onChange={(e) =>
-                          updateForm(
-                            "timelapseEvery",
-                            Number(e.target.value || 100),
-                          )
-                        }
+                        min={0}
+                        step={100}
+                        value={form.sparsifySteps}
+                        onChange={(e) => updateForm("sparsifySteps", Number(e.target.value || 0))}
                       />
+                      <FieldHint>啟用 sparsity 後的剪枝/稀疏化節奏；通常數值越小，壓縮動作越頻繁。</FieldHint>
                     </div>
                     <div>
-                      <Label>Log Level</Label>
+                      <Label>Init Rho</Label>
                       <Input
                         className="mt-2"
-                        value={form.logLevel}
-                        onChange={(e) => updateForm("logLevel", e.target.value)}
+                        type="number"
+                        min={0}
+                        step="0.1"
+                        value={form.initRho}
+                        onChange={(e) => updateForm("initRho", Number(e.target.value || 0))}
                       />
+                      <FieldHint>稀疏化初始化強度參數；屬於進階壓縮調整，建議有實驗需求時再改。</FieldHint>
                     </div>
+                    <div>
+                      <Label>Prune Ratio</Label>
+                      <Input
+                        className="mt-2"
+                        type="number"
+                        min={0}
+                        max={1}
+                        step="0.01"
+                        value={form.pruneRatio}
+                        onChange={(e) => updateForm("pruneRatio", Number(e.target.value || 0))}
+                      />
+                      <FieldHint>每輪稀疏化要裁掉的比例；過高可能快速壓縮，但也可能犧牲品質。</FieldHint>
+                    </div>
+                    <div>
+                      <Label>PPISP Sidecar</Label>
+                      <Input
+                        className="mt-2"
+                        value={form.ppispSidecar}
+                        onChange={(e) => updateForm("ppispSidecar", e.target.value)}
+                        placeholder="例如：/data/ppisp/sidecar.json"
+                      />
+                      <FieldHint>PPISP 外觀模型 sidecar 路徑；這是少數仍需要外部來源的進階欄位。</FieldHint>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <ToggleChip checked={form.random} label="--random" onChange={(checked) => updateForm("random", checked)} />
+                    <ToggleChip checked={form.noCpuCache} label="--no-cpu-cache" onChange={(checked) => updateForm("noCpuCache", checked)} />
+                    <ToggleChip checked={form.noFsCache} label="--no-fs-cache" onChange={(checked) => updateForm("noFsCache", checked)} />
+                    {showMaskSettings ? <ToggleChip checked={form.invertMasks} label="--invert-masks" onChange={(checked) => updateForm("invertMasks", checked)} /> : null}
+                    {showMaskSettings ? <ToggleChip checked={form.noAlphaAsMask} label="--no-alpha-as-mask" onChange={(checked) => updateForm("noAlphaAsMask", checked)} /> : null}
+                    <ToggleChip checked={form.enableSparsity} label="--enable-sparsity" onChange={(checked) => updateForm("enableSparsity", checked)} />
+                    <ToggleChip checked={form.enableMip} label="--enable-mip" onChange={(checked) => updateForm("enableMip", checked)} />
+                    <ToggleChip checked={form.bilateralGrid} label="--bilateral-grid" onChange={(checked) => updateForm("bilateralGrid", checked)} />
+                    <ToggleChip checked={form.ppisp} label="--ppisp" onChange={(checked) => updateForm("ppisp", checked)} />
+                    <ToggleChip checked={form.ppispController} label="--ppisp-controller" onChange={(checked) => updateForm("ppispController", checked)} />
+                    <ToggleChip checked={form.ppispFreeze} label="--ppisp-freeze" onChange={(checked) => updateForm("ppispFreeze", checked)} />
+                    <ToggleChip checked={form.bgModulation} label="--bg-modulation" onChange={(checked) => updateForm("bgModulation", checked)} />
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <FieldHint>`--random`：改用隨機點初始化，而不是依既有重建結果起步。</FieldHint>
+                    <FieldHint>`--no-cpu-cache` / `--no-fs-cache`：停用 RAM 或磁碟影像快取；通常只在快取造成壓力時才關閉。</FieldHint>
+                    {showMaskSettings ? <FieldHint>`--invert-masks` / `--no-alpha-as-mask`：控制是否反轉遮罩，以及是否停用 RGBA alpha 自動當作遮罩來源。</FieldHint> : null}
+                    <FieldHint>`--enable-sparsity`：開啟模型壓縮/剪枝流程，適合想降低模型大小時使用。</FieldHint>
+                    <FieldHint>`--enable-mip`：啟用 mip-splatting 抗鋸齒濾波，有助於高頻細節與縮放穩定性。</FieldHint>
+                    <FieldHint>`--bilateral-grid`：加入外觀嵌入，處理曝光或顏色不一致資料。</FieldHint>
+                    <FieldHint>`--ppisp` / `--ppisp-controller`：啟用每相機外觀校正，以及新視角合成用控制器 CNN。</FieldHint>
+                    <FieldHint>`--ppisp-freeze`：從既有 sidecar 啟動時凍結部分高斯參數，避免外觀模型覆蓋原始幾何。</FieldHint>
+                    <FieldHint>`--bg-modulation`：學習獨立背景顏色，對背景變化明顯的資料集較有幫助。</FieldHint>
                   </div>
                 </ParameterPanel>
 
@@ -1116,6 +1360,11 @@ export function CreateJobWizard({
                       }
                     />
                     <ToggleChip
+                      checked={form.saveDepth}
+                      label="--save-depth"
+                      onChange={(checked) => updateForm("saveDepth", checked)}
+                    />
+                    <ToggleChip
                       checked={form.gut}
                       label="--gut"
                       onChange={(checked) => updateForm("gut", checked)}
@@ -1125,6 +1374,12 @@ export function CreateJobWizard({
                       label="--undistort"
                       onChange={(checked) => updateForm("undistort", checked)}
                     />
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <FieldHint>`--eval`：訓練時同時跑評估流程，方便觀察品質指標。</FieldHint>
+                    <FieldHint>`--save-eval-images` / `--save-depth`：額外輸出評估影像或深度結果，會增加磁碟使用量。</FieldHint>
+                    <FieldHint>`--gut`：啟用 3DGUT，適合失真相機模型；官方文件指出它不適用於 `adc` / `igs+`。</FieldHint>
+                    <FieldHint>`--undistort`：在訓練前先做影像畸變校正，適合需要標準 pinhole 訓練流程時使用。</FieldHint>
                   </div>
                 </ParameterPanel>
 
@@ -1169,9 +1424,9 @@ export function CreateJobWizard({
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
-                      <span className="text-zinc-500">timelapse</span>
+                      <span className="text-zinc-500">mip / sparsity</span>
                       <span className="text-zinc-100">
-                        every {form.timelapseEvery}
+                        {`${form.enableMip ? "mip on" : "mip off"} / ${form.enableSparsity ? "sparsity on" : "sparsity off"}`}
                       </span>
                     </div>
                   </div>
