@@ -72,6 +72,8 @@ export interface TrainingParamsForm {
   ppispSidecar?: string;
   bgModulation?: boolean;
   gut?: boolean;
+  useErrorMap?: boolean;
+  useEdgeMap?: boolean;
   eval?: boolean;
   saveEvalImages?: boolean;
   saveDepth?: boolean;

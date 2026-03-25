@@ -1232,11 +1232,11 @@ export function CreateJobWizard({
                       >
                         <option value="auto">auto</option>
                         <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="4">4</option>
-                        <option value="8">8</option>
+                        <option value="2">1/2</option>
+                        <option value="4">1/4</option>
+                        <option value="8">1/8</option>
                       </select>
-                      <FieldHint>先對訓練影像降採樣；數字越大，解析度越低，速度越快但細節可能減少。</FieldHint>
+                      <FieldHint>先對訓練影像降採樣；分母越大，解析度越低，速度越快但細節可能減少。</FieldHint>
                     </div>
                   </div>
                 </ParameterPanel>
