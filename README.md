@@ -105,6 +105,9 @@ Compose 只需要掛載一個資料夾：
 
 - 若訓練時出現 `/opt/lichtfeld/bin/LichtFeld-Studio: error while loading shared libraries: liblfs_mcp.so: cannot open shared object file: No such file or directory`，通常代表 image 尚未套用新版啟動設定
 - 請重新 build 或重新 pull image 後再啟動 container，讓後端在啟動時自動補上 LichtFeld-Studio 的動態函式庫搜尋路徑
+- 若出現 `/opt/lichtfeld/bin/LichtFeld-Studio: error while loading shared libraries: libdbus-1.so.3: cannot open shared object file: No such file or directory`，代表 runtime image 缺少 `libdbus-1-3` 套件
+- 請重新 build/pull 最新 image（已補上 OpenGL/X11/DBus 常見 runtime 依賴，例如 `libdbus-1-3`、`libgl1`、`libx11-6` 等），再重新啟動 container
+- 若仍有共享函式庫錯誤，可在 container 內執行 `ldd /opt/lichtfeld/bin/LichtFeld-Studio | grep "not found"` 追蹤缺少的套件
 
 ## 環境變數
 

@@ -97,6 +97,31 @@ RUN set -eux; \
         && apt-get install -y --no-install-recommends \
           ca-certificates \
           curl \
+          libasound2 \
+          libdbus-1-3 \
+          libdrm2 \
+          libegl1 \
+          libgbm1 \
+          libgl1 \
+          libglu1-mesa \
+          libglvnd0 \
+          libice6 \
+          libnss3 \
+          libopengl0 \
+          libsm6 \
+          libx11-6 \
+          libxcursor1 \
+          libxdamage1 \
+          libxext6 \
+          libxfixes3 \
+          libxi6 \
+          libxinerama1 \
+          libxkbcommon0 \
+          libxrandr2 \
+          libxrender1 \
+          libxtst6 \
+          libxxf86vm1 \
+          libglx0 \
           unzip \
           zip; then \
         break; \
