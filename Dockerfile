@@ -131,9 +131,7 @@ WORKDIR /app
 COPY --from=web-build /app /app
 COPY --from=lfs-build /opt/lichtfeld /opt/lichtfeld
 
-RUN mkdir -p /data/datasets /data/outputs /data/db /data/logs
-
 ENV LFS_BIN_PATH=/opt/lichtfeld/bin/LichtFeld-Studio
 
 EXPOSE 3000
-CMD ["node", "backend/dist/index.js"]
+CMD ["node", "scripts/docker-entrypoint.mjs"]
