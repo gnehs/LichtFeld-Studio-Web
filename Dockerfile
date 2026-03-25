@@ -97,7 +97,7 @@ RUN set -eux; \
         && apt-get install -y --no-install-recommends \
           ca-certificates \
           curl \
-          libasound2 \
+          libasound2t64 \
           libdbus-1-3 \
           libdrm2 \
           libegl1 \
