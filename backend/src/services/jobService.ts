@@ -227,7 +227,7 @@ class JobService {
       writeJobLog(`[spawn-error] ${error.message}\n`);
     });
 
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
       logStream.end();
       this.stopTimelapsePolling(job.id);
       this.stopDiskGuard(job.id);
@@ -245,7 +245,15 @@ class JobService {
         status = "stopped";
       } else if (code !== 0 || spawnErrorMessage) {
         status = "failed";
-        errorMessage = spawnErrorMessage ?? `Process exited with code ${code}`;
+        if (spawnErrorMessage) {
+          errorMessage = spawnErrorMessage;
+        } else if (signal) {
+          errorMessage = `Process terminated by signal ${signal}`;
+        } else if (code !== null) {
+          errorMessage = `Process exited with code ${code}`;
+        } else {
+          errorMessage = "Process exited before reporting an exit code";
+        }
       }
 
       repo.updateJobStatus(job.id, status, {
