@@ -1066,7 +1066,7 @@ export function CreateJobWizard({
                       <input
                         type="range"
                         min={100000}
-                        max={1000000}
+                        max={10000000}
                         step={50000}
                         value={form.maxCap}
                         onChange={(e) =>
