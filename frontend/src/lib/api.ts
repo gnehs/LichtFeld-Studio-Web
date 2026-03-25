@@ -1,4 +1,4 @@
-import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, TimelapseFrame, TrainingJob } from "./types";
+import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, SystemMetrics, TimelapseFrame, TrainingJob } from "./types";
 
 interface UploadDatasetOptions {
   onProgress?: (progress: number) => void;
@@ -105,5 +105,6 @@ export const api = {
     return request<{ items: TimelapseFrame[]; nextCursor: number | null }>(`/api/jobs/${id}/timelapse/frames?${params.toString()}`);
   },
   getTimelapseLatest: (id: string) => request<{ items: TimelapseFrame[]; disk: DiskGuardStatus }>(`/api/jobs/${id}/timelapse/latest`),
-  disk: () => request<DiskGuardStatus>("/api/system/disk")
+  disk: () => request<DiskGuardStatus>("/api/system/disk"),
+  systemMetrics: () => request<SystemMetrics>("/api/system/metrics")
 };

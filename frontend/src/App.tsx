@@ -4,7 +4,7 @@ import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 
 import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
 import type { JobInsight, Notice } from "@/lib/app-types";
-import type { DatasetFolderEntry, DatasetRecord, TrainingJob } from "@/lib/types";
+import type { DatasetFolderEntry, DatasetRecord, SystemMetrics, TrainingJob } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
@@ -18,10 +18,12 @@ function isUnauthorizedError(error: unknown): boolean {
 function DashboardShell({
   datasets,
   setAuthed,
-  jobs
+  jobs,
+  systemMetrics
 }: {
   datasets: DatasetRecord[];
   jobs: TrainingJob[];
+  systemMetrics: SystemMetrics | null;
   setAuthed: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const location = useLocation();
@@ -29,6 +31,7 @@ function DashboardShell({
 
   const runningCount = jobs.filter((job) => job.status === "running").length;
   const queuedCount = jobs.filter((job) => job.status === "queued").length;
+  const gpu = systemMetrics?.gpu.devices[0] ?? null;
 
   return (
     <div className="min-h-screen bg-app-base pb-8 text-zinc-100">
@@ -71,7 +74,7 @@ function DashboardShell({
                 <h2 className="mt-2 max-w-2xl text-2xl font-semibold leading-tight text-zinc-50">訓練控制台</h2>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">即時監看任務進度、排隊狀態與資料集操作。</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-3 md:grid-cols-1 xl:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-5">
                 <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">running</p>
                   <div className="mt-2 text-2xl font-semibold text-zinc-50">{runningCount}</div>
@@ -83,6 +86,17 @@ function DashboardShell({
                 <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">datasets</p>
                   <div className="mt-2 text-2xl font-semibold text-zinc-50">{datasets.length}</div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">gpu util</p>
+                  <div className="mt-2 text-2xl font-semibold text-zinc-50">{gpu?.utilizationGpu ?? "-"}{gpu?.utilizationGpu !== null && gpu?.utilizationGpu !== undefined ? "%" : ""}</div>
+                </div>
+                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">memory</p>
+                  <div className="mt-2 text-sm font-semibold text-zinc-50">
+                    {systemMetrics ? `${systemMetrics.memory.usedGb.toFixed(1)} / ${systemMetrics.memory.totalGb.toFixed(1)} GB` : "-"}
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-400">{systemMetrics ? `${systemMetrics.memory.usedPercent.toFixed(1)}%` : ""}</div>
                 </div>
               </div>
             </div>
@@ -101,6 +115,7 @@ function App() {
   const [datasets, setDatasets] = useState<DatasetRecord[]>([]);
   const [datasetFolders, setDatasetFolders] = useState<DatasetFolderEntry[]>([]);
   const [jobs, setJobs] = useState<TrainingJob[]>([]);
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
   const [insights, setInsights] = useState<Record<string, JobInsight>>({});
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -168,6 +183,11 @@ function App() {
     setInsights(next);
   }, []);
 
+  const refreshSystemMetrics = useCallback(async () => {
+    const metrics = await api.systemMetrics();
+    setSystemMetrics(metrics);
+  }, []);
+
   useEffect(() => {
     api
       .me()
@@ -183,12 +203,12 @@ function App() {
 
     const load = async () => {
       try {
-        await Promise.all([refreshDatasets(), refreshJobs()]);
+         await Promise.all([refreshDatasets(), refreshJobs(), refreshSystemMetrics()]);
       } catch (error) {
         if (!cancelled && isUnauthorizedError(error)) {
           await new Promise((resolve) => setTimeout(resolve, 400));
           try {
-            await Promise.all([refreshDatasets(), refreshJobs()]);
+             await Promise.all([refreshDatasets(), refreshJobs(), refreshSystemMetrics()]);
             return;
           } catch (retryError) {
             if (!cancelled && isUnauthorizedError(retryError)) {
@@ -219,13 +239,22 @@ function App() {
           setNoticeText({ tone: "error", text: `任務更新失敗：${(error as Error).message}` });
         }
       });
+      void refreshSystemMetrics().catch((error) => {
+        if (!cancelled && isUnauthorizedError(error)) {
+          setAuthed(false);
+          return;
+        }
+        if (!cancelled) {
+          setNoticeText({ tone: "error", text: `系統資訊更新失敗：${(error as Error).message}` });
+        }
+      });
     }, 5000);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [authed, refreshDatasets, refreshJobs, setNoticeText]);
+  }, [authed, refreshDatasets, refreshJobs, refreshSystemMetrics, setNoticeText]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
@@ -245,7 +274,7 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={<DashboardShell datasets={datasets} jobs={jobs} setAuthed={setAuthed} />}
+          element={<DashboardShell datasets={datasets} jobs={jobs} systemMetrics={systemMetrics} setAuthed={setAuthed} />}
         >
           <Route index element={<Navigate to="/jobs" replace />} />
           <Route

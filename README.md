@@ -154,6 +154,11 @@ my-dataset/
 
 - `GET /api/jobs/:id/model/download`（下載該任務輸出目錄中最新的 `.ply` 模型檔）
 
+## System API
+
+- `GET /api/system/disk`
+- `GET /api/system/metrics`（主機 RAM 與 GPU 使用狀態，若無可用 GPU 會回傳 `available: false`）
+
 ## 測試
 
 ```bash

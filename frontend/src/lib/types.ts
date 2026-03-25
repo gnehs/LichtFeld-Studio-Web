@@ -118,3 +118,24 @@ export interface EventMessage {
   data: unknown;
   ts: string;
 }
+
+export interface SystemMetrics {
+  memory: {
+    totalGb: number;
+    usedGb: number;
+    usedPercent: number;
+  };
+  gpu: {
+    available: boolean;
+    devices: Array<{
+      index: number;
+      name: string;
+      utilizationGpu: number | null;
+      memoryUsedMiB: number | null;
+      memoryTotalMiB: number | null;
+      memoryUsedPercent: number | null;
+      temperatureC: number | null;
+    }>;
+  };
+  ts: string;
+}
