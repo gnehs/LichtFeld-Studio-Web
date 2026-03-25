@@ -40,7 +40,7 @@ export interface TrainingParamsForm {
   init?: string;
   importCameras?: string;
   iterations?: number;
-  strategy?: "mcmc" | "adc" | "igs+";
+  strategy?: "mcmc" | "adc" | "igs+" | "lfs";
   shDegree?: number;
   shDegreeInterval?: number;
   maxCap?: number;

@@ -1,4 +1,4 @@
-export type CreateJobStrategy = "mcmc" | "adc" | "igs+";
+export type CreateJobStrategy = "mcmc" | "adc" | "igs+" | "lfs";
 
 export type CreateJobMaskMode = "none" | "segment" | "ignore" | "alpha_consistent";
 
@@ -84,6 +84,7 @@ const STRATEGY_MAX_CAP: Record<CreateJobStrategy, number> = {
   mcmc: 1000000,
   adc: 6000000,
   "igs+": 4000000,
+  lfs: 1000000,
 };
 
 export function getStrategyDefaults(strategy: CreateJobStrategy): CreateJobStrategyDefaults {

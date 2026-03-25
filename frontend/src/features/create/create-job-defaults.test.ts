@@ -25,6 +25,12 @@ describe("create job strategy defaults", () => {
       maxCap: 4000000,
       ppisp: true,
     });
+
+    expect(getStrategyDefaults("lfs")).toMatchObject({
+      strategy: "lfs",
+      maxCap: 1000000,
+      ppisp: true,
+    });
   });
 
   test("shows mask settings when dataset has masks or alpha images", () => {

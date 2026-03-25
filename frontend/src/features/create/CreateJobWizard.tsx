@@ -1199,7 +1199,7 @@ export function CreateJobWizard({
                     <div>
                       <Label>Strategy</Label>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {(["mcmc", "adc", "igs+"] as const).map((strategy) => (
+                        {(["mcmc", "adc", "igs+", "lfs"] as const).map((strategy) => (
                           <Button
                             key={strategy}
                             variant={
@@ -1214,7 +1214,7 @@ export function CreateJobWizard({
                           </Button>
                         ))}
                       </div>
-                      <FieldHint>訓練/密度化策略；`mcmc` 通常最通用，`gut` 與 `adc` / `igs+` 可能存在相容性限制。</FieldHint>
+                      <FieldHint>訓練/密度化策略；`mcmc` 與 `lfs` 通常較通用，`gut` 與 `adc` / `igs+` 可能存在相容性限制。</FieldHint>
                     </div>
                     <div>
                       <Label>Resize Factor</Label>
