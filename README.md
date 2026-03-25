@@ -44,12 +44,36 @@ pnpm dev
 
 ## 3. Docker 部署
 
+先拉 image：
+
+```bash
+docker pull ghcr.io/gnehs/lichtfeld-studio-web:latest
+```
+
+建立設定與資料夾：
+
 ```bash
 cp .env.example .env
-# 編輯 .env：至少填 SESSION_SECRET / ADMIN_PASSWORD_HASH / LFS_BIN_PATH
+# 編輯 .env：至少填 SESSION_SECRET / ADMIN_PASSWORD_HASH
 mkdir -p data
+```
 
-docker compose up --build
+單行執行：
+
+```bash
+docker run -d --name lichtfeld-studio-web \
+  --restart unless-stopped \
+  --gpus all \
+  -p 3000:3000 \
+  --env-file .env \
+  -v "$(pwd)/data:/data" \
+  ghcr.io/gnehs/lichtfeld-studio-web:latest
+```
+
+若偏好 Compose，也可直接執行：
+
+```bash
+docker compose up -d
 ```
 
 Compose 只需要掛載一個資料夾：
@@ -66,22 +90,23 @@ Compose 只需要掛載一個資料夾：
 - 直接用 `http://主機:3000` 存取 Docker 服務時，不會強制 `Secure`，避免正確密碼也無法登入
 - 若前面有 HTTPS reverse proxy，請保留 `X-Forwarded-Proto`，cookie 會自動標成 `Secure`
 
-### Docker build 會自動編譯 LichtFeld-Studio
+### Docker 與 GPU
 
-- 在 image build 階段會自動：
-  1. `git clone` LichtFeld-Studio
-  2. 使用 CMake + Ninja + vcpkg 編譯
-  3. 安裝到 `/opt/lichtfeld`
-- 預設執行檔：`/opt/lichtfeld/bin/LichtFeld-Studio`
-- 可在 `.env` 覆蓋版本來源：
-  - `LFS_REPO`
-  - `LFS_REF`（預設 `master`）
+- 預設 image 已內含 LichtFeld-Studio，執行檔路徑為 `/opt/lichtfeld/bin/LichtFeld-Studio`
+- Docker 啟動時已支援 CUDA GPU；請確認主機已安裝 NVIDIA Driver 與 NVIDIA Container Toolkit
+- `docker run` 請帶 `--gpus all`
+- `docker compose.yml` 已包含 `gpus: all`
 
 ## 環境變數
 
-- `LFS_BIN_PATH`：LichtFeld-Studio 執行檔路徑
-- `TIMELAPSE_MIN_FREE_GB`：低於此值會自動中止任務
-- `DATASET_ALLOWED_ROOTS`：後端允許註冊的伺服器資料路徑白名單（主要給 API/進階流程使用）
+- required:
+  - `SESSION_SECRET`：登入 session secret
+  - `ADMIN_PASSWORD_HASH`：管理者密碼 bcrypt hash
+- optional:
+  - `TIMELAPSE_MIN_FREE_GB`：低於此值會自動中止任務
+  - `DATASET_ALLOWED_ROOTS`：後端允許註冊的伺服器資料路徑白名單（主要給 API/進階流程使用）
+- `LFS_BIN_PATH` 在 Docker image 內已預設為 `/opt/lichtfeld/bin/LichtFeld-Studio`，通常不需要手動設定
+- 其餘路徑與埠號在 Docker 內已有預設值，通常不需要額外設定
 
 ## Timelapse API
 
