@@ -15,7 +15,7 @@ describe("config shared library path", () => {
 
     try {
       await import("../src/config.js");
-      expect(process.env.LD_LIBRARY_PATH).toBe("/opt/lichtfeld/lib:/opt/lichtfeld/lib64:/usr/local/lib");
+      expect(process.env.LD_LIBRARY_PATH).toBe("/opt/lichtfeld/lib:/opt/lichtfeld/lib64:/opt/lichtfeld/bin:/usr/local/lib");
     } finally {
       process.env = originalEnv;
       vi.resetModules();

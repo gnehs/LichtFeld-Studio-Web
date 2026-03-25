@@ -86,7 +86,15 @@ RUN cmake -B build \
     -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     && cmake --build build -- -j"$(nproc)" \
-    && cmake --install build --prefix /opt/lichtfeld
+    && cmake --install build --prefix /opt/lichtfeld \
+    && mkdir -p /opt/lichtfeld/lib /opt/lichtfeld/bin \
+    && find /opt/src/LichtFeld-Studio/build -type f -name 'liblfs_*.so*' -exec cp -an {} /opt/lichtfeld/lib/ \; \
+    && find /opt/lichtfeld -type f -name 'liblfs_*.so*' -exec cp -an {} /opt/lichtfeld/lib/ \; \
+    && for lib in /opt/lichtfeld/lib/liblfs_*.so.*; do \
+         [ -e "$lib" ] || continue; \
+         soname="${lib%%.so.*}.so"; \
+         [ -e "$soname" ] || ln -s "$(basename "$lib")" "$soname"; \
+       done
 
 FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04
 ENV DEBIAN_FRONTEND=noninteractive
@@ -157,6 +165,9 @@ COPY --from=lfs-build /opt/lichtfeld /opt/lichtfeld
 COPY --from=web-build /app /app
 
 ENV LFS_BIN_PATH=/opt/lichtfeld/bin/LichtFeld-Studio
+ENV LD_LIBRARY_PATH=/opt/lichtfeld/lib:/opt/lichtfeld/lib64:/opt/lichtfeld/bin
+
+RUN printf "/opt/lichtfeld/lib\n/opt/lichtfeld/lib64\n/opt/lichtfeld/bin\n" > /etc/ld.so.conf.d/lichtfeld.conf && ldconfig
 
 EXPOSE 3000
 CMD ["node", "scripts/docker-entrypoint.mjs"]

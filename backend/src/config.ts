@@ -36,7 +36,7 @@ function ensureLibraryPath(paths: string[]) {
   process.env.LD_LIBRARY_PATH = nextEntries.join(":");
 }
 
-ensureLibraryPath(["/opt/lichtfeld/lib", "/opt/lichtfeld/lib64"]);
+ensureLibraryPath(["/opt/lichtfeld/lib", "/opt/lichtfeld/lib64", "/opt/lichtfeld/bin"]);
 
 const dataRoot = process.env.DATA_ROOT ?? path.join(process.cwd(), "data");
 
