@@ -28,7 +28,7 @@ describe("create job strategy defaults", () => {
 
     expect(getStrategyDefaults("lfs")).toMatchObject({
       strategy: "lfs",
-      maxCap: 1000000,
+      maxCap: 5000000,
       ppisp: true,
     });
   });
