@@ -5,7 +5,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { ImagePlus, ListChecks, LogOut } from "lucide-react";
+import { CircleIndicator } from "@/components/CircleIndicator";
+import { LogOut } from "lucide-react";
 import {
   Link,
   Navigate,
@@ -20,7 +21,7 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { JobInsight, Notice } from "@/lib/app-types";
 import type { DatasetRecord, SystemMetrics, TrainingJob } from "@/lib/types";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
@@ -83,68 +84,81 @@ function DashboardShell({
 
       <main className="mx-auto mt-4 max-w-7xl space-y-4 px-4">
         {onJobsRoute ? (
-          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-6">
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500">
-                執行中
+          <div className="flex w-full flex-wrap justify-center gap-2">
+            <div className="min-w-20 rounded-full border border-white/8 bg-black/30 px-4 py-2">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                訓練中
               </p>
-              <div className="mt-2 text-2xl font-semibold text-zinc-50">
+              <div className="text-sm font-semibold text-zinc-50">
                 {runningCount}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500">
+            <div className="min-w-20 rounded-full border border-white/8 bg-black/30 px-4 py-2">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
                 佇列
               </p>
-              <div className="mt-2 text-2xl font-semibold text-zinc-50">
+              <div className="text-sm font-semibold text-zinc-50">
                 {queuedCount}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500">
+            <div className="min-w-20 rounded-full border border-white/8 bg-black/30 px-4 py-2">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
                 資料集
               </p>
-              <div className="mt-2 text-2xl font-semibold text-zinc-50">
+              <div className="text-sm font-semibold text-zinc-50">
                 {datasets.length}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500">GPU</p>
-              <div className="mt-2 text-2xl font-semibold text-zinc-50">
-                {gpu?.utilizationGpu ?? "-"}
-                {gpu?.utilizationGpu !== null &&
-                gpu?.utilizationGpu !== undefined
-                  ? "%"
-                  : ""}
+            <div className="flex min-w-30 items-center gap-3 rounded-full border border-white/8 bg-black/30 py-2 pr-4 pl-2">
+              <CircleIndicator
+                progress={gpu?.utilizationGpu ?? 0}
+                size={32}
+                color="var(--chart-1)"
+              />
+              <div>
+                <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                  {gpu?.name ? gpu.name : "GPU"}
+                </p>
+                <div className="text-sm font-semibold text-zinc-50">
+                  {gpu?.utilizationGpu ?? "-"}
+                </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
-                VRAM
-              </p>
-              <div className="mt-2 text-sm font-semibold text-zinc-50">
-                {vramText}
-              </div>
-              <div className="mt-1 text-xs text-zinc-400">
-                {gpu?.memoryUsedPercent !== null &&
-                gpu?.memoryUsedPercent !== undefined
-                  ? `${gpu.memoryUsedPercent.toFixed(1)}%`
-                  : ""}
+            <div className="flex min-w-30 items-center gap-3 rounded-full border border-white/8 bg-black/30 py-2 pr-4 pl-2">
+              <CircleIndicator
+                progress={
+                  gpu?.memoryUsedPercent !== null &&
+                  gpu?.memoryUsedPercent !== undefined
+                    ? gpu.memoryUsedPercent
+                    : 0
+                }
+                size={32}
+                color="var(--chart-1)"
+              />
+              <div>
+                <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                  VRAM
+                </p>
+                <div className="text-sm font-semibold text-zinc-50">
+                  {vramText}
+                </div>
               </div>
             </div>
-            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
-                RAM
-              </p>
-              <div className="mt-2 text-sm font-semibold text-zinc-50">
-                {systemMetrics
-                  ? `${systemMetrics.memory.usedGb.toFixed(1)} / ${systemMetrics.memory.totalGb.toFixed(1)} GB`
-                  : "-"}
-              </div>
-              <div className="mt-1 text-xs text-zinc-400">
-                {systemMetrics
-                  ? `${systemMetrics.memory.usedPercent.toFixed(1)}%`
-                  : ""}
+            <div className="flex min-w-30 items-center gap-3 rounded-full border border-white/8 bg-black/30 py-2 pr-4 pl-2">
+              <CircleIndicator
+                progress={systemMetrics ? systemMetrics.memory.usedPercent : 0}
+                size={32}
+                color="var(--chart-1)"
+              />
+              <div>
+                <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                  RAM
+                </p>
+                <div className="text-sm font-semibold text-zinc-50">
+                  {systemMetrics
+                    ? `${systemMetrics.memory.usedGb.toFixed(1)} / ${systemMetrics.memory.totalGb.toFixed(1)} GB`
+                    : "-"}
+                </div>
               </div>
             </div>
           </div>
