@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { CircleIndicator } from "@/components/CircleIndicator";
-import { Play, Clock, Database } from "lucide-react";
+import { Play, Clock, Database, Gpu, MemoryStick } from "lucide-react";
 import type { SystemMetrics, TrainingJob } from "@/lib/types";
 
 const baseCardClass = "rounded-full border border-white/8 bg-black/30";
@@ -37,20 +37,23 @@ function UsageCard({
   label,
   value,
   progress,
+  icon,
 }: {
   label: string;
   value: ReactNode;
   progress: number;
+  icon: ReactNode;
 }) {
   return (
     <div
-      className={`flex items-center gap-2 py-1.5 pr-4 pl-1.5 max-md:w-full md:min-w-30 ${baseCardClass}`}
+      className={`relative flex items-center gap-2 overflow-hidden py-1.5 pr-4 pl-1.5 max-md:w-full md:min-w-30 ${baseCardClass}`}
     >
       <CircleIndicator progress={progress} size={28} color="var(--chart-1)" />
       <div>
         <p className={metricLabelClass}>{label}</p>
         <div className="text-sm font-semibold text-zinc-50">{value}</div>
       </div>
+      <div className="absolute right-2 bottom-0 m-auto opacity-10">{icon}</div>
     </div>
   );
 }
@@ -79,17 +82,17 @@ export function DashboardOverview({
     {
       label: "訓練中",
       value: runningCount,
-      icon: <Play size={20} className="text-green-400" />,
+      icon: <Play size={16} className="text-green-400" />,
     },
     {
       label: "佇列",
       value: queuedCount,
-      icon: <Clock size={20} className="text-yellow-400" />,
+      icon: <Clock size={16} className="text-yellow-400" />,
     },
     {
       label: "資料集",
       value: datasetCount,
-      icon: <Database size={20} className="text-blue-400" />,
+      icon: <Database size={16} className="text-blue-400" />,
     },
   ];
 
@@ -98,11 +101,13 @@ export function DashboardOverview({
       label: gpu?.name || "GPU",
       value: gpu?.utilizationGpu ?? "-",
       progress: gpu?.utilizationGpu ?? 0,
+      icon: <Gpu size={32} className="text-white" />,
     },
     {
       label: "VRAM",
       value: vramText,
       progress: gpu?.memoryUsedPercent ?? 0,
+      icon: <MemoryStick size={32} className="text-white" />,
     },
     {
       label: "RAM",
@@ -118,6 +123,7 @@ export function DashboardOverview({
         "-"
       ),
       progress: systemMetrics?.memory.usedPercent ?? 0,
+      icon: <MemoryStick size={32} className="text-white" />,
     },
   ];
 
@@ -141,6 +147,7 @@ export function DashboardOverview({
             label={card.label}
             value={card.value}
             progress={card.progress}
+            icon={card.icon}
           />
         ))}
       </div>
