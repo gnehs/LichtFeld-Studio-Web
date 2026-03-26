@@ -158,7 +158,6 @@ export function TaskList({
               <TableHead>縮圖</TableHead>
               <TableHead>進度</TableHead>
               <TableHead>執行時間</TableHead>
-              <TableHead>經過時間</TableHead>
               <TableHead>ETA</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
@@ -171,7 +170,6 @@ export function TaskList({
               const startedAt = toTimestamp(job.startedAt);
               const finishedAt = toTimestamp(job.finishedAt);
               const endTs = finishedAt ?? nowMs;
-              const elapsedFromCreate = createdAt ? Math.max(0, endTs - createdAt) : null;
               const runElapsed = startedAt ? Math.max(0, endTs - startedAt) : null;
               const thumbnail = insight?.latestFramePath;
 
@@ -198,7 +196,6 @@ export function TaskList({
                     </div>
                   </TableCell>
                   <TableCell className="text-sm text-zinc-300">{formatDuration(runElapsed)}</TableCell>
-                  <TableCell className="text-sm text-zinc-300">{formatDuration(elapsedFromCreate)}</TableCell>
                   <TableCell className="text-sm text-zinc-300">{job.status === "completed" ? "已完成" : formatEta(metrics.etaMs)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
