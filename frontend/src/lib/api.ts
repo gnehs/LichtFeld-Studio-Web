@@ -93,8 +93,7 @@ export const api = {
   createJob: (payload: unknown) => request<{ item: TrainingJob }>("/api/jobs", { method: "POST", body: JSON.stringify(payload) }),
   getJob: (id: string) => request<{ item: TrainingJob }>(`/api/jobs/${id}`),
   stopJob: (id: string) => request<{ success: boolean }>(`/api/jobs/${id}/stop`, { method: "POST" }),
-  deleteJob: (id: string, deleteTimelapse = false) =>
-    request<{ success: boolean }>(`/api/jobs/${id}?deleteTimelapse=${deleteTimelapse ? "true" : "false"}`, { method: "DELETE" }),
+  deleteJob: (id: string) => request<{ success: boolean }>(`/api/jobs/${id}`, { method: "DELETE" }),
 
   getTimelapseCameras: (id: string) => request<{ items: Array<{ cameraName: string; frameCount: number; lastIteration: number }> }>(`/api/jobs/${id}/timelapse/cameras`),
   getTimelapseFrames: (id: string, camera: string, cursor?: number) => {

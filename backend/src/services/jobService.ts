@@ -67,6 +67,10 @@ class JobService {
     return [];
   }
 
+  clearLogLines(jobId: string) {
+    this.logs.delete(jobId);
+  }
+
   createJob(input: CreateJobInput) {
     const dataset = input.datasetId ? repo.getDataset(input.datasetId) : null;
     const params: TrainingParamsForm = { ...input.params };

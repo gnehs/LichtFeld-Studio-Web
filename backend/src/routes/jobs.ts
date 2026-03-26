@@ -7,7 +7,7 @@ import { repo } from "../db.js";
 import { registerSseClient } from "../sse.js";
 import { jobService } from "../services/jobService.js";
 import { config } from "../config.js";
-import { removeJobOutputDir } from "../lib/outputCleanup.js";
+import { removeJobLogFile, removeJobOutputDir } from "../lib/outputCleanup.js";
 
 const createJobSchema = z.object({
   datasetId: z.string().optional(),
@@ -120,8 +120,10 @@ jobsRouter.delete("/:id", (req, res) => {
     });
   }
 
+  const deletedLog = removeJobLogFile(job.id, config.logsDir);
+  jobService.clearLogLines(job.id);
   repo.deleteJob(job.id);
-  return res.json({ success: true, deletedOutput });
+  return res.json({ success: true, deletedOutput, deletedLog });
 });
 
 jobsRouter.get("/:id/logs/stream", (req, res) => {

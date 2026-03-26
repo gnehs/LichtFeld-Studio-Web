@@ -6,18 +6,29 @@ function isSubPath(child: string, parent: string): boolean {
   return relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
-export function removeJobOutputDir(outputPath: string, outputsRoot: string): boolean {
-  const resolvedOutput = path.resolve(outputPath);
-  const resolvedRoot = path.resolve(outputsRoot);
+function removePathWithinRoot(targetPath: string, rootPath: string, options?: { recursive?: boolean }): boolean {
+  const resolvedTarget = path.resolve(targetPath);
+  const resolvedRoot = path.resolve(rootPath);
 
-  if (!isSubPath(resolvedOutput, resolvedRoot)) {
+  if (!isSubPath(resolvedTarget, resolvedRoot)) {
     return false;
   }
 
-  if (!fs.existsSync(resolvedOutput)) {
+  if (!fs.existsSync(resolvedTarget)) {
     return false;
   }
 
-  fs.rmSync(resolvedOutput, { recursive: true, force: true });
+  fs.rmSync(resolvedTarget, {
+    recursive: options?.recursive ?? false,
+    force: true
+  });
   return true;
+}
+
+export function removeJobOutputDir(outputPath: string, outputsRoot: string): boolean {
+  return removePathWithinRoot(outputPath, outputsRoot, { recursive: true });
+}
+
+export function removeJobLogFile(jobId: string, logsRoot: string): boolean {
+  return removePathWithinRoot(path.join(logsRoot, `${jobId}.log`), logsRoot);
 }

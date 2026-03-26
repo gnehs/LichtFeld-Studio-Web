@@ -215,7 +215,7 @@ function App() {
   });
 
   const deleteJobMutation = useMutation({
-    mutationFn: (id: string) => guardAuth(() => api.deleteJob(id, false)),
+    mutationFn: (id: string) => guardAuth(() => api.deleteJob(id)),
     onSuccess: async (_result, id) => {
       setNoticeText({ tone: "success", text: `任務 ${id} 已刪除` });
       await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
@@ -313,7 +313,7 @@ function App() {
                 }}
                 onDelete={async (id) => {
                   const ok = window.confirm(
-                    "確定要刪除此任務？\n按「確定」會保留 Timelapse 檔案。",
+                    "確定要刪除此任務？\n按「確定」會一併刪除輸出資料夾、Timelapse 與 log，且無法復原。",
                   );
                   if (!ok) return;
                   try {
