@@ -16,12 +16,10 @@ function SummaryCard({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 rounded-full py-1 pr-4 pl-1 max-md:w-full md:min-w-24 glass-panel`}
+      className={`glass-panel flex items-center gap-2 rounded-full py-1 pr-4 pl-1 max-md:w-full md:min-w-24`}
     >
-      <div className="grid size-8 shrink-0 place-content-center rounded-full glass-panel">
-        <div className="icon-mask">
-          {icon}
-        </div>
+      <div className="glass-panel grid size-8 shrink-0 place-content-center rounded-full">
+        <div className="icon-mask">{icon}</div>
       </div>
       <div className="relative flex flex-col gap-0.5 text-shadow-sm">
         <p className={metricLabelClass}>{label}</p>
@@ -46,7 +44,7 @@ function UsageCard({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 overflow-hidden py-1 pr-4 pl-1 max-md:w-full md:min-w-30 glass-panel rounded-full`}
+      className={`glass-panel flex items-center gap-2 overflow-hidden rounded-full py-1 pr-4 pl-1 max-md:w-full md:min-w-30`}
     >
       <CircleIndicator
         progress={progress}
@@ -144,7 +142,7 @@ export function DashboardOverview({
   ];
 
   return (
-    <div className="flex flex-wrap justify-between gap-2">
+    <div className="mb-4 flex flex-wrap justify-between gap-2 border-b border-white/10 pb-4">
       <div className="grid grid-cols-3 flex-wrap items-center justify-center gap-2 max-md:w-full md:flex">
         {summaryCards.map((card) => (
           <SummaryCard

@@ -50,7 +50,7 @@ function DashboardShell({
 
   return (
     <div className="bg-app-base min-h-screen pb-8 text-zinc-100">
-      <header className="border-b border-white/10 bg-black/55 backdrop-blur-md">
+      <header className="border-b border-white/10 bg-black/20 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-50">

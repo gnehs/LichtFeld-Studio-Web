@@ -53,9 +53,6 @@ function Button({
       className={cn("relative", buttonVariants({ variant, size, className }))}
       {...props}
     >
-      {variant === "outline" && (
-        <span className="pointer-events-none absolute inset-0 rounded-[inherit] border border-input opacity-50" />
-      )}
       {children}
     </ButtonPrimitive>
   );

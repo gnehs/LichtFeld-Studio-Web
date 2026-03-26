@@ -138,21 +138,21 @@ function ProgressBar({ progress }: { progress: number | null }) {
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="rounded-[1.5rem] glass-panel p-8 text-center backdrop-blur-xl">
+    <div className="glass-panel rounded-[1.5rem] p-8 text-center backdrop-blur-xl">
       <div className="relative z-10 flex flex-col items-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full glass-panel">
+        <div className="glass-panel mx-auto flex h-12 w-12 items-center justify-center rounded-full">
           <div className="icon-mask text-cyan-200">
             <ListChecks className="h-7 w-7" />
           </div>
         </div>
-        <h2 className="mt-4 text-2xl font-semibold text-zinc-50 relative">
+        <h2 className="relative mt-4 text-2xl font-semibold text-zinc-50">
           目前還沒有任務
         </h2>
-        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400 relative">
+        <p className="relative mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">
           上傳 zip 或選擇既有 dataset
           後，即可建立新任務並在這裡追蹤縮圖、進度、執行時間與 ETA。
         </p>
-        <Button className="mt-6 relative" onClick={onCreate}>
+        <Button className="relative mt-6" onClick={onCreate}>
           <Plus className="size-4" /> 新增任務
         </Button>
       </div>
@@ -195,8 +195,29 @@ export function TaskList({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold text-zinc-50">任務清單</h2>
+        <div className="flex flex-wrap items-center justify-between">
+          <div className="flex flex-wrap gap-2">
+            {filterOptions.map((filter) => {
+              const active = filter.key === activeFilter;
+              return (
+                <Button
+                  key={filter.key}
+                  variant={active ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "rounded-2xl border-white/10 bg-black/10 text-zinc-300 hover:border-white/20 hover:bg-white/[0.06]",
+                    active && "bg-primary/25",
+                  )}
+                  onClick={() => setActiveFilter(filter.key)}
+                >
+                  <span>{filter.label}</span>
+                  <span className="glass-panel relative rounded-full bg-current/5 px-1.5 py-0.5 text-[10px] leading-none opacity-80">
+                    {filter.count}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => void onRefresh()}>
@@ -208,35 +229,10 @@ export function TaskList({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between">
-        <div className="flex flex-wrap gap-2">
-          {filterOptions.map((filter) => {
-            const active = filter.key === activeFilter;
-            return (
-              <Button
-                key={filter.key}
-                variant={active ? "default" : "outline"}
-                size="sm"
-                className={cn(
-                  "rounded-2xl border-white/10 bg-black/10 text-zinc-300 hover:border-white/20 hover:bg-white/[0.06]",
-                  active && "border-white/20 bg-white/10",
-                )}
-                onClick={() => setActiveFilter(filter.key)}
-              >
-                <span>{filter.label}</span>
-                <span className="rounded-full border border-current/15 px-1.5 py-0.5 text-[10px] leading-none opacity-80">
-                  {filter.count}
-                </span>
-              </Button>
-            );
-          })}
-        </div>
-      </div>
-
       {filteredJobs.length === 0 ? (
-        <div className="rounded-[1.5rem] p-8 text-center glass-panel backdrop-blur-xl relative overflow-hidden">
+        <div className="glass-panel relative overflow-hidden rounded-[1.5rem] p-8 text-center backdrop-blur-xl">
           <div className="relative z-10">
-            <p className="text-base font-medium text-zinc-100 relative">
+            <p className="relative text-base font-medium text-zinc-100">
               目前沒有符合「{filterEmptyText(activeFilter)}」的任務
             </p>
             <p className="mt-2 text-sm text-zinc-400">
@@ -273,7 +269,7 @@ export function TaskList({
               <article
                 key={job.id}
                 data-job-card
-                className="relative overflow-hidden rounded-2xl glass-panel p-4 backdrop-blur-xl"
+                className="glass-panel relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl"
               >
                 <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px rounded-2xl bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(103,232,249,0.25),rgba(255,255,255,0))]" />
                 <div className="relative z-10">
@@ -282,16 +278,16 @@ export function TaskList({
                       <div className="font-mono text-[11px] break-all text-zinc-500">
                         {job.id}
                       </div>
-                      <Badge variant={statusBadgeVariant(job.status)}>
-                        {statusText(job.status)}
-                      </Badge>
+                      <div className="text-[11px] text-zinc-500">
+                        {new Date(job.createdAt).toLocaleString()}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-zinc-500">
-                      {new Date(job.createdAt).toLocaleString()}
-                    </div>
+                    <Badge variant={statusBadgeVariant(job.status)}>
+                      {statusText(job.status)}
+                    </Badge>
                   </div>
 
-                  <div className="mt-4 overflow-hidden rounded-[1.2rem] glass-panel bg-black/25">
+                  <div className="glass-panel mt-2 overflow-hidden rounded-xl bg-black/25">
                     {thumbnail ? (
                       <img
                         className="h-40 w-full object-cover"
@@ -305,7 +301,7 @@ export function TaskList({
                     )}
                   </div>
 
-                  <div className="mt-4 rounded-[1.2rem] glass-panel bg-black/20 p-3">
+                  <div className="glass-panel mt-4 rounded-xl bg-black/20 p-3">
                     <div className="flex items-center justify-between text-xs text-zinc-400">
                       <span>進度</span>
                       <span>{progressText(metrics.progress)}</span>
@@ -316,19 +312,17 @@ export function TaskList({
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-[1.1rem] glass-panel bg-black/15 p-3">
-                      <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                        執行時間
-                      </div>
-                      <div className="mt-2 text-base font-medium text-zinc-100">
+                    <div className="glass-panel rounded-xl bg-black/15 p-3">
+                      <div className="text-xs text-zinc-500">執行時間</div>
+                      <div className="text-base font-medium text-zinc-100">
                         {formatDuration(runElapsed)}
                       </div>
                     </div>
-                    <div className="rounded-[1.1rem] glass-panel bg-black/15 p-3">
-                      <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                        ETA
+                    <div className="glass-panel rounded-xl bg-black/15 p-3">
+                      <div className="text-xs text-zinc-500">
+                        {job.status === "completed" ? "狀態" : `預計剩餘時間`}
                       </div>
-                      <div className="mt-2 text-base font-medium text-zinc-100">
+                      <div className="text-base font-medium text-zinc-100">
                         {job.status === "completed"
                           ? "已完成"
                           : formatEta(metrics.etaMs)}
