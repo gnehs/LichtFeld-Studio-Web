@@ -277,14 +277,14 @@ export function JobDetailPage({
     <section data-route="job-detail" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link className={buttonVariants({ variant: "outline" })} to="/jobs">
-          <ArrowLeft className="mr-2 h-4 w-4" /> 返回任務列表
+          <ArrowLeft className="size-4" /> 返回任務列表
         </Link>
         <div className="flex items-center gap-2">
           <a
             className={buttonVariants({ variant: "default" })}
             href={`/api/jobs/${id}/model/download`}
           >
-            <Download className="mr-2 h-4 w-4" /> 下載模型
+            <Download className="size-4" /> 下載模型
           </a>
         </div>
       </div>
@@ -377,7 +377,7 @@ export function JobDetailPage({
             onClick={() => setFrameIndex((prev) => Math.max(0, prev - 1))}
             disabled={isLive || frames.length === 0}
           >
-            <SkipBack className="mr-2 h-4 w-4" /> 上一張
+            <SkipBack className="size-4" /> 上一張
           </Button>
           <Button
             onClick={() => {
@@ -387,9 +387,9 @@ export function JobDetailPage({
             disabled={isLive || frames.length < 2}
           >
             {isPlaying ? (
-              <Pause className="mr-2 h-4 w-4" />
+              <Pause className="size-4" />
             ) : (
-              <Play className="mr-2 h-4 w-4" />
+              <Play className="size-4" />
             )}
             {isPlaying ? "暫停" : "播放"}
           </Button>
@@ -400,7 +400,7 @@ export function JobDetailPage({
             }
             disabled={isLive || frames.length === 0}
           >
-            <SkipForward className="mr-2 h-4 w-4" /> 下一張
+            <SkipForward className="size-4" /> 下一張
           </Button>
 
           <select

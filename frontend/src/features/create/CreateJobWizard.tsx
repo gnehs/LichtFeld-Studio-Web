@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { Database, RefreshCw, Sparkles, UploadCloud } from "lucide-react";
+import { RefreshCw, Sparkles, UploadCloud } from "lucide-react";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Notice } from "@/lib/app-types";
@@ -48,6 +48,37 @@ import {
   shouldAutoStartUpload,
   type PendingUploadDraft,
 } from "@/upload-state";
+import {
+  formatDatasetFolderLabel,
+  formatDatasetFolderMeta,
+  getDatasetSelectItems,
+} from "./create-job-dataset-select";
+import {
+  CREATE_JOB_SOURCE_MODE_BUTTONS,
+  getCreateJobSourceModeState,
+  type CreateJobSourceMode,
+} from "./create-job-source-mode";
+
+function SourceModeButton({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant={active ? "default" : "outline"}
+      className="min-w-[160px] flex-1"
+      onClick={onClick}
+    >
+      {label}
+    </Button>
+  );
+}
 
 interface CreateWizardValues extends CreateJobStrategyDefaults {
   advancedJson: string;
@@ -72,28 +103,6 @@ const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
   totalBytes: 0,
   startedAt: null,
 };
-
-function localizeFolderReason(reason: string | null): string {
-  if (!reason) return "未知原因";
-  if (reason.includes("Missing sparse/")) return "缺少 sparse/ 目錄";
-  if (reason.includes("Missing images/")) return "缺少 images/ 目錄";
-  if (reason.includes("upload in progress")) return "上傳尚未完成";
-  if (reason.includes("still being written")) return "資料夾仍在寫入中";
-  return reason;
-}
-
-function formatFolderMeta(folder: DatasetFolderEntry): string {
-  if (folder.imageCount !== null) {
-    return `${folder.imageCount} 張照片`;
-  }
-  if (folder.health === "uploading") {
-    return "上傳中";
-  }
-  if (folder.health === "stabilizing") {
-    return "寫入穩定中";
-  }
-  return `失敗：${localizeFolderReason(folder.reason)}`;
-}
 
 function ProgressBar({ progress }: { progress: number | null }) {
   const width =
@@ -132,6 +141,13 @@ function DatasetStructureGuide() {
         <code className="rounded bg-black/40 px-1 py-0.5">dataset/images</code>
         。
       </p>
+      <p className="mt-2 text-xs leading-5 text-zinc-400">
+        若需要遮罩，請在資料集根目錄額外放入
+        <code className="rounded bg-black/40 px-1 py-0.5">masks/</code>
+        資料夾；若
+        <code className="rounded bg-black/40 px-1 py-0.5">images/</code>
+        內的 PNG 含 alpha 通道，也會被視為可用的遮罩來源。
+      </p>
     </div>
   );
 }
@@ -162,40 +178,6 @@ function SourcePanel({
       </div>
       <div className="mt-4 space-y-4">{children}</div>
     </section>
-  );
-}
-
-function SourceModeButton({
-  active,
-  icon,
-  title,
-  description,
-  onClick,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group flex min-w-[220px] flex-1 items-start gap-3 rounded-[1rem] border px-4 py-3 text-left transition ${active ? "border-cyan-300/35 bg-cyan-300/[0.06]" : "border-white/10 bg-black/25 hover:border-white/20 hover:bg-black/35"}`}
-    >
-      <div
-        className={`mt-0.5 rounded-lg border p-2 ${active ? "border-cyan-300/35 bg-cyan-300/[0.12] text-cyan-100" : "border-white/10 bg-black/30 text-zinc-300"}`}
-      >
-        {icon}
-      </div>
-      <div>
-        <div className="text-sm font-medium text-zinc-100">{title}</div>
-        <div className="mt-1 text-xs leading-5 text-zinc-400">
-          {description}
-        </div>
-      </div>
-    </button>
   );
 }
 
@@ -239,17 +221,18 @@ function UploadDropzone({
             拖移 ZIP 到這裡，或點擊選擇檔案
           </p>
           <p className="mt-1 text-xs leading-5 text-zinc-400">
-            只接受單一 `.zip` 檔案。選取後會自動切到參數設定並開始背景上傳。
+            只接受 `.zip` 格式。
           </p>
         </div>
         <div className="text-xs text-zinc-500">
-          {file ? `已選擇：${file.name}` : "尚未選擇檔案"}
+          {file ? (
+            `已選擇：${file.name}`
+          ) : (
+            <Button type="button" variant="outline" onClick={onPick}>
+              <UploadCloud className="size-4" /> 選擇 ZIP
+            </Button>
+          )}
         </div>
-      </div>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button type="button" variant="outline" onClick={onPick}>
-          <UploadCloud className="mr-2 h-4 w-4" /> 選擇 ZIP
-        </Button>
       </div>
     </label>
   );
@@ -490,9 +473,8 @@ export function CreateJobWizard({
 }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2>(1);
-  const [dataSourceMode, setDataSourceMode] = useState<"existing" | "upload">(
-    "existing",
-  );
+  const [dataSourceMode, setDataSourceMode] =
+    useState<CreateJobSourceMode>("existing");
   const [draggingUpload, setDraggingUpload] = useState(false);
   const [uploadInputKey, setUploadInputKey] = useState(0);
   const [uploadNowMs, setUploadNowMs] = useState(() => Date.now());
@@ -549,6 +531,34 @@ export function CreateJobWizard({
           Boolean(folder.datasetId),
       ),
     [datasetFolders],
+  );
+  const datasetSelectItems = useMemo(
+    () => getDatasetSelectItems(datasetFolders),
+    [datasetFolders],
+  );
+  const datasetSelectValueMap = useMemo(
+    () =>
+      new Map(
+        datasetFolders.flatMap((folder) =>
+          folder.datasetId
+            ? [
+                [
+                  folder.datasetId,
+                  {
+                    name: folder.name,
+                    meta: formatDatasetFolderMeta(folder),
+                    label: formatDatasetFolderLabel(folder),
+                  },
+                ] as const,
+              ]
+            : [],
+        ),
+      ),
+    [datasetFolders],
+  );
+  const sourceModeState = useMemo(
+    () => getCreateJobSourceModeState(dataSourceMode),
+    [dataSourceMode],
   );
   const activeDatasetId =
     dataSourceMode === "existing" ? selectedDatasetId : uploadedDatasetId;
@@ -869,38 +879,13 @@ export function CreateJobWizard({
 
       {step === 1 ? (
         <div className="space-y-5">
-          <div className="grid gap-3 md:grid-cols-2">
-            <SourceModeButton
-              active={dataSourceMode === "existing"}
-              icon={<Database className="h-4 w-4" />}
-              title="既有資料集"
-              description="從已註冊的 dataset 清單中選取。"
-              onClick={() => setDataSourceMode("existing")}
-            />
-            <SourceModeButton
-              active={dataSourceMode === "upload"}
-              icon={<UploadCloud className="h-4 w-4" />}
-              title="拖移 / 上傳 ZIP"
-              description="選取後會自動進入參數設定並背景上傳。"
-              onClick={() => setDataSourceMode("upload")}
-            />
-          </div>
-
           <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <SourcePanel
-              title={
-                dataSourceMode === "existing"
-                  ? "從既有資料集中選擇"
-                  : "以拖移方式上傳 ZIP"
-              }
-              description={
-                dataSourceMode === "existing"
-                  ? "會列出 DATASETS 內全部資料夾。"
-                  : "選取後自動上傳；資料集命名移到參數設定區。"
-              }
+              title="資料集來源"
+              description="先用上方按鈕切換既有資料集或上傳 ZIP，再決定這次任務要使用哪個資料來源。"
               active
               actions={
-                dataSourceMode === "existing" ? (
+                sourceModeState.showRefreshAction ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -920,23 +905,57 @@ export function CreateJobWizard({
                         );
                     }}
                   >
-                    <RefreshCw className="mr-2 h-4 w-4" /> 重新整理
+                    <RefreshCw className="size-4" /> 重新整理
                   </Button>
                 ) : null
               }
             >
-              {dataSourceMode === "existing" ? (
+              <div className="flex flex-wrap gap-2">
+                {CREATE_JOB_SOURCE_MODE_BUTTONS.map((item) => (
+                  <SourceModeButton
+                    key={item.mode}
+                    active={dataSourceMode === item.mode}
+                    label={item.label}
+                    onClick={() => setDataSourceMode(item.mode)}
+                  />
+                ))}
+              </div>
+
+              {sourceModeState.showExistingDatasetSelect ? (
                 <>
                   <div>
                     <Label>選擇資料集</Label>
                     <Select
-                      value={selectedDatasetId || undefined}
+                      items={datasetSelectItems}
+                      value={selectedDatasetId || null}
                       onValueChange={(value) => {
                         setSelectedDatasetId(value ?? "");
                       }}
                     >
-                      <SelectTrigger className="mt-2 w-full">
-                        <SelectValue placeholder="請選擇可用 dataset" />
+                      <SelectTrigger className="mt-2 h-auto min-h-8 w-full items-start py-2 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start">
+                        <SelectValue placeholder="請選擇可用 dataset">
+                          {(value) => {
+                            if (!value) {
+                              return "請選擇可用 dataset";
+                            }
+                            const selected = datasetSelectValueMap.get(
+                              value as string,
+                            );
+                            if (!selected) {
+                              return String(value);
+                            }
+                            return (
+                              <span className="flex min-w-0 flex-col py-0.5 leading-tight">
+                                <span className="truncate text-sm text-zinc-100">
+                                  {selected.name}
+                                </span>
+                                <span className="truncate text-xs text-zinc-400">
+                                  {selected.meta}
+                                </span>
+                              </span>
+                            );
+                          }}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
@@ -946,13 +965,6 @@ export function CreateJobWizard({
                               !folder.isRegistered ||
                               folder.health !== "ready" ||
                               !folder.datasetId;
-                            const selectableDataset = folder.datasetId
-                              ? datasets.find(
-                                  (dataset) => dataset.id === folder.datasetId,
-                                )
-                              : null;
-                            const title =
-                              selectableDataset?.name ?? folder.name;
                             return (
                               <SelectItem
                                 key={folder.path}
@@ -961,7 +973,14 @@ export function CreateJobWizard({
                                 }
                                 disabled={disabled}
                               >
-                                {`${title} - ${formatFolderMeta(folder)}`}
+                                <div className="flex flex-col gap-0.5 py-0.5">
+                                  <span className="text-sm text-zinc-100">
+                                    {folder.name}
+                                  </span>
+                                  <span className="text-xs text-zinc-400">
+                                    {formatDatasetFolderMeta(folder)}
+                                  </span>
+                                </div>
                               </SelectItem>
                             );
                           })}
@@ -980,7 +999,9 @@ export function CreateJobWizard({
                     </p>
                   ) : null}
                 </>
-              ) : (
+              ) : null}
+
+              {sourceModeState.showUploadSection ? (
                 <>
                   <UploadDropzone
                     file={uploadFile}
@@ -1006,17 +1027,8 @@ export function CreateJobWizard({
                       applyUploadFile(e.target.files?.[0] ?? null)
                     }
                   />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => void goStepTwo()}
-                      disabled={!uploadFile && !uploadedDatasetId}
-                    >
-                      先調整參數
-                    </Button>
-                  </div>
                 </>
-              )}
+              ) : null}
             </SourcePanel>
 
             <SourcePanel
