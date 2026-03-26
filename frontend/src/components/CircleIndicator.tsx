@@ -50,16 +50,22 @@ export function CircleIndicator({
         />
       </svg>
       <motion.div
-        className="absolute inset-0 flex size-full items-center justify-center text-[11px] font-medium tracking-tighter tabular-nums"
-        style={{
-          color: `color-mix(in oklch,var(--foreground), ${color} 70%)`,
-        }}
+        className="absolute inset-0 flex size-full items-center justify-center text-shadow-sm"
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true, margin: "0px 0px -72px 0px" }}
         transition={{ duration: 0.3 }}
       >
-        {rounded}
+        <div
+          className="bg-linear-to-b bg-clip-text text-[11px] leading-[1em] font-medium tracking-tighter text-transparent tabular-nums"
+          style={
+            {
+              backgroundImage: `linear-gradient(to bottom, color-mix(in oklch, white, ${color} 10%), color-mix(in oklch, white, ${color} 40%))`,
+            } as React.CSSProperties
+          }
+        >
+          {rounded}
+        </div>
       </motion.div>
     </div>
   );

@@ -1,20 +1,30 @@
+import { useState } from "react";
 import { Plus, RefreshCw, Square, Trash2, ListChecks } from "lucide-react";
 import type { JobInsight } from "@/lib/app-types";
 import type { JobStatus, TrainingJob, TrainingParamsForm } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 interface ParsedJobMetrics {
   progress: number | null;
   etaMs: number | null;
+}
+
+type TaskFilter = "all" | "running" | "queued" | "completed" | "failed";
+
+const TASK_FILTERS: Array<{ key: TaskFilter; label: string }> = [
+  { key: "all", label: "全部" },
+  { key: "running", label: "訓練中" },
+  { key: "queued", label: "佇列" },
+  { key: "completed", label: "完成" },
+  { key: "failed", label: "失敗" },
+];
+
+function isFailureStatus(status: JobStatus): boolean {
+  return (
+    status === "failed" || status === "stopped" || status === "stopped_low_disk"
+  );
 }
 
 function statusBadgeVariant(
@@ -28,12 +38,23 @@ function statusBadgeVariant(
 }
 
 function statusText(status: JobStatus): string {
-  if (status === "queued") return "排隊中";
-  if (status === "running") return "執行中";
+  if (status === "queued") return "佇列";
+  if (status === "running") return "訓練中";
   if (status === "completed") return "已完成";
   if (status === "failed") return "失敗";
   if (status === "stopped") return "已停止";
   return "低磁碟空間中止";
+}
+
+function matchesTaskFilter(status: JobStatus, filter: TaskFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "failed") return isFailureStatus(status);
+  return status === filter;
+}
+
+function filterEmptyText(filter: TaskFilter): string {
+  const entry = TASK_FILTERS.find((item) => item.key === filter);
+  return entry?.label ?? "目前條件";
 }
 
 function formatDuration(ms: number | null): string {
@@ -154,7 +175,18 @@ export function TaskList({
   onDelete: (id: string) => Promise<void>;
   onOpenDetail: (id: string) => void;
 }) {
+  const [activeFilter, setActiveFilter] = useState<TaskFilter>("all");
+
   if (jobs.length === 0) return <EmptyState onCreate={onCreate} />;
+
+  const filteredJobs = jobs.filter((job) =>
+    matchesTaskFilter(job.status, activeFilter),
+  );
+  const filterOptions = TASK_FILTERS.map((filter) => ({
+    ...filter,
+    count: jobs.filter((job) => matchesTaskFilter(job.status, filter.key))
+      .length,
+  }));
 
   return (
     <div className="space-y-4">
@@ -172,103 +204,161 @@ export function TaskList({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.03] shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-xl">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-white/[0.03]">
-              <TableHead>任務</TableHead>
-              <TableHead>縮圖</TableHead>
-              <TableHead>進度</TableHead>
-              <TableHead>執行時間</TableHead>
-              <TableHead>ETA</TableHead>
-              <TableHead className="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {jobs.map((job) => {
-              const insight = insights[job.id];
-              const metrics = buildJobMetrics(job, insight, nowMs);
-              const startedAt = toTimestamp(job.startedAt);
-              const finishedAt = toTimestamp(job.finishedAt);
-              const endTs = finishedAt ?? nowMs;
-              const runElapsed = startedAt
-                ? Math.max(0, endTs - startedAt)
-                : null;
-              const thumbnail = insight?.latestFramePath;
+      <div className="flex flex-wrap items-center justify-between">
+        <div className="flex flex-wrap gap-2">
+          {filterOptions.map((filter) => {
+            const active = filter.key === activeFilter;
+            return (
+              <Button
+                key={filter.key}
+                variant={active ? "default" : "outline"}
+                size="sm"
+                className={cn(
+                  "rounded-2xl border-white/10 bg-black/10 text-zinc-300 hover:border-white/20 hover:bg-white/[0.06]",
+                  active && "border-white/20 bg-white/10",
+                )}
+                onClick={() => setActiveFilter(filter.key)}
+              >
+                <span>{filter.label}</span>
+                <span className="rounded-full border border-current/15 px-1.5 py-0.5 text-[10px] leading-none opacity-80">
+                  {filter.count}
+                </span>
+              </Button>
+            );
+          })}
+        </div>
+      </div>
 
-              return (
-                <TableRow key={job.id} className="align-top">
-                  <TableCell>
-                    <div className="space-y-2">
-                      <div className="font-mono text-[11px] text-zinc-500">
-                        {job.id}
-                      </div>
-                      <Badge variant={statusBadgeVariant(job.status)}>
-                        {statusText(job.status)}
-                      </Badge>
-                      <div className="text-xs text-zinc-500">
-                        建立於 {new Date(job.createdAt).toLocaleString()}
-                      </div>
+      {filteredJobs.length === 0 ? (
+        <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-white/[0.03] p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.26)]">
+          <p className="text-base font-medium text-zinc-100">
+            目前沒有符合「{filterEmptyText(activeFilter)}」的任務
+          </p>
+          <p className="mt-2 text-sm text-zinc-400">
+            切換其他狀態，或直接建立新的訓練任務。
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveFilter("all")}
+            >
+              查看全部
+            </Button>
+            <Button size="sm" onClick={onCreate}>
+              <Plus className="size-4" /> 新增任務
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filteredJobs.map((job) => {
+            const insight = insights[job.id];
+            const metrics = buildJobMetrics(job, insight, nowMs);
+            const startedAt = toTimestamp(job.startedAt);
+            const finishedAt = toTimestamp(job.finishedAt);
+            const endTs = finishedAt ?? nowMs;
+            const runElapsed = startedAt
+              ? Math.max(0, endTs - startedAt)
+              : null;
+            const thumbnail = insight?.latestFramePath;
+
+            return (
+              <article
+                key={job.id}
+                data-job-card
+                className="relative overflow-hidden rounded-2xl bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+              >
+                <div className="pointer-events-none absolute inset-0 size-full rounded-2xl border border-white/10" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-2xl bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(103,232,249,0.25),rgba(255,255,255,0))]" />
+
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-2">
+                    <div className="font-mono text-[11px] break-all text-zinc-500">
+                      {job.id}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    {thumbnail ? (
-                      <img
-                        className="h-20 w-32 rounded-xl border border-white/10 object-cover"
-                        src={`/api/jobs/${job.id}/timelapse/frame?path=${encodeURIComponent(thumbnail)}`}
-                        alt={`job-${job.id}`}
-                      />
-                    ) : (
-                      <div className="flex h-20 w-32 items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-zinc-500">
-                        尚無縮圖
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="min-w-[180px]">
-                    <div className="space-y-2">
-                      <ProgressBar progress={metrics.progress} />
-                      <div className="text-xs text-zinc-400">
-                        {progressText(metrics.progress)}
-                      </div>
+                    <Badge variant={statusBadgeVariant(job.status)}>
+                      {statusText(job.status)}
+                    </Badge>
+                  </div>
+                  <div className="text-[11px] text-zinc-500">
+                    {new Date(job.createdAt).toLocaleString()}
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-hidden rounded-[1.2rem] border border-white/10 bg-black/25">
+                  {thumbnail ? (
+                    <img
+                      className="h-40 w-full object-cover"
+                      src={`/api/jobs/${job.id}/timelapse/frame?path=${encodeURIComponent(thumbnail)}`}
+                      alt={`job-${job.id}`}
+                    />
+                  ) : (
+                    <div className="flex h-40 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_55%)] text-sm text-zinc-500">
+                      尚無縮圖
                     </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-zinc-300">
-                    {formatDuration(runElapsed)}
-                  </TableCell>
-                  <TableCell className="text-sm text-zinc-300">
-                    {job.status === "completed"
-                      ? "已完成"
-                      : formatEta(metrics.etaMs)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-2">
-                      {job.status === "queued" || job.status === "running" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void onStop(job.id)}
-                        >
-                          <Square className="mr-1 h-3.5 w-3.5" /> 停止
-                        </Button>
-                      ) : null}
+                  )}
+                </div>
+
+                <div className="mt-4 rounded-[1.2rem] border border-white/8 bg-black/20 p-3">
+                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                    <span>進度</span>
+                    <span>{progressText(metrics.progress)}</span>
+                  </div>
+                  <div className="mt-2">
+                    <ProgressBar progress={metrics.progress} />
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[1.1rem] border border-white/8 bg-black/15 p-3">
+                    <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                      執行時間
+                    </div>
+                    <div className="mt-2 text-base font-medium text-zinc-100">
+                      {formatDuration(runElapsed)}
+                    </div>
+                  </div>
+                  <div className="rounded-[1.1rem] border border-white/8 bg-black/15 p-3">
+                    <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                      ETA
+                    </div>
+                    <div className="mt-2 text-base font-medium text-zinc-100">
+                      {job.status === "completed"
+                        ? "已完成"
+                        : formatEta(metrics.etaMs)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap justify-between gap-2 border-t border-white/8 pt-4">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => void onDelete(job.id)}
+                  >
+                    <Trash2 className="mr-1 h-3.5 w-3.5" /> 刪除
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    {job.status === "queued" || job.status === "running" ? (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => void onDelete(job.id)}
+                        onClick={() => void onStop(job.id)}
                       >
-                        <Trash2 className="mr-1 h-3.5 w-3.5" /> 刪除
+                        <Square className="mr-1 h-3.5 w-3.5" /> 停止
                       </Button>
-                      <Button size="sm" onClick={() => onOpenDetail(job.id)}>
-                        查看詳細
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+                    ) : null}
+                    <Button size="sm" onClick={() => onOpenDetail(job.id)}>
+                      查看詳細
+                    </Button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
