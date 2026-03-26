@@ -424,17 +424,26 @@ function ParameterMetric({
 function ToggleChip({
   checked,
   label,
+  description,
   onChange,
 }: {
   checked: boolean;
   label: string;
+  description?: string;
   onChange: (checked: boolean) => void;
 }) {
   return (
     <label
       className={`flex items-center justify-between gap-3 rounded-[1rem] border px-3 py-3 text-sm transition ${checked ? "border-cyan-300/30 bg-cyan-300/[0.08] text-zinc-100" : "border-white/10 bg-black/20 text-zinc-300"}`}
     >
-      <span>{label}</span>
+      <div>
+        <span>{label}</span>
+        <div>
+          {description ? (
+            <p className="mt-1 text-xs text-zinc-500">{description}</p>
+          ) : null}
+        </div>
+      </div>
       <input
         type="checkbox"
         checked={checked}
@@ -926,7 +935,7 @@ export function CreateJobWizard({
                         setSelectedDatasetId(value ?? "");
                       }}
                     >
-                      <SelectTrigger className="mt-2 w-full min-h-12 items-start whitespace-normal py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start">
+                      <SelectTrigger className="mt-2 min-h-12 w-full items-start py-2 whitespace-normal data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start">
                         <SelectValue placeholder="請選擇可用 dataset">
                           {(value) => {
                             if (!value) {
@@ -1326,7 +1335,9 @@ export function CreateJobWizard({
                         onValueChange={(val) =>
                           updateForm(
                             "resizeFactor",
-                            val === "auto" ? "auto" : (Number(val) as 1 | 2 | 4 | 8),
+                            val === "auto"
+                              ? "auto"
+                              : (Number(val) as 1 | 2 | 4 | 8),
                           )
                         }
                       >
@@ -1359,7 +1370,10 @@ export function CreateJobWizard({
                         <Select
                           value={form.maskMode}
                           onValueChange={(val) =>
-                            updateForm("maskMode", val as CreateWizardValues["maskMode"])
+                            updateForm(
+                              "maskMode",
+                              val as CreateWizardValues["maskMode"],
+                            )
                           }
                         >
                           <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
@@ -1369,7 +1383,9 @@ export function CreateJobWizard({
                             <SelectItem value="none">none</SelectItem>
                             <SelectItem value="segment">segment</SelectItem>
                             <SelectItem value="ignore">ignore</SelectItem>
-                            <SelectItem value="alpha_consistent">alpha_consistent</SelectItem>
+                            <SelectItem value="alpha_consistent">
+                              alpha_consistent
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                         <FieldHint>
@@ -1463,22 +1479,26 @@ export function CreateJobWizard({
                     <ToggleChip
                       checked={form.random}
                       label="--random"
+                      description="改用隨機點初始化，而不是依既有重建結果起步。"
                       onChange={(checked) => updateForm("random", checked)}
                     />
                     <ToggleChip
                       checked={form.noCpuCache}
                       label="--no-cpu-cache"
+                      description="停用 RAM 影像快取；通常只在快取造成壓力時才關閉。"
                       onChange={(checked) => updateForm("noCpuCache", checked)}
                     />
                     <ToggleChip
                       checked={form.noFsCache}
                       label="--no-fs-cache"
+                      description="停用磁碟影像快取；通常只在快取造成壓力時才關閉。"
                       onChange={(checked) => updateForm("noFsCache", checked)}
                     />
                     {showMaskSettings ? (
                       <ToggleChip
                         checked={form.invertMasks}
                         label="--invert-masks"
+                        description="控制是否反轉遮罩。"
                         onChange={(checked) =>
                           updateForm("invertMasks", checked)
                         }
@@ -1488,6 +1508,7 @@ export function CreateJobWizard({
                       <ToggleChip
                         checked={form.noAlphaAsMask}
                         label="--no-alpha-as-mask"
+                        description="停用 RGBA alpha 自動當作遮罩來源。"
                         onChange={(checked) =>
                           updateForm("noAlphaAsMask", checked)
                         }
@@ -1496,6 +1517,7 @@ export function CreateJobWizard({
                     <ToggleChip
                       checked={form.enableSparsity}
                       label="--enable-sparsity"
+                      description="開啟模型壓縮/剪枝流程，適合想降低模型大小時使用。"
                       onChange={(checked) =>
                         updateForm("enableSparsity", checked)
                       }
@@ -1503,11 +1525,13 @@ export function CreateJobWizard({
                     <ToggleChip
                       checked={form.enableMip}
                       label="--enable-mip"
+                      description="啟用 mip-splatting 抗鋸齒濾波，有助於高頻細節與縮放穩定性。"
                       onChange={(checked) => updateForm("enableMip", checked)}
                     />
                     <ToggleChip
                       checked={form.bilateralGrid}
                       label="--bilateral-grid"
+                      description="加入外觀嵌入，處理曝光或顏色不一致資料。"
                       onChange={(checked) =>
                         updateForm("bilateralGrid", checked)
                       }
@@ -1515,11 +1539,13 @@ export function CreateJobWizard({
                     <ToggleChip
                       checked={form.ppisp}
                       label="--ppisp"
+                      description="啟用每相機外觀校正。"
                       onChange={(checked) => updateForm("ppisp", checked)}
                     />
                     <ToggleChip
                       checked={form.ppispController}
                       label="--ppisp-controller"
+                      description="新視角合成用控制器 CNN。"
                       onChange={(checked) =>
                         updateForm("ppispController", checked)
                       }
@@ -1527,53 +1553,17 @@ export function CreateJobWizard({
                     <ToggleChip
                       checked={form.ppispFreeze}
                       label="--ppisp-freeze"
+                      description="從既有 sidecar 啟動時凍結部分高斯參數，避免外觀模型覆蓋原始幾何。"
                       onChange={(checked) => updateForm("ppispFreeze", checked)}
                     />
                     <ToggleChip
                       checked={form.bgModulation}
                       label="--bg-modulation"
+                      description="學習獨立背景顏色，對背景變化明顯的資料集較有幫助。"
                       onChange={(checked) =>
                         updateForm("bgModulation", checked)
                       }
                     />
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <FieldHint>
-                      `--random`：改用隨機點初始化，而不是依既有重建結果起步。
-                    </FieldHint>
-                    <FieldHint>
-                      `--no-cpu-cache` / `--no-fs-cache`：停用 RAM
-                      或磁碟影像快取；通常只在快取造成壓力時才關閉。
-                    </FieldHint>
-                    {showMaskSettings ? (
-                      <FieldHint>
-                        `--invert-masks` /
-                        `--no-alpha-as-mask`：控制是否反轉遮罩，以及是否停用
-                        RGBA alpha 自動當作遮罩來源。
-                      </FieldHint>
-                    ) : null}
-                    <FieldHint>
-                      `--enable-sparsity`：開啟模型壓縮/剪枝流程，適合想降低模型大小時使用。
-                    </FieldHint>
-                    <FieldHint>
-                      `--enable-mip`：啟用 mip-splatting
-                      抗鋸齒濾波，有助於高頻細節與縮放穩定性。
-                    </FieldHint>
-                    <FieldHint>
-                      `--bilateral-grid`：加入外觀嵌入，處理曝光或顏色不一致資料。
-                    </FieldHint>
-                    <FieldHint>
-                      `--ppisp` /
-                      `--ppisp-controller`：啟用每相機外觀校正，以及新視角合成用控制器
-                      CNN。
-                    </FieldHint>
-                    <FieldHint>
-                      `--ppisp-freeze`：從既有 sidecar
-                      啟動時凍結部分高斯參數，避免外觀模型覆蓋原始幾何。
-                    </FieldHint>
-                    <FieldHint>
-                      `--bg-modulation`：學習獨立背景顏色，對背景變化明顯的資料集較有幫助。
-                    </FieldHint>
                   </div>
                 </ParameterPanel>
 
@@ -1585,11 +1575,13 @@ export function CreateJobWizard({
                     <ToggleChip
                       checked={form.eval}
                       label="--eval"
+                      description="訓練時同時跑評估流程，方便觀察品質指標。"
                       onChange={(checked) => updateForm("eval", checked)}
                     />
                     <ToggleChip
                       checked={form.saveEvalImages}
                       label="--save-eval-images"
+                      description="額外輸出評估影像或深度結果，會增加磁碟使用量。"
                       onChange={(checked) =>
                         updateForm("saveEvalImages", checked)
                       }
@@ -1597,36 +1589,21 @@ export function CreateJobWizard({
                     <ToggleChip
                       checked={form.saveDepth}
                       label="--save-depth"
+                      description="額外輸出評估影像或深度結果，會增加磁碟使用量。"
                       onChange={(checked) => updateForm("saveDepth", checked)}
                     />
                     <ToggleChip
                       checked={form.gut}
                       label="--gut"
+                      description="啟用 3DGUT，適合失真相機模型；官方文件指出它不適用於 `adc` / `igs+`。"
                       onChange={(checked) => updateForm("gut", checked)}
                     />
                     <ToggleChip
                       checked={form.undistort}
                       label="--undistort"
+                      description="在訓練前先做影像畸變校正，適合需要標準 pinhole 訓練流程時使用。"
                       onChange={(checked) => updateForm("undistort", checked)}
                     />
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <FieldHint>
-                      `--eval`：訓練時同時跑評估流程，方便觀察品質指標。
-                    </FieldHint>
-                    <FieldHint>
-                      `--save-eval-images` /
-                      `--save-depth`：額外輸出評估影像或深度結果，會增加磁碟使用量。
-                    </FieldHint>
-                    <FieldHint>
-                      `--gut`：啟用
-                      3DGUT，適合失真相機模型；官方文件指出它不適用於 `adc` /
-                      `igs+`。
-                    </FieldHint>
-                    <FieldHint>
-                      `--undistort`：在訓練前先做影像畸變校正，適合需要標準
-                      pinhole 訓練流程時使用。
-                    </FieldHint>
                   </div>
                 </ParameterPanel>
 

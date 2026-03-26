@@ -269,7 +269,7 @@ export function TaskList({
               <article
                 key={job.id}
                 data-job-card
-                className="glass-panel relative overflow-hidden rounded-2xl p-4 backdrop-blur-xl"
+                className="glass-panel relative rounded-2xl p-3 backdrop-blur-xl"
               >
                 <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px rounded-2xl bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(103,232,249,0.25),rgba(255,255,255,0))]" />
                 <div className="relative z-10">
