@@ -102,14 +102,6 @@ pre,
   font-family: "JetBrains Mono", "IBM Plex Mono", monospace;
 }
 
-*,
-::after,
-::before,
-::backdrop,
-::file-selector-button {
-  border-color: var(--color-border);
-}
-
 button:not(:disabled),
 [role="button"]:not(:disabled) {
   cursor: pointer;
