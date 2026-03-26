@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { calculateUploadSpeed, formatBytesPerSecond, formatUploadPhase, isDraggedFileZip, mergeUploadDraft, normalizeUploadProgress, shouldAllowStepTwoWhileUploading, shouldAutoStartUpload } from "./upload-state";
-import type { PendingUploadDraft } from "./upload-state";
+import { calculateUploadSpeed, formatBytesPerSecond, formatUploadPhase, isDraggedFileZip, mergeUploadDraft, normalizeUploadProgress, shouldAllowStepTwoWhileUploading, shouldAutoStartUpload } from "@/upload-state";
+import type { PendingUploadDraft } from "@/upload-state";
 
 describe("upload state helpers", () => {
   test("allows moving to step two while upload is still running", () => {

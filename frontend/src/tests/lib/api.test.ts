@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { api } from "./api";
+import { api } from "@/lib/api";
 
 function progressEvent(init?: { lengthComputable?: boolean; loaded?: number; total?: number }) {
   return {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { TrainingParamsForm } from "@/lib/types";
-import { getStrategyDefaults } from "./create-job-defaults";
+import { getStrategyDefaults } from "@/features/create/create-job-defaults";
 
 interface CreateWizardValues {
   iterations: number;

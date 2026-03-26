@@ -3,7 +3,7 @@ import {
   applyVisibleStrategyDefaults,
   getStrategyDefaults,
   shouldShowMaskSettings,
-} from "./create-job-defaults";
+} from "@/features/create/create-job-defaults";
 
 describe("create job strategy defaults", () => {
   test("returns upstream-inspired presets per strategy", () => {
