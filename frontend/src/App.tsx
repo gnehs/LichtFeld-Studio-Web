@@ -5,7 +5,7 @@ import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
 import type { JobInsight, Notice } from "@/lib/app-types";
 import type { DatasetFolderEntry, DatasetRecord, SystemMetrics, TrainingJob } from "@/lib/types";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
@@ -46,16 +46,15 @@ function DashboardShell({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant={onJobsRoute ? "default" : "outline"}>
-              <Link to="/jobs">
-                <ListChecks className="mr-2 h-4 w-4" /> 任務首頁
-              </Link>
-            </Button>
-            <Button asChild variant={location.pathname === "/create" ? "default" : "outline"}>
-              <Link to="/create">
-                <ImagePlus className="mr-2 h-4 w-4" /> 建立任務
-              </Link>
-            </Button>
+            <Link className={buttonVariants({ variant: onJobsRoute ? "default" : "outline" })} to="/jobs">
+              <ListChecks className="mr-2 h-4 w-4" /> 任務首頁
+            </Link>
+            <Link
+              className={buttonVariants({ variant: location.pathname === "/create" ? "default" : "outline" })}
+              to="/create"
+            >
+              <ImagePlus className="mr-2 h-4 w-4" /> 建立任務
+            </Link>
             <Button
               variant="outline"
               onClick={async () => {

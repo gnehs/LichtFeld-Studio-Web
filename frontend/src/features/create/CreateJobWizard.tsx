@@ -899,7 +899,9 @@ export function CreateJobWizard({
                       <Label>選擇 dataset</Label>
                       <Select
                         value={selectedDatasetId || undefined}
-                        onValueChange={setSelectedDatasetId}
+                        onValueChange={(value) => {
+                          setSelectedDatasetId(value ?? "");
+                        }}
                       >
                         <SelectTrigger className="mt-2">
                           <SelectValue placeholder="請選擇可用 dataset" />

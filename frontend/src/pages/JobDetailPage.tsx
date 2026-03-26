@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Download, Pause, Play, RefreshCw, SkipBack, SkipForward } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import type { Notice } from "@/lib/app-types";
@@ -98,8 +98,24 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
         return;
       }
       try {
-        const response = await api.getTimelapseFrames(id, selectedCamera);
-        const sorted = sortFramesAscending(response.items);
+        const collected: TimelapseFrame[] = [];
+        const seenCursors = new Set<number>();
+        let cursor: number | undefined;
+
+        while (true) {
+          const response = await api.getTimelapseFrames(id, selectedCamera, cursor);
+          if (response.items.length === 0) break;
+
+          collected.push(...response.items);
+
+          if (response.nextCursor === null) break;
+          if (seenCursors.has(response.nextCursor)) break;
+
+          seenCursors.add(response.nextCursor);
+          cursor = response.nextCursor;
+        }
+
+        const sorted = sortFramesAscending(collected);
         setFrames(sorted);
         setFrameIndex((prev) => {
           if (sorted.length === 0) return 0;
@@ -112,6 +128,25 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
     },
     [id, isLive, onNotice, selectedCamera]
   );
+
+  const reloadLatestFrames = useCallback(async () => {
+    if (!id || !selectedCamera) return;
+    try {
+      const response = await api.getTimelapseFrames(id, selectedCamera);
+      const latest = response.items;
+
+      setFrames((prev) => {
+        if (latest.length === 0) return prev;
+        const map = new Map(prev.map((frame) => [`${frame.iteration}:${frame.filePath}`, frame]));
+        latest.forEach((frame) => {
+          map.set(`${frame.iteration}:${frame.filePath}`, frame);
+        });
+        return sortFramesAscending(Array.from(map.values()));
+      });
+    } catch (error) {
+      onNotice({ tone: "error", text: `讀取相機影格失敗：${(error as Error).message}` });
+    }
+  }, [id, onNotice, selectedCamera]);
 
   const reloadJob = useCallback(async () => {
     if (!id) return;
@@ -161,10 +196,15 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
     const timer = setInterval(() => {
       void reloadJob();
       void reloadTimelapseOverview();
-      void reloadSelectedCameraFrames(true);
+      void reloadLatestFrames();
     }, 3000);
     return () => clearInterval(timer);
-  }, [id, isLive, reloadJob, reloadSelectedCameraFrames, reloadTimelapseOverview]);
+  }, [id, isLive, reloadJob, reloadLatestFrames, reloadTimelapseOverview]);
+
+  useEffect(() => {
+    if (!isLive) return;
+    setFrameIndex(Math.max(0, frames.length - 1));
+  }, [frames.length, isLive]);
 
   useEffect(() => {
     if (!isPlaying || isLive || frames.length < 2) return;
@@ -219,20 +259,16 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
   return (
     <section data-route="job-detail" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button asChild variant="outline">
-          <Link to="/jobs">
-            <ArrowLeft className="mr-2 h-4 w-4" /> 返回任務列表
-          </Link>
-        </Button>
+        <Link className={buttonVariants({ variant: "outline" })} to="/jobs">
+          <ArrowLeft className="mr-2 h-4 w-4" /> 返回任務列表
+        </Link>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => void reloadJob()}>
             <RefreshCw className="mr-2 h-4 w-4" /> 重新讀取
           </Button>
-          <Button asChild>
-            <a href={`/api/jobs/${id}/model/download`}>
-              <Download className="mr-2 h-4 w-4" /> 下載模型
-            </a>
-          </Button>
+          <a className={buttonVariants({ variant: "default" })} href={`/api/jobs/${id}/model/download`}>
+            <Download className="mr-2 h-4 w-4" /> 下載模型
+          </a>
         </div>
       </div>
 
