@@ -99,7 +99,7 @@ export function DashboardOverview({
   const usageCards = [
     {
       label: gpu?.name || "GPU",
-      value: gpu?.utilizationGpu ?? "-",
+      value: gpu?.utilizationGpu ? `${gpu.utilizationGpu}%` : "-",
       progress: gpu?.utilizationGpu ?? 0,
       icon: <Gpu size={32} className="text-white" />,
     },
