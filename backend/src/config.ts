@@ -65,6 +65,7 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   nodeEnv: process.env.NODE_ENV ?? "development",
   sessionSecret: required("SESSION_SECRET", "dev-session-secret"),
+  sessionCleanupIntervalMs: Number(process.env.SESSION_CLEANUP_INTERVAL_MS ?? 1000 * 60 * 60),
   adminPasswordHash: required("ADMIN_PASSWORD_HASH", "$2a$10$8QfQh49Fzi6zpbW6A2fBXeJvlaQt1zArQXd1LSeXfhBF3nf6/DrxW"),
   lfsBinPath: required("LFS_BIN_PATH", "LichtFeld-Studio"),
   lfsDefaultLogLevel: process.env.LFS_DEFAULT_LOG_LEVEL ?? "info",

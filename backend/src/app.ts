@@ -6,6 +6,7 @@ import helmet from "helmet";
 import cors from "cors";
 import { config } from "./config.js";
 import { getSessionCookieSecure, getSessionTrustProxy } from "./lib/sessionConfig.js";
+import { sessionStore } from "./lib/sessionStore.js";
 import { authRouter } from "./routes/auth.js";
 import { datasetsRouter } from "./routes/datasets.js";
 import { jobsRouter } from "./routes/jobs.js";
@@ -30,6 +31,7 @@ export function createApp() {
     session({
       name: "lfs.sid",
       secret: config.sessionSecret,
+      store: sessionStore,
       resave: false,
       saveUninitialized: false,
       cookie: {

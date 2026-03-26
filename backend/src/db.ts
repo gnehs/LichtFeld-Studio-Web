@@ -43,8 +43,16 @@ function migrate() {
       UNIQUE(job_id, camera_name, iteration)
     );
 
+    CREATE TABLE IF NOT EXISTS sessions (
+      sid TEXT PRIMARY KEY,
+      data_json TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
     CREATE INDEX IF NOT EXISTS idx_timelapse_job_camera ON timelapse_frames(job_id, camera_name, iteration DESC);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
   `);
 
   const jobColumns = db.prepare("PRAGMA table_info(jobs)").all() as Array<{ name: string }>;
@@ -248,6 +256,49 @@ export const repo = {
       )
       .all(jobId, jobId)
       .map(mapFrame);
+  },
+
+  getSession(sid: string) {
+    const row = db.prepare("SELECT data_json, expires_at FROM sessions WHERE sid = ?").get(sid) as
+      | { data_json: string; expires_at: string }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    if (Date.parse(row.expires_at) <= Date.now()) {
+      db.prepare("DELETE FROM sessions WHERE sid = ?").run(sid);
+      return null;
+    }
+
+    return JSON.parse(row.data_json);
+  },
+
+  persistSession(sid: string, dataJson: string, expiresAt: string) {
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO sessions (sid, data_json, expires_at, updated_at)
+       VALUES (@sid, @dataJson, @expiresAt, @updatedAt)
+       ON CONFLICT(sid) DO UPDATE SET
+         data_json = excluded.data_json,
+         expires_at = excluded.expires_at,
+         updated_at = excluded.updated_at`
+    ).run({
+      sid,
+      dataJson,
+      expiresAt,
+      updatedAt: now
+    });
+  },
+
+  deleteExpiredSessions(expiresBefore: string) {
+    const result = db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(expiresBefore);
+    return result.changes;
+  },
+
+  deleteSession(sid: string) {
+    db.prepare("DELETE FROM sessions WHERE sid = ?").run(sid);
   }
 };
 

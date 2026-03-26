@@ -9,6 +9,8 @@ LichtFeld-Studio 的簡易 Web 控制台，提供 React + Tailwind 前端與 Nod
 ## 功能重點
 
 - 單一管理者密碼登入
+- Session 會持久化到 SQLite，後端重啟後可沿用既有登入狀態
+- 會定期主動清理已過期的 session，避免資料表持續累積
 - 上傳 ZIP 或直接選用伺服器上的 dataset
 - 建立、停止、刪除訓練任務
 - 查看 timelapse、模型輸出與系統資源資訊
@@ -69,7 +71,7 @@ docker compose up -d --build
 
 - `datasets/`: 原始資料集
 - `outputs/`: 訓練輸出
-- `db/`: SQLite 資料庫
+- `db/`: SQLite 資料庫（包含 app 資料與 session）
 - `logs/`: 任務與系統日誌
 
 注意事項：
@@ -88,6 +90,7 @@ docker compose up -d --build
 常用選填：
 
 - `TIMELAPSE_MIN_FREE_GB`: 剩餘空間低於此值時自動停止任務，預設 `5`
+- `SESSION_CLEANUP_INTERVAL_MS`: 主動清理過期 session 的週期，預設 `3600000`（1 小時）
 - `DATASET_ALLOWED_ROOTS`: 允許註冊的 dataset 路徑白名單，預設為 datasets 目錄
 - `LFS_BIN_PATH`: LichtFeld-Studio 執行檔路徑；Docker 預設已設定
 
