@@ -60,6 +60,7 @@ import {
   getCreateJobSourceModeState,
   type CreateJobSourceMode,
 } from "./create-job-source-mode";
+import { cn } from "@/lib/utils";
 
 function SourceModeButton({
   active,
@@ -434,7 +435,12 @@ function ToggleChip({
 }) {
   return (
     <label
-      className={`flex items-center justify-between gap-3 rounded-[1rem] border px-3 py-3 text-sm transition ${checked ? "border-cyan-300/30 bg-cyan-300/[0.08] text-zinc-100" : "border-white/10 bg-black/20 text-zinc-300"}`}
+      className={cn(
+        `glass-panel flex items-center justify-between gap-3 rounded-[1rem] px-3 py-3 text-sm transition`,
+        checked
+          ? "bg-cyan-300/[0.08] text-zinc-100"
+          : "bg-black/20 text-zinc-300",
+      )}
     >
       <div>
         <span>{label}</span>
@@ -1048,632 +1054,595 @@ export function CreateJobWizard({
           </div>
         </div>
       ) : (
-        <Card className="border-white/10 bg-white/[0.03]">
-          <CardHeader>
-            <CardTitle className="text-xl">訓練參數設定</CardTitle>
-            <CardDescription>
-              目前資料集：
-              <span className="font-medium text-zinc-50">
-                {activeDatasetLabel}
-              </span>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-              <div className="space-y-4">
-                <ParameterPanel
-                  title="資料集與命名"
-                  description="ZIP 選取後才在這裡命名，避免把來源選擇與命名綁在一起。"
-                >
-                  <div>
-                    <Label>資料集名稱</Label>
-                    <Input
-                      className="mt-2"
-                      value={uploadDraft.name}
-                      onChange={(e) =>
-                        updateUploadDraft({ name: e.target.value })
-                      }
-                      placeholder="例如：garden-v2"
-                      disabled={dataSourceMode !== "upload"}
-                    />
-                  </div>
-                </ParameterPanel>
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-4">
+            <ParameterPanel
+              title="資料集與命名"
+              description="ZIP 選取後才在這裡命名，避免把來源選擇與命名綁在一起。"
+            >
+              <div>
+                <Label>目前資料集</Label>
+                <Input className="mt-2" value={activeDatasetLabel} disabled />
+              </div>
+              <div>
+                <Label>資料集名稱</Label>
+                <Input
+                  className="mt-2"
+                  value={uploadDraft.name}
+                  onChange={(e) => updateUploadDraft({ name: e.target.value })}
+                  placeholder="例如：garden-v2"
+                  disabled={dataSourceMode !== "upload"}
+                />
+              </div>
+            </ParameterPanel>
 
-                <ParameterPanel
-                  title="核心訓練參數"
-                  description="先決定主要訓練強度與資料讀取策略，維持高頻操作的清楚度。"
-                >
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <ParameterMetric
-                      label="iterations"
-                      value={form.iterations.toLocaleString()}
-                      hint="steps"
-                    />
-                    <ParameterMetric
-                      label="max cap"
-                      value={form.maxCap.toLocaleString()}
-                      hint="memory / density ceiling"
-                    />
-                    <ParameterMetric
-                      label="resize"
-                      value={String(form.resizeFactor)}
-                      hint="input scale"
-                    />
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
-                      <Label>Iterations</Label>
-                      <input
-                        type="range"
-                        min={5000}
-                        max={200000}
-                        step={1000}
-                        value={form.iterations}
-                        onChange={(e) =>
-                          updateForm("iterations", Number(e.target.value))
-                        }
-                        className="range-dark mt-3 w-full"
-                      />
-                    </div>
-                    <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
-                      <Label>Max Cap</Label>
-                      <input
-                        type="range"
-                        min={100000}
-                        max={10000000}
-                        step={50000}
-                        value={form.maxCap}
-                        onChange={(e) =>
-                          updateForm("maxCap", Number(e.target.value))
-                        }
-                        className="range-dark mt-3 w-full"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <Label>SH Degree</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={form.shDegree}
-                        onChange={(e) =>
-                          updateForm("shDegree", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        球諧函數階數，控制外觀表達能力；值越高，顏色/光照表現越細，但成本也越高。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>SH Degree Interval</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step={100}
-                        value={form.shDegreeInterval}
-                        onChange={(e) =>
-                          updateForm(
-                            "shDegreeInterval",
-                            Number(e.target.value || 0),
-                          )
-                        }
-                      />
-                      <FieldHint>
-                        MCMC 會依間隔逐步提升 SH
-                        階數；數值越小，越早增加外觀複雜度。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Min Opacity</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step="0.001"
-                        value={form.minOpacity}
-                        onChange={(e) =>
-                          updateForm("minOpacity", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        不透明度下限，用來抑制過淡的高斯；調高可能讓模型更乾淨，但也可能吃掉細節。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Steps Scaler</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step="0.1"
-                        value={form.stepsScaler}
-                        onChange={(e) =>
-                          updateForm("stepsScaler", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        依資料量放大訓練節奏；官方說明是依影像數量自動估算，調大通常代表更長的優化與延後某些階段切換。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Tile Mode</Label>
-                      <Select
-                        value={String(form.tileMode)}
-                        onValueChange={(val) =>
-                          updateForm("tileMode", Number(val) as 1 | 2 | 4)
-                        }
-                      >
-                        <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">1</SelectItem>
-                          <SelectItem value="2">2</SelectItem>
-                          <SelectItem value="4">4</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FieldHint>
-                        大圖分塊渲染模式；較大的 tile
-                        常有助於穩定處理高解析影像，但也會影響效能與記憶體行為。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Init Num Pts</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step={1000}
-                        value={form.initNumPts}
-                        onChange={(e) =>
-                          updateForm("initNumPts", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        隨機初始化時使用的點數；只有搭配 `--random` 才有意義。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Init Extent</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step="0.1"
-                        value={form.initExtent}
-                        onChange={(e) =>
-                          updateForm("initExtent", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        隨機初始化邊界盒大小；值越大，初始點雲分布範圍越廣。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Images Folder</Label>
-                      <Input
-                        className="mt-2"
-                        value={form.images}
-                        onChange={(e) => updateForm("images", e.target.value)}
-                        placeholder="例如：images"
-                      />
-                      <FieldHint>
-                        官方 CLI 的 `--images` 是影像子資料夾名稱，預設為
-                        `images`，不是檔名萬用字元。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Test Every</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step={10}
-                        value={form.testEvery}
-                        onChange={(e) =>
-                          updateForm("testEvery", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        每隔多少 iteration
-                        做一次測試/評估；設太小會增加額外開銷。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Max Width</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step={64}
-                        value={form.maxWidth}
-                        onChange={(e) =>
-                          updateForm("maxWidth", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        限制輸入影像最大寬度（像素）；可用來降低顯存與加快訓練。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Strategy</Label>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {(["mcmc", "adc", "igs+", "lfs"] as const).map(
-                          (strategy) => (
-                            <Button
-                              key={strategy}
-                              variant={
-                                form.strategy === strategy
-                                  ? "default"
-                                  : "outline"
-                              }
-                              onClick={() =>
-                                setForm((prev) =>
-                                  applyVisibleStrategyDefaults(prev, strategy),
-                                )
-                              }
-                              type="button"
-                            >
-                              {strategy}
-                            </Button>
-                          ),
-                        )}
-                      </div>
-                      <FieldHint>
-                        訓練/密度化策略；`mcmc` 與 `lfs` 通常較通用，`gut` 與
-                        `adc` / `igs+` 可能存在相容性限制。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Resize Factor</Label>
-                      <Select
-                        value={String(form.resizeFactor)}
-                        onValueChange={(val) =>
-                          updateForm(
-                            "resizeFactor",
-                            val === "auto"
-                              ? "auto"
-                              : (Number(val) as 1 | 2 | 4 | 8),
-                          )
-                        }
-                      >
-                        <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto">auto</SelectItem>
-                          <SelectItem value="1">1</SelectItem>
-                          <SelectItem value="2">1/2</SelectItem>
-                          <SelectItem value="4">1/4</SelectItem>
-                          <SelectItem value="8">1/8</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FieldHint>
-                        先對訓練影像降採樣；分母越大，解析度越低，速度越快但細節可能減少。
-                      </FieldHint>
-                    </div>
-                  </div>
-                </ParameterPanel>
-
-                <ParameterPanel
-                  title="資料處理與進階訓練"
-                  description="整理遮罩、稀疏化、MIP、PPISP 與背景調變相關選項。"
-                >
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {showMaskSettings ? (
-                      <div>
-                        <Label>Mask Mode</Label>
-                        <Select
-                          value={form.maskMode}
-                          onValueChange={(val) =>
-                            updateForm(
-                              "maskMode",
-                              val as CreateWizardValues["maskMode"],
+            <ParameterPanel
+              title="核心訓練參數"
+              description="先決定主要訓練強度與資料讀取策略，維持高頻操作的清楚度。"
+            >
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <ParameterMetric
+                  label="iterations"
+                  value={form.iterations.toLocaleString()}
+                  hint="steps"
+                />
+                <ParameterMetric
+                  label="max cap"
+                  value={form.maxCap.toLocaleString()}
+                  hint="memory / density ceiling"
+                />
+                <ParameterMetric
+                  label="resize"
+                  value={String(form.resizeFactor)}
+                  hint="input scale"
+                />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
+                  <Label>Iterations</Label>
+                  <input
+                    type="range"
+                    min={5000}
+                    max={200000}
+                    step={1000}
+                    value={form.iterations}
+                    onChange={(e) =>
+                      updateForm("iterations", Number(e.target.value))
+                    }
+                    className="range-dark mt-3 w-full"
+                  />
+                </div>
+                <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
+                  <Label>Max Cap</Label>
+                  <input
+                    type="range"
+                    min={100000}
+                    max={10000000}
+                    step={50000}
+                    value={form.maxCap}
+                    onChange={(e) =>
+                      updateForm("maxCap", Number(e.target.value))
+                    }
+                    className="range-dark mt-3 w-full"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Strategy</Label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(["mcmc", "adc", "igs+", "lfs"] as const).map(
+                      (strategy) => (
+                        <Button
+                          key={strategy}
+                          className="uppercase"
+                          variant={
+                            form.strategy === strategy ? "default" : "outline"
+                          }
+                          onClick={() =>
+                            setForm((prev) =>
+                              applyVisibleStrategyDefaults(prev, strategy),
                             )
                           }
+                          type="button"
                         >
-                          <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">none</SelectItem>
-                            <SelectItem value="segment">segment</SelectItem>
-                            <SelectItem value="ignore">ignore</SelectItem>
-                            <SelectItem value="alpha_consistent">
-                              alpha_consistent
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FieldHint>
-                          決定如何使用注意力遮罩，例如分割、忽略背景或維持 alpha
-                          一致性。
-                        </FieldHint>
-                      </div>
-                    ) : (
-                      <div className="rounded-[1rem] border border-dashed border-white/10 bg-black/20 p-4 md:col-span-2">
-                        <p className="text-sm text-zinc-200">
-                          目前 dataset 未偵測到可自動讀取的 masks
-                          資料夾，因此隱藏 mask 相關設定。
-                        </p>
-                        <FieldHint>
-                          參考 upstream，自動搜尋的資料夾名稱包含{" "}
-                          {UPSTREAM_MASK_FOLDERS.join(" / ")}；若影像本身帶有
-                          RGBA alpha，也會自動作為遮罩來源。
-                        </FieldHint>
-                      </div>
+                          {strategy}
+                        </Button>
+                      ),
                     )}
-                    <div>
-                      <Label>Sparsify Steps</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step={100}
-                        value={form.sparsifySteps}
-                        onChange={(e) =>
-                          updateForm(
-                            "sparsifySteps",
-                            Number(e.target.value || 0),
-                          )
-                        }
-                      />
-                      <FieldHint>
-                        啟用 sparsity
-                        後的剪枝/稀疏化節奏；通常數值越小，壓縮動作越頻繁。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Init Rho</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        step="0.1"
-                        value={form.initRho}
-                        onChange={(e) =>
-                          updateForm("initRho", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        稀疏化初始化強度參數；屬於進階壓縮調整，建議有實驗需求時再改。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>Prune Ratio</Label>
-                      <Input
-                        className="mt-2"
-                        type="number"
-                        min={0}
-                        max={1}
-                        step="0.01"
-                        value={form.pruneRatio}
-                        onChange={(e) =>
-                          updateForm("pruneRatio", Number(e.target.value || 0))
-                        }
-                      />
-                      <FieldHint>
-                        每輪稀疏化要裁掉的比例；過高可能快速壓縮，但也可能犧牲品質。
-                      </FieldHint>
-                    </div>
-                    <div>
-                      <Label>PPISP Sidecar</Label>
-                      <Input
-                        className="mt-2"
-                        value={form.ppispSidecar}
-                        onChange={(e) =>
-                          updateForm("ppispSidecar", e.target.value)
-                        }
-                        placeholder="例如：/data/ppisp/sidecar.json"
-                      />
-                      <FieldHint>
-                        PPISP 外觀模型 sidecar
-                        路徑；這是少數仍需要外部來源的進階欄位。
-                      </FieldHint>
-                    </div>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <ToggleChip
-                      checked={form.random}
-                      label="--random"
-                      description="改用隨機點初始化，而不是依既有重建結果起步。"
-                      onChange={(checked) => updateForm("random", checked)}
-                    />
-                    <ToggleChip
-                      checked={form.noCpuCache}
-                      label="--no-cpu-cache"
-                      description="停用 RAM 影像快取；通常只在快取造成壓力時才關閉。"
-                      onChange={(checked) => updateForm("noCpuCache", checked)}
-                    />
-                    <ToggleChip
-                      checked={form.noFsCache}
-                      label="--no-fs-cache"
-                      description="停用磁碟影像快取；通常只在快取造成壓力時才關閉。"
-                      onChange={(checked) => updateForm("noFsCache", checked)}
-                    />
-                    {showMaskSettings ? (
-                      <ToggleChip
-                        checked={form.invertMasks}
-                        label="--invert-masks"
-                        description="控制是否反轉遮罩。"
-                        onChange={(checked) =>
-                          updateForm("invertMasks", checked)
-                        }
-                      />
-                    ) : null}
-                    {showMaskSettings ? (
-                      <ToggleChip
-                        checked={form.noAlphaAsMask}
-                        label="--no-alpha-as-mask"
-                        description="停用 RGBA alpha 自動當作遮罩來源。"
-                        onChange={(checked) =>
-                          updateForm("noAlphaAsMask", checked)
-                        }
-                      />
-                    ) : null}
-                    <ToggleChip
-                      checked={form.enableSparsity}
-                      label="--enable-sparsity"
-                      description="開啟模型壓縮/剪枝流程，適合想降低模型大小時使用。"
-                      onChange={(checked) =>
-                        updateForm("enableSparsity", checked)
-                      }
-                    />
-                    <ToggleChip
-                      checked={form.enableMip}
-                      label="--enable-mip"
-                      description="啟用 mip-splatting 抗鋸齒濾波，有助於高頻細節與縮放穩定性。"
-                      onChange={(checked) => updateForm("enableMip", checked)}
-                    />
-                    <ToggleChip
-                      checked={form.bilateralGrid}
-                      label="--bilateral-grid"
-                      description="加入外觀嵌入，處理曝光或顏色不一致資料。"
-                      onChange={(checked) =>
-                        updateForm("bilateralGrid", checked)
-                      }
-                    />
-                    <ToggleChip
-                      checked={form.ppisp}
-                      label="--ppisp"
-                      description="啟用每相機外觀校正。"
-                      onChange={(checked) => updateForm("ppisp", checked)}
-                    />
-                    <ToggleChip
-                      checked={form.ppispController}
-                      label="--ppisp-controller"
-                      description="新視角合成用控制器 CNN。"
-                      onChange={(checked) =>
-                        updateForm("ppispController", checked)
-                      }
-                    />
-                    <ToggleChip
-                      checked={form.ppispFreeze}
-                      label="--ppisp-freeze"
-                      description="從既有 sidecar 啟動時凍結部分高斯參數，避免外觀模型覆蓋原始幾何。"
-                      onChange={(checked) => updateForm("ppispFreeze", checked)}
-                    />
-                    <ToggleChip
-                      checked={form.bgModulation}
-                      label="--bg-modulation"
-                      description="學習獨立背景顏色，對背景變化明顯的資料集較有幫助。"
-                      onChange={(checked) =>
-                        updateForm("bgModulation", checked)
-                      }
-                    />
-                  </div>
-                </ParameterPanel>
-
-                <ParameterPanel
-                  title="選用旗標"
-                  description="把常用布林選項整理成同樣尺寸的切換卡。"
-                >
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <ToggleChip
-                      checked={form.eval}
-                      label="--eval"
-                      description="訓練時同時跑評估流程，方便觀察品質指標。"
-                      onChange={(checked) => updateForm("eval", checked)}
-                    />
-                    <ToggleChip
-                      checked={form.saveEvalImages}
-                      label="--save-eval-images"
-                      description="額外輸出評估影像或深度結果，會增加磁碟使用量。"
-                      onChange={(checked) =>
-                        updateForm("saveEvalImages", checked)
-                      }
-                    />
-                    <ToggleChip
-                      checked={form.saveDepth}
-                      label="--save-depth"
-                      description="額外輸出評估影像或深度結果，會增加磁碟使用量。"
-                      onChange={(checked) => updateForm("saveDepth", checked)}
-                    />
-                    <ToggleChip
-                      checked={form.gut}
-                      label="--gut"
-                      description="啟用 3DGUT，適合失真相機模型；官方文件指出它不適用於 `adc` / `igs+`。"
-                      onChange={(checked) => updateForm("gut", checked)}
-                    />
-                    <ToggleChip
-                      checked={form.undistort}
-                      label="--undistort"
-                      description="在訓練前先做影像畸變校正，適合需要標準 pinhole 訓練流程時使用。"
-                      onChange={(checked) => updateForm("undistort", checked)}
-                    />
-                  </div>
-                </ParameterPanel>
-
-                <ParameterPanel
-                  title="進階 JSON 覆寫"
-                  description="僅在需要超出預設面板的參數時使用。"
-                >
-                  <div>
-                    <Label>進階參數 JSON（可選）</Label>
-                    <Textarea
-                      className="mt-2 min-h-[160px] font-mono text-xs"
-                      placeholder='{"testEvery": 500, "enableMip": true}'
-                      value={form.advancedJson}
-                      onChange={(e) =>
-                        updateForm("advancedJson", e.target.value)
-                      }
-                    />
-                  </div>
-                </ParameterPanel>
-              </div>
-
-              <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-                <ParameterPanel
-                  title="建立任務摘要"
-                  description="送出前快速確認資料來源、策略與阻塞原因。"
-                >
-                  <div className="space-y-3 text-sm text-zinc-300">
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
-                      <span className="text-zinc-500">dataset</span>
-                      <span className="max-w-[60%] truncate text-right text-zinc-100">
-                        {activeDatasetLabel}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
-                      <span className="text-zinc-500">strategy</span>
-                      <span className="text-zinc-100">{form.strategy}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
-                      <span className="text-zinc-500">iterations</span>
-                      <span className="text-zinc-100">
-                        {form.iterations.toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
-                      <span className="text-zinc-500">mip / sparsity</span>
-                      <span className="text-zinc-100">
-                        {`${form.enableMip ? "mip on" : "mip off"} / ${form.enableSparsity ? "sparsity on" : "sparsity off"}`}
-                      </span>
-                    </div>
-                  </div>
-                  <div
-                    className={`rounded-[1rem] border px-3 py-3 text-sm ${blockingReason ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"}`}
+                  <FieldHint>訓練/密度化策略</FieldHint>
+                </div>
+                <div>
+                  <Label>SH Degree</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={form.shDegree}
+                    onChange={(e) =>
+                      updateForm("shDegree", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    球諧函數階數，控制外觀表達能力；值越高，顏色/光照表現越細，但成本也越高。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>SH Degree Interval</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={form.shDegreeInterval}
+                    onChange={(e) =>
+                      updateForm(
+                        "shDegreeInterval",
+                        Number(e.target.value || 0),
+                      )
+                    }
+                  />
+                  <FieldHint>
+                    MCMC 會依間隔逐步提升 SH
+                    階數；數值越小，越早增加外觀複雜度。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Min Opacity</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step="0.001"
+                    value={form.minOpacity}
+                    onChange={(e) =>
+                      updateForm("minOpacity", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    不透明度下限，用來抑制過淡的高斯；調高可能讓模型更乾淨，但也可能吃掉細節。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Steps Scaler</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={form.stepsScaler}
+                    onChange={(e) =>
+                      updateForm("stepsScaler", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    依資料量放大訓練節奏；官方說明是依影像數量自動估算，調大通常代表更長的優化與延後某些階段切換。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Tile Mode</Label>
+                  <Select
+                    value={String(form.tileMode)}
+                    onValueChange={(val) =>
+                      updateForm("tileMode", Number(val) as 1 | 2 | 4)
+                    }
                   >
-                    {blockingReason
-                      ? `目前無法建立：${blockingReason}`
-                      : "條件已齊備，可以建立任務。"}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button variant="outline" onClick={() => setStep(1)}>
-                      返回 Step 1
-                    </Button>
-                    <Button onClick={() => void submit()} disabled={!canSubmit}>
-                      {submitting ? "建立中..." : "建立任務"}
-                    </Button>
-                  </div>
-                </ParameterPanel>
+                    <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1</SelectItem>
+                      <SelectItem value="2">2</SelectItem>
+                      <SelectItem value="4">4</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FieldHint>
+                    大圖分塊渲染模式；較大的 tile
+                    常有助於穩定處理高解析影像，但也會影響效能與記憶體行為。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Init Num Pts</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step={1000}
+                    value={form.initNumPts}
+                    onChange={(e) =>
+                      updateForm("initNumPts", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    隨機初始化時使用的點數；只有搭配 `--random` 才有意義。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Init Extent</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={form.initExtent}
+                    onChange={(e) =>
+                      updateForm("initExtent", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    隨機初始化邊界盒大小；值越大，初始點雲分布範圍越廣。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Images Folder</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.images}
+                    onChange={(e) => updateForm("images", e.target.value)}
+                    placeholder="例如：images"
+                  />
+                  <FieldHint>
+                    官方 CLI 的 `--images` 是影像子資料夾名稱，預設為
+                    `images`，不是檔名萬用字元。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Test Every</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step={10}
+                    value={form.testEvery}
+                    onChange={(e) =>
+                      updateForm("testEvery", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    每隔多少 iteration 做一次測試/評估；設太小會增加額外開銷。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Max Width</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step={64}
+                    value={form.maxWidth}
+                    onChange={(e) =>
+                      updateForm("maxWidth", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    限制輸入影像最大寬度（像素）；可用來降低顯存與加快訓練。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Resize Factor</Label>
+                  <Select
+                    value={String(form.resizeFactor)}
+                    onValueChange={(val) =>
+                      updateForm(
+                        "resizeFactor",
+                        val === "auto"
+                          ? "auto"
+                          : (Number(val) as 1 | 2 | 4 | 8),
+                      )
+                    }
+                  >
+                    <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">auto</SelectItem>
+                      <SelectItem value="1">1</SelectItem>
+                      <SelectItem value="2">1/2</SelectItem>
+                      <SelectItem value="4">1/4</SelectItem>
+                      <SelectItem value="8">1/8</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FieldHint>
+                    先對訓練影像降採樣；分母越大，解析度越低，速度越快但細節可能減少。
+                  </FieldHint>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </ParameterPanel>
+
+            <ParameterPanel
+              title="資料處理與進階訓練"
+              description="整理遮罩、稀疏化、MIP、PPISP 與背景調變相關選項。"
+            >
+              <div className="grid gap-4 md:grid-cols-2">
+                {showMaskSettings ? (
+                  <div>
+                    <Label>Mask Mode</Label>
+                    <Select
+                      value={form.maskMode}
+                      onValueChange={(val) =>
+                        updateForm(
+                          "maskMode",
+                          val as CreateWizardValues["maskMode"],
+                        )
+                      }
+                    >
+                      <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">none</SelectItem>
+                        <SelectItem value="segment">segment</SelectItem>
+                        <SelectItem value="ignore">ignore</SelectItem>
+                        <SelectItem value="alpha_consistent">
+                          alpha_consistent
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FieldHint>
+                      決定如何使用注意力遮罩，例如分割、忽略背景或維持 alpha
+                      一致性。
+                    </FieldHint>
+                  </div>
+                ) : (
+                  <div className="rounded-[1rem] border border-dashed border-white/10 bg-black/20 p-4 md:col-span-2">
+                    <p className="text-sm text-zinc-200">
+                      目前 dataset 未偵測到可自動讀取的 masks 資料夾，因此隱藏
+                      mask 相關設定。
+                    </p>
+                    <FieldHint>
+                      參考 upstream，自動搜尋的資料夾名稱包含{" "}
+                      {UPSTREAM_MASK_FOLDERS.join(" / ")}；若影像本身帶有 RGBA
+                      alpha，也會自動作為遮罩來源。
+                    </FieldHint>
+                  </div>
+                )}
+                <div>
+                  <Label>Sparsify Steps</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step={100}
+                    value={form.sparsifySteps}
+                    onChange={(e) =>
+                      updateForm("sparsifySteps", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    啟用 sparsity
+                    後的剪枝/稀疏化節奏；通常數值越小，壓縮動作越頻繁。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Init Rho</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={form.initRho}
+                    onChange={(e) =>
+                      updateForm("initRho", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    稀疏化初始化強度參數；屬於進階壓縮調整，建議有實驗需求時再改。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>Prune Ratio</Label>
+                  <Input
+                    className="mt-2"
+                    type="number"
+                    min={0}
+                    max={1}
+                    step="0.01"
+                    value={form.pruneRatio}
+                    onChange={(e) =>
+                      updateForm("pruneRatio", Number(e.target.value || 0))
+                    }
+                  />
+                  <FieldHint>
+                    每輪稀疏化要裁掉的比例；過高可能快速壓縮，但也可能犧牲品質。
+                  </FieldHint>
+                </div>
+                <div>
+                  <Label>PPISP Sidecar</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.ppispSidecar}
+                    onChange={(e) => updateForm("ppispSidecar", e.target.value)}
+                    placeholder="例如：/data/ppisp/sidecar.json"
+                  />
+                  <FieldHint>
+                    PPISP 外觀模型 sidecar
+                    路徑；這是少數仍需要外部來源的進階欄位。
+                  </FieldHint>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <ToggleChip
+                  checked={form.random}
+                  label="random"
+                  description="改用隨機點初始化，而不是依既有重建結果起步。"
+                  onChange={(checked) => updateForm("random", checked)}
+                />
+                <ToggleChip
+                  checked={form.noCpuCache}
+                  label="no-cpu-cache"
+                  description="停用 RAM 影像快取；通常只在快取造成壓力時才關閉。"
+                  onChange={(checked) => updateForm("noCpuCache", checked)}
+                />
+                <ToggleChip
+                  checked={form.noFsCache}
+                  label="no-fs-cache"
+                  description="停用磁碟影像快取；通常只在快取造成壓力時才關閉。"
+                  onChange={(checked) => updateForm("noFsCache", checked)}
+                />
+                {showMaskSettings ? (
+                  <ToggleChip
+                    checked={form.invertMasks}
+                    label="invert-masks"
+                    description="控制是否反轉遮罩。"
+                    onChange={(checked) => updateForm("invertMasks", checked)}
+                  />
+                ) : null}
+                {showMaskSettings ? (
+                  <ToggleChip
+                    checked={form.noAlphaAsMask}
+                    label="no-alpha-as-mask"
+                    description="停用 RGBA alpha 自動當作遮罩來源。"
+                    onChange={(checked) => updateForm("noAlphaAsMask", checked)}
+                  />
+                ) : null}
+                <ToggleChip
+                  checked={form.enableSparsity}
+                  label="enable-sparsity"
+                  description="開啟模型壓縮/剪枝流程，適合想降低模型大小時使用。"
+                  onChange={(checked) => updateForm("enableSparsity", checked)}
+                />
+                <ToggleChip
+                  checked={form.enableMip}
+                  label="enable-mip"
+                  description="啟用 mip-splatting 抗鋸齒濾波，有助於高頻細節與縮放穩定性。"
+                  onChange={(checked) => updateForm("enableMip", checked)}
+                />
+                <ToggleChip
+                  checked={form.bilateralGrid}
+                  label="bilateral-grid"
+                  description="加入外觀嵌入，處理曝光或顏色不一致資料。"
+                  onChange={(checked) => updateForm("bilateralGrid", checked)}
+                />
+                <ToggleChip
+                  checked={form.ppisp}
+                  label="ppisp"
+                  description="啟用每相機外觀校正。"
+                  onChange={(checked) => updateForm("ppisp", checked)}
+                />
+                <ToggleChip
+                  checked={form.ppispController}
+                  label="ppisp-controller"
+                  description="新視角合成用控制器 CNN。"
+                  onChange={(checked) => updateForm("ppispController", checked)}
+                />
+                <ToggleChip
+                  checked={form.ppispFreeze}
+                  label="ppisp-freeze"
+                  description="從既有 sidecar 啟動時凍結部分高斯參數，避免外觀模型覆蓋原始幾何。"
+                  onChange={(checked) => updateForm("ppispFreeze", checked)}
+                />
+                <ToggleChip
+                  checked={form.bgModulation}
+                  label="bg-modulation"
+                  description="學習獨立背景顏色，對背景變化明顯的資料集較有幫助。"
+                  onChange={(checked) => updateForm("bgModulation", checked)}
+                />
+              </div>
+            </ParameterPanel>
+
+            <ParameterPanel
+              title="選用旗標"
+              description="把常用布林選項整理成同樣尺寸的切換卡。"
+            >
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <ToggleChip
+                  checked={form.eval}
+                  label="eval"
+                  description="訓練時同時跑評估流程，方便觀察品質指標。"
+                  onChange={(checked) => updateForm("eval", checked)}
+                />
+                <ToggleChip
+                  checked={form.saveEvalImages}
+                  label="save-eval-images"
+                  description="額外輸出評估影像或深度結果，會增加磁碟使用量。"
+                  onChange={(checked) => updateForm("saveEvalImages", checked)}
+                />
+                <ToggleChip
+                  checked={form.saveDepth}
+                  label="save-depth"
+                  description="額外輸出評估影像或深度結果，會增加磁碟使用量。"
+                  onChange={(checked) => updateForm("saveDepth", checked)}
+                />
+                <ToggleChip
+                  checked={form.gut}
+                  label="gut"
+                  description="啟用 3DGUT，適合失真相機模型；官方文件指出它不適用於 `adc` / `igs+`。"
+                  onChange={(checked) => updateForm("gut", checked)}
+                />
+                <ToggleChip
+                  checked={form.undistort}
+                  label="undistort"
+                  description="在訓練前先做影像畸變校正，適合需要標準 pinhole 訓練流程時使用。"
+                  onChange={(checked) => updateForm("undistort", checked)}
+                />
+              </div>
+            </ParameterPanel>
+
+            <ParameterPanel
+              title="進階 JSON 覆寫"
+              description="僅在需要超出預設面板的參數時使用。"
+            >
+              <div>
+                <Label>進階參數 JSON（可選）</Label>
+                <Textarea
+                  className="mt-2 min-h-[160px] font-mono text-xs"
+                  placeholder='{"testEvery": 500, "enableMip": true}'
+                  value={form.advancedJson}
+                  onChange={(e) => updateForm("advancedJson", e.target.value)}
+                />
+              </div>
+            </ParameterPanel>
+          </div>
+
+          <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+            <ParameterPanel
+              title="建立任務摘要"
+              description="送出前快速確認資料來源、策略與阻塞原因。"
+            >
+              <div className="space-y-3 text-sm text-zinc-300">
+                <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                  <span className="text-zinc-500">dataset</span>
+                  <span className="max-w-[60%] truncate text-right text-zinc-100">
+                    {activeDatasetLabel}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                  <span className="text-zinc-500">strategy</span>
+                  <span className="text-zinc-100">{form.strategy}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                  <span className="text-zinc-500">iterations</span>
+                  <span className="text-zinc-100">
+                    {form.iterations.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                  <span className="text-zinc-500">mip / sparsity</span>
+                  <span className="text-zinc-100">
+                    {`${form.enableMip ? "mip on" : "mip off"} / ${form.enableSparsity ? "sparsity on" : "sparsity off"}`}
+                  </span>
+                </div>
+              </div>
+              <div
+                className={`rounded-[1rem] border px-3 py-3 text-sm ${blockingReason ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"}`}
+              >
+                {blockingReason
+                  ? `目前無法建立：${blockingReason}`
+                  : "條件已齊備，可以建立任務。"}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Button variant="outline" onClick={() => setStep(1)}>
+                  返回 Step 1
+                </Button>
+                <Button onClick={() => void submit()} disabled={!canSubmit}>
+                  {submitting ? "建立中..." : "建立任務"}
+                </Button>
+              </div>
+            </ParameterPanel>
+          </div>
+        </div>
       )}
 
       <FixedUploadDock draft={uploadDraft} nowMs={uploadNowMs} />
