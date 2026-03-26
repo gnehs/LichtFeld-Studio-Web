@@ -5,6 +5,8 @@ import { RefreshCw, Sparkles, UploadCloud } from "lucide-react";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Notice } from "@/lib/app-types";
+
+import { CircleIndicator } from "@/components/CircleIndicator";
 import type {
   DatasetFolderEntry,
   DatasetRecord,
@@ -302,39 +304,31 @@ function FixedUploadDock({
       : formatBytesPerSecond(
           calculateUploadSpeed(draft.uploadedBytes, draft.startedAt, nowMs),
         );
-  const progressLabel =
-    draft.status === "error" ? "上傳失敗" : `${Math.round(progress * 100)}%`;
 
   return createPortal(
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-[140] w-[min(calc(100vw-1rem),28rem)] -translate-x-1/2">
+    <div className="pointer-events-none fixed bottom-4 left-1/2 z-[140] w-[min(calc(100vw-1rem),20rem)] -translate-x-1/2">
       <div
-        className={`pointer-events-auto rounded-[1rem] border px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl ${draft.status === "error" ? "border-red-400/25 bg-red-950/85" : "border-white/10 bg-black/88"}`}
+        className={`pointer-events-auto rounded-full border px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm ${draft.status === "error" ? "border-red-400/25 bg-red-950/85" : "border-white/10 bg-black/50"}`}
       >
         <div className="flex items-center gap-3">
           <div className="shrink-0">
-            <CircularUploadProgress progress={progress} />
+            <CircleIndicator
+              progress={progress * 100}
+              size={40}
+              color="var(--chart-1)"
+            />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-zinc-100">
+            <p className="truncate text-sm font-semibold text-zinc-100">
               {draft.file.name}
             </p>
-            <div className="mt-1 flex items-center gap-2 text-xs text-zinc-400">
-              <span
-                className={
-                  draft.status === "error" ? "text-red-100" : "text-zinc-300"
-                }
-              >
-                {progressLabel}
-              </span>
-              {speed ? (
-                <>
-                  <span className="text-zinc-600">/</span>
-                  <span>{speed}</span>
-                </>
-              ) : null}
-            </div>
+            {draft.status !== "error" ? (
+              <div className="flex items-center gap-2 text-xs text-zinc-400">
+                {speed ? speed : null}
+              </div>
+            ) : null}
             {draft.status === "error" ? (
-              <p className="mt-1 truncate text-[11px] text-red-100">
+              <p className="text-[11px] text-red-100">
                 {draft.error ?? "上傳失敗，請重新選擇 ZIP。"}
               </p>
             ) : null}
