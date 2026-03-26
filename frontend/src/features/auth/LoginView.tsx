@@ -33,13 +33,13 @@ export function LoginView({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div className="mx-auto  max-w-md px-4 py-12">
-      <Card className="relative  overflow-hidden border-white/10 bg-black/55">
+    <div className="mx-auto flex min-h-screen max-w-md items-center justify-center">
+      <Card className="relative min-w-80 border-white/10 bg-black/55">
         <CardHeader>
           <CardTitle className="font-semibold text-zinc-50">
-            LichtFeld-Studio Web
+            LichtFeld Studio Web
           </CardTitle>
-          <CardDescription>請輸入管理密碼以進入暗色控制台。</CardDescription>
+          <CardDescription>請輸入管理密碼以進入控制台。</CardDescription>
         </CardHeader>
         <form onSubmit={submit}>
           <CardContent className="space-y-3">
@@ -48,10 +48,15 @@ export function LoginView({ onLogin }: { onLogin: () => void }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
+              autoFocus
             />
             {error ? <p className="text-sm text-red-300">{error}</p> : null}
-            <Button className="w-full" type="submit" disabled={loginMutation.isPending}>
-              {loginMutation.isPending ? "登入中..." : "Login"}
+            <Button
+              className="w-full"
+              type="submit"
+              disabled={loginMutation.isPending}
+            >
+              {loginMutation.isPending ? "登入中..." : "登入"}
             </Button>
           </CardContent>
         </form>

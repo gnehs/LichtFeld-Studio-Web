@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { ImagePlus, ListChecks, LogOut } from "lucide-react";
-import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -31,36 +44,38 @@ function DashboardShell({
   logoutPending: boolean;
 }) {
   const location = useLocation();
-  const onJobsRoute = location.pathname === "/" || location.pathname.startsWith("/jobs");
+  const onJobsRoute =
+    location.pathname === "/" || location.pathname.startsWith("/jobs");
 
   const runningCount = jobs.filter((job) => job.status === "running").length;
   const queuedCount = jobs.filter((job) => job.status === "queued").length;
   const gpu = systemMetrics?.gpu.devices[0] ?? null;
   const vramText =
-    gpu?.memoryUsedMiB !== null && gpu?.memoryUsedMiB !== undefined && gpu?.memoryTotalMiB !== null && gpu?.memoryTotalMiB !== undefined
+    gpu?.memoryUsedMiB !== null &&
+    gpu?.memoryUsedMiB !== undefined &&
+    gpu?.memoryTotalMiB !== null &&
+    gpu?.memoryTotalMiB !== undefined
       ? `${(gpu.memoryUsedMiB / 1024).toFixed(1)} / ${(gpu.memoryTotalMiB / 1024).toFixed(1)} GB`
       : "-";
 
   return (
-    <div className="min-h-screen bg-app-base pb-8 text-zinc-100">
+    <div className="bg-app-base min-h-screen pb-8 text-zinc-100">
       <header className="border-b border-white/10 bg-black/55 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-50">LichtFeld-Studio 任務控制台</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-50">
+              LichtFeld Studio Web
+            </h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Link className={buttonVariants({ variant: onJobsRoute ? "default" : "outline" })} to="/jobs">
-              <ListChecks className="mr-2 h-4 w-4" /> 任務首頁
-            </Link>
-            <Link
-              className={buttonVariants({ variant: location.pathname === "/create" ? "default" : "outline" })}
-              to="/create"
+            <Button
+              variant="outline"
+              onClick={() => void onLogout()}
+              disabled={logoutPending}
             >
-              <ImagePlus className="mr-2 h-4 w-4" /> 建立任務
-            </Link>
-            <Button variant="outline" onClick={() => void onLogout()} disabled={logoutPending}>
-              <LogOut className="mr-2 h-4 w-4" /> {logoutPending ? "登出中..." : "Logout"}
+              <LogOut className="size-4" />
+              {logoutPending ? "登出中..." : "登出"}
             </Button>
           </div>
         </div>
@@ -68,50 +83,71 @@ function DashboardShell({
 
       <main className="mx-auto mt-4 max-w-7xl space-y-4 px-4">
         {onJobsRoute ? (
-          <section className="panel-grid noise-overlay relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.03] px-4 py-4 shadow-[0_30px_120px_rgba(0,0,0,0.45)]">
-            <div className="grid gap-3 md:grid-cols-[1.6fr_1fr]">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-zinc-500">overview</p>
-                <h2 className="mt-2 max-w-2xl text-2xl font-semibold leading-tight text-zinc-50">訓練控制台</h2>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">即時監看任務進度、排隊狀態與資料集操作。</p>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-6">
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">running</p>
-                  <div className="mt-2 text-2xl font-semibold text-zinc-50">{runningCount}</div>
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">queued</p>
-                  <div className="mt-2 text-2xl font-semibold text-zinc-50">{queuedCount}</div>
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">datasets</p>
-                  <div className="mt-2 text-2xl font-semibold text-zinc-50">{datasets.length}</div>
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">gpu util</p>
-                  <div className="mt-2 text-2xl font-semibold text-zinc-50">
-                    {gpu?.utilizationGpu ?? "-"}
-                    {gpu?.utilizationGpu !== null && gpu?.utilizationGpu !== undefined ? "%" : ""}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">vram</p>
-                  <div className="mt-2 text-sm font-semibold text-zinc-50">{vramText}</div>
-                  <div className="mt-1 text-xs text-zinc-400">
-                    {gpu?.memoryUsedPercent !== null && gpu?.memoryUsedPercent !== undefined ? `${gpu.memoryUsedPercent.toFixed(1)}%` : ""}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">memory</p>
-                  <div className="mt-2 text-sm font-semibold text-zinc-50">
-                    {systemMetrics ? `${systemMetrics.memory.usedGb.toFixed(1)} / ${systemMetrics.memory.totalGb.toFixed(1)} GB` : "-"}
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-400">{systemMetrics ? `${systemMetrics.memory.usedPercent.toFixed(1)}%` : ""}</div>
-                </div>
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-6">
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500">
+                執行中
+              </p>
+              <div className="mt-2 text-2xl font-semibold text-zinc-50">
+                {runningCount}
               </div>
             </div>
-          </section>
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500">
+                佇列
+              </p>
+              <div className="mt-2 text-2xl font-semibold text-zinc-50">
+                {queuedCount}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500">
+                資料集
+              </p>
+              <div className="mt-2 text-2xl font-semibold text-zinc-50">
+                {datasets.length}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500">GPU</p>
+              <div className="mt-2 text-2xl font-semibold text-zinc-50">
+                {gpu?.utilizationGpu ?? "-"}
+                {gpu?.utilizationGpu !== null &&
+                gpu?.utilizationGpu !== undefined
+                  ? "%"
+                  : ""}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                VRAM
+              </p>
+              <div className="mt-2 text-sm font-semibold text-zinc-50">
+                {vramText}
+              </div>
+              <div className="mt-1 text-xs text-zinc-400">
+                {gpu?.memoryUsedPercent !== null &&
+                gpu?.memoryUsedPercent !== undefined
+                  ? `${gpu.memoryUsedPercent.toFixed(1)}%`
+                  : ""}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
+              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                RAM
+              </p>
+              <div className="mt-2 text-sm font-semibold text-zinc-50">
+                {systemMetrics
+                  ? `${systemMetrics.memory.usedGb.toFixed(1)} / ${systemMetrics.memory.totalGb.toFixed(1)} GB`
+                  : "-"}
+              </div>
+              <div className="mt-1 text-xs text-zinc-400">
+                {systemMetrics
+                  ? `${systemMetrics.memory.usedPercent.toFixed(1)}%`
+                  : ""}
+              </div>
+            </div>
+          </div>
         ) : null}
         <Outlet />
       </main>
@@ -198,9 +234,15 @@ function App() {
   const insights = useMemo<Record<string, JobInsight>>(() => {
     return jobs.reduce<Record<string, JobInsight>>((acc, job, index) => {
       const latest = insightQueries[index]?.data?.items ?? [];
-      const newest = latest.reduce<{ filePath: string | null; iteration: number | null }>(
+      const newest = latest.reduce<{
+        filePath: string | null;
+        iteration: number | null;
+      }>(
         (current, frame) => {
-          if (current.iteration === null || frame.iteration > current.iteration) {
+          if (
+            current.iteration === null ||
+            frame.iteration > current.iteration
+          ) {
             return { filePath: frame.filePath, iteration: frame.iteration };
           }
           return current;
@@ -224,7 +266,10 @@ function App() {
       queryClient.removeQueries({ queryKey: queryKeys.system.metrics });
     },
     onError: (error) => {
-      setNoticeText({ tone: "error", text: `登出失敗：${(error as Error).message}` });
+      setNoticeText({
+        tone: "error",
+        text: `登出失敗：${(error as Error).message}`,
+      });
     },
   });
 
@@ -233,7 +278,9 @@ function App() {
     onSuccess: async (_result, id) => {
       setNoticeText({ tone: "success", text: `任務 ${id} 已送出停止指令` });
       await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.timelapseLatest(id) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.jobs.timelapseLatest(id),
+      });
     },
   });
 
@@ -252,28 +299,47 @@ function App() {
 
   useEffect(() => {
     if (datasetsQuery.error) {
-      setNoticeText({ tone: "error", text: `讀取資料集失敗：${(datasetsQuery.error as Error).message}` });
+      setNoticeText({
+        tone: "error",
+        text: `讀取資料集失敗：${(datasetsQuery.error as Error).message}`,
+      });
     }
   }, [datasetsQuery.error, datasetsQuery.errorUpdatedAt, setNoticeText]);
 
   useEffect(() => {
     if (jobsQuery.error) {
-      setNoticeText({ tone: "error", text: `讀取任務失敗：${(jobsQuery.error as Error).message}` });
+      setNoticeText({
+        tone: "error",
+        text: `讀取任務失敗：${(jobsQuery.error as Error).message}`,
+      });
     }
   }, [jobsQuery.error, jobsQuery.errorUpdatedAt, setNoticeText]);
 
   useEffect(() => {
     if (systemMetricsQuery.error) {
-      setNoticeText({ tone: "error", text: `讀取系統資訊失敗：${(systemMetricsQuery.error as Error).message}` });
+      setNoticeText({
+        tone: "error",
+        text: `讀取系統資訊失敗：${(systemMetricsQuery.error as Error).message}`,
+      });
     }
-  }, [setNoticeText, systemMetricsQuery.error, systemMetricsQuery.errorUpdatedAt]);
+  }, [
+    setNoticeText,
+    systemMetricsQuery.error,
+    systemMetricsQuery.errorUpdatedAt,
+  ]);
 
   if (meQuery.isPending) {
     return <div className="p-8 text-zinc-300">Loading...</div>;
   }
 
   if (!authed) {
-    return <LoginView onLogin={() => void queryClient.invalidateQueries({ queryKey: queryKeys.auth.me })} />;
+    return (
+      <LoginView
+        onLogin={() =>
+          void queryClient.invalidateQueries({ queryKey: queryKeys.auth.me })
+        }
+      />
+    );
   }
 
   return (
@@ -309,23 +375,34 @@ function App() {
                   try {
                     await stopJobMutation.mutateAsync(id);
                   } catch (error) {
-                    setNoticeText({ tone: "error", text: `停止任務失敗：${(error as Error).message}` });
+                    setNoticeText({
+                      tone: "error",
+                      text: `停止任務失敗：${(error as Error).message}`,
+                    });
                   }
                 }}
                 onDelete={async (id) => {
-                  const ok = window.confirm("確定要刪除此任務？\n按「確定」會保留 Timelapse 檔案。");
+                  const ok = window.confirm(
+                    "確定要刪除此任務？\n按「確定」會保留 Timelapse 檔案。",
+                  );
                   if (!ok) return;
                   try {
                     await deleteJobMutation.mutateAsync(id);
                   } catch (error) {
-                    setNoticeText({ tone: "error", text: `刪除失敗：${(error as Error).message}` });
+                    setNoticeText({
+                      tone: "error",
+                      text: `刪除失敗：${(error as Error).message}`,
+                    });
                   }
                 }}
                 onOpenDetail={(id) => navigate(`/jobs/${id}`)}
               />
             }
           />
-          <Route path="jobs/:id" element={<JobDetailPage onNotice={setNoticeText} />} />
+          <Route
+            path="jobs/:id"
+            element={<JobDetailPage onNotice={setNoticeText} />}
+          />
           <Route
             path="create"
             element={
@@ -335,12 +412,18 @@ function App() {
                 onCancel={() => navigate("/jobs")}
                 onDatasetCreated={(dataset) => {
                   void dataset;
-                  void queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
+                  void queryClient.invalidateQueries({
+                    queryKey: queryKeys.datasets.all,
+                  });
                 }}
                 onCreated={async () => {
                   await Promise.all([
-                    queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all }),
-                    queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all }),
+                    queryClient.invalidateQueries({
+                      queryKey: queryKeys.datasets.all,
+                    }),
+                    queryClient.invalidateQueries({
+                      queryKey: queryKeys.jobs.all,
+                    }),
                   ]);
                   navigate("/jobs");
                 }}

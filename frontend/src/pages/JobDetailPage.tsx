@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Download, Pause, Play, RefreshCw, SkipBack, SkipForward } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  Pause,
+  Play,
+  SkipBack,
+  SkipForward,
+} from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +17,11 @@ import type { Notice } from "@/lib/app-types";
 import type { JobStatus, TimelapseFrame, TrainingJob } from "@/lib/types";
 import { computeProgress, sortFramesAscending } from "@/pages/job-detail-utils";
 
-function statusBadgeVariant(status: JobStatus): "default" | "secondary" | "destructive" | "outline" {
-  if (status === "failed" || status === "stopped_low_disk") return "destructive";
+function statusBadgeVariant(
+  status: JobStatus,
+): "default" | "secondary" | "destructive" | "outline" {
+  if (status === "failed" || status === "stopped_low_disk")
+    return "destructive";
   if (status === "running") return "default";
   if (status === "queued") return "secondary";
   return "outline";
@@ -30,7 +40,8 @@ function parseJobParams(job: TrainingJob | null): Record<string, unknown> {
   if (!job?.paramsJson) return {};
   try {
     const parsed = JSON.parse(job.paramsJson);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return {};
     return parsed as Record<string, unknown>;
   } catch {
     return {};
@@ -39,8 +50,10 @@ function parseJobParams(job: TrainingJob | null): Record<string, unknown> {
 
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return "-";
-  if (typeof value === "string") return value.trim().length > 0 ? value : "(空字串)";
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string")
+    return value.trim().length > 0 ? value : "(空字串)";
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   try {
     return JSON.stringify(value);
   } catch {
@@ -48,7 +61,10 @@ function formatValue(value: unknown): string {
   }
 }
 
-async function collectCameraFrames(id: string, camera: string): Promise<TimelapseFrame[]> {
+async function collectCameraFrames(
+  id: string,
+  camera: string,
+): Promise<TimelapseFrame[]> {
   const collected: TimelapseFrame[] = [];
   const seenCursors = new Set<number>();
   let cursor: number | undefined;
@@ -57,7 +73,8 @@ async function collectCameraFrames(id: string, camera: string): Promise<Timelaps
     const response = await api.getTimelapseFrames(id, camera, cursor);
     if (response.items.length === 0) break;
     collected.push(...response.items);
-    if (response.nextCursor === null || seenCursors.has(response.nextCursor)) break;
+    if (response.nextCursor === null || seenCursors.has(response.nextCursor))
+      break;
     seenCursors.add(response.nextCursor);
     cursor = response.nextCursor;
   }
@@ -65,7 +82,11 @@ async function collectCameraFrames(id: string, camera: string): Promise<Timelaps
   return sortFramesAscending(collected);
 }
 
-export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }) {
+export function JobDetailPage({
+  onNotice,
+}: {
+  onNotice: (next: Notice) => void;
+}) {
   const { id } = useParams();
   const [selectedCamera, setSelectedCamera] = useState("");
   const [frameIndex, setFrameIndex] = useState(0);
@@ -91,11 +112,17 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
     queryKey: queryKeys.jobs.timelapseOverview(id ?? ""),
     queryFn: async () => {
       if (!id) throw new Error("missing job id");
-      const [camerasRes, latestRes] = await Promise.all([api.getTimelapseCameras(id), api.getTimelapseLatest(id)]);
-      const latestIteration = latestRes.items.reduce<number | null>((acc, item) => {
-        if (acc === null || item.iteration > acc) return item.iteration;
-        return acc;
-      }, null);
+      const [camerasRes, latestRes] = await Promise.all([
+        api.getTimelapseCameras(id),
+        api.getTimelapseLatest(id),
+      ]);
+      const latestIteration = latestRes.items.reduce<number | null>(
+        (acc, item) => {
+          if (acc === null || item.iteration > acc) return item.iteration;
+          return acc;
+        },
+        null,
+      );
       return {
         cameras: camerasRes.items,
         latestIteration,
@@ -124,24 +151,44 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
   const frames = framesQuery.data ?? [];
 
   const params = useMemo(() => parseJobParams(job), [job]);
-  const entries = useMemo(() => Object.entries(params).sort(([a], [b]) => a.localeCompare(b)), [params]);
+  const entries = useMemo(
+    () => Object.entries(params).sort(([a], [b]) => a.localeCompare(b)),
+    [params],
+  );
   const selectedFrame = frames[frameIndex] ?? null;
-  const progress = useMemo(() => computeProgress(job, latestIteration), [job, latestIteration]);
-  const progressPercent = progress.ratio === null ? 0 : Math.round(progress.ratio * 1000) / 10;
+  const progress = useMemo(
+    () => computeProgress(job, latestIteration),
+    [job, latestIteration],
+  );
+  const progressPercent =
+    progress.ratio === null ? 0 : Math.round(progress.ratio * 1000) / 10;
 
   useEffect(() => {
     if (!timelapseOverviewQuery.error) return;
-    onNotice({ tone: "error", text: `讀取 Timelapse 失敗：${(timelapseOverviewQuery.error as Error).message}` });
-  }, [onNotice, timelapseOverviewQuery.error, timelapseOverviewQuery.errorUpdatedAt]);
+    onNotice({
+      tone: "error",
+      text: `讀取 Timelapse 失敗：${(timelapseOverviewQuery.error as Error).message}`,
+    });
+  }, [
+    onNotice,
+    timelapseOverviewQuery.error,
+    timelapseOverviewQuery.errorUpdatedAt,
+  ]);
 
   useEffect(() => {
     if (!framesQuery.error) return;
-    onNotice({ tone: "error", text: `讀取相機影格失敗：${(framesQuery.error as Error).message}` });
+    onNotice({
+      tone: "error",
+      text: `讀取相機影格失敗：${(framesQuery.error as Error).message}`,
+    });
   }, [framesQuery.error, framesQuery.errorUpdatedAt, onNotice]);
 
   useEffect(() => {
     if (!jobQuery.error) return;
-    onNotice({ tone: "error", text: `讀取任務失敗：${(jobQuery.error as Error).message}` });
+    onNotice({
+      tone: "error",
+      text: `讀取任務失敗：${(jobQuery.error as Error).message}`,
+    });
   }, [jobQuery.error, jobQuery.errorUpdatedAt, onNotice]);
 
   useEffect(() => {
@@ -159,7 +206,9 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
 
   useEffect(() => {
     if (!isLive) {
-      setFrameIndex((prev) => Math.max(0, Math.min(prev, Math.max(0, frames.length - 1))));
+      setFrameIndex((prev) =>
+        Math.max(0, Math.min(prev, Math.max(0, frames.length - 1))),
+      );
       return;
     }
     setFrameIndex(Math.max(0, frames.length - 1));
@@ -178,11 +227,15 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
 
     setLogLines([]);
     setLogConnected(false);
-    const source = new EventSource(`/api/jobs/${id}/logs/stream`, { withCredentials: true });
+    const source = new EventSource(`/api/jobs/${id}/logs/stream`, {
+      withCredentials: true,
+    });
 
     const onLog = (event: MessageEvent<string>) => {
       try {
-        const payload = JSON.parse(event.data) as { data?: { lines?: string[] } };
+        const payload = JSON.parse(event.data) as {
+          data?: { lines?: string[] };
+        };
         const lines = payload.data?.lines ?? [];
         if (lines.length === 0) return;
         setLogLines((prev) => {
@@ -211,7 +264,10 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
 
   if (!id) {
     return (
-      <section data-route="job-detail" className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-100">
+      <section
+        data-route="job-detail"
+        className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-100"
+      >
         找不到任務 ID。
       </section>
     );
@@ -224,10 +280,10 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
           <ArrowLeft className="mr-2 h-4 w-4" /> 返回任務列表
         </Link>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => void jobQuery.refetch({ throwOnError: false })}>
-            <RefreshCw className="mr-2 h-4 w-4" /> 重新讀取
-          </Button>
-          <a className={buttonVariants({ variant: "default" })} href={`/api/jobs/${id}/model/download`}>
+          <a
+            className={buttonVariants({ variant: "default" })}
+            href={`/api/jobs/${id}/model/download`}
+          >
             <Download className="mr-2 h-4 w-4" /> 下載模型
           </a>
         </div>
@@ -243,10 +299,16 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
             />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-300">
-            <span>{progress.ratio === null ? "迭代目標未知" : `${progressPercent.toFixed(1)}%`}</span>
+            <span>
+              {progress.ratio === null
+                ? "迭代目標未知"
+                : `${progressPercent.toFixed(1)}%`}
+            </span>
             <span>
               iteration {progress.latestIteration}
-              {progress.targetIterations ? ` / ${progress.targetIterations}` : ""}
+              {progress.targetIterations
+                ? ` / ${progress.targetIterations}`
+                : ""}
             </span>
           </div>
         </div>
@@ -254,7 +316,7 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
 
       <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-zinc-50">Timelapse 檢視器</h2>
+          <h2 className="text-lg font-semibold text-zinc-50">預覽</h2>
           <div className="flex items-center gap-2">
             <Button
               variant={isLive ? "default" : "outline"}
@@ -269,9 +331,6 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
               }}
             >
               LIVE {isLive ? "ON" : "OFF"}
-            </Button>
-            <Button variant="outline" onClick={() => void timelapseOverviewQuery.refetch({ throwOnError: false })}>
-              更新相機
             </Button>
           </div>
         </div>
@@ -306,12 +365,18 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
               alt={`timelapse-${selectedFrame.cameraName}-${selectedFrame.iteration}`}
             />
           ) : (
-            <div className="flex h-[360px] items-center justify-center text-sm text-zinc-500">此相機尚無 timelapse 影格</div>
+            <div className="flex h-[360px] items-center justify-center text-sm text-zinc-500">
+              此相機尚無 timelapse 影格
+            </div>
           )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setFrameIndex((prev) => Math.max(0, prev - 1))} disabled={isLive || frames.length === 0}>
+          <Button
+            variant="outline"
+            onClick={() => setFrameIndex((prev) => Math.max(0, prev - 1))}
+            disabled={isLive || frames.length === 0}
+          >
             <SkipBack className="mr-2 h-4 w-4" /> 上一張
           </Button>
           <Button
@@ -321,14 +386,29 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
             }}
             disabled={isLive || frames.length < 2}
           >
-            {isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+            {isPlaying ? (
+              <Pause className="mr-2 h-4 w-4" />
+            ) : (
+              <Play className="mr-2 h-4 w-4" />
+            )}
             {isPlaying ? "暫停" : "播放"}
           </Button>
-          <Button variant="outline" onClick={() => setFrameIndex((prev) => Math.min(frames.length - 1, prev + 1))} disabled={isLive || frames.length === 0}>
+          <Button
+            variant="outline"
+            onClick={() =>
+              setFrameIndex((prev) => Math.min(frames.length - 1, prev + 1))
+            }
+            disabled={isLive || frames.length === 0}
+          >
             <SkipForward className="mr-2 h-4 w-4" /> 下一張
           </Button>
 
-          <select className="h-9 rounded-xl border border-white/12 bg-black/20 px-3 text-sm text-zinc-100" value={String(playbackMs)} onChange={(event) => setPlaybackMs(Number(event.target.value))} disabled={isLive}>
+          <select
+            className="h-9 rounded-xl border border-white/12 bg-black/20 px-3 text-sm text-zinc-100"
+            value={String(playbackMs)}
+            onChange={(event) => setPlaybackMs(Number(event.target.value))}
+            disabled={isLive}
+          >
             <option value="1000">1x</option>
             <option value="500">2x</option>
             <option value="250">4x</option>
@@ -338,9 +418,19 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
 
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between text-xs text-zinc-500">
-            <span>{frames[0] ? `start: ${frames[0].iteration}` : "start: -"}</span>
-            <span>{selectedFrame ? `current: ${selectedFrame.iteration}` : "current: -"}</span>
-            <span>{frames[frames.length - 1] ? `end: ${frames[frames.length - 1].iteration}` : "end: -"}</span>
+            <span>
+              {frames[0] ? `start: ${frames[0].iteration}` : "start: -"}
+            </span>
+            <span>
+              {selectedFrame
+                ? `current: ${selectedFrame.iteration}`
+                : "current: -"}
+            </span>
+            <span>
+              {frames[frames.length - 1]
+                ? `end: ${frames[frames.length - 1].iteration}`
+                : "end: -"}
+            </span>
           </div>
           <input
             type="range"
@@ -362,7 +452,9 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
         </div>
 
         <div className="mt-2 text-xs text-zinc-400">
-          {selectedFrame ? `iteration ${selectedFrame.iteration} | frame ${frameIndex + 1} / ${frames.length} | ${selectedFrame.cameraName}` : "尚無可播放影格"}
+          {selectedFrame
+            ? `iteration ${selectedFrame.iteration} | frame ${frameIndex + 1} / ${frames.length} | ${selectedFrame.cameraName}`
+            : "尚無可播放影格"}
         </div>
       </div>
 
@@ -379,16 +471,22 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
             <div>
               <div className="text-zinc-500">狀態</div>
               <div className="mt-1">
-                <Badge variant={statusBadgeVariant(job.status)}>{statusText(job.status)}</Badge>
+                <Badge variant={statusBadgeVariant(job.status)}>
+                  {statusText(job.status)}
+                </Badge>
               </div>
             </div>
             <div>
               <div className="text-zinc-500">建立時間</div>
-              <div className="mt-1 text-zinc-200">{new Date(job.createdAt).toLocaleString()}</div>
+              <div className="mt-1 text-zinc-200">
+                {new Date(job.createdAt).toLocaleString()}
+              </div>
             </div>
             <div>
               <div className="text-zinc-500">輸出路徑</div>
-              <div className="mt-1 break-all font-mono text-zinc-200">{job.outputPath}</div>
+              <div className="mt-1 font-mono break-all text-zinc-200">
+                {job.outputPath}
+              </div>
             </div>
           </div>
         ) : (
@@ -412,8 +510,12 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
               <tbody>
                 {entries.map(([key, value]) => (
                   <tr key={key} className="border-t border-white/8">
-                    <td className="px-3 py-2 align-top font-mono text-zinc-300">{key}</td>
-                    <td className="px-3 py-2 align-top break-all text-zinc-200">{formatValue(value)}</td>
+                    <td className="px-3 py-2 align-top font-mono text-zinc-300">
+                      {key}
+                    </td>
+                    <td className="px-3 py-2 align-top break-all text-zinc-200">
+                      {formatValue(value)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -425,7 +527,9 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
       <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-base font-semibold text-zinc-50">執行 Log</h3>
-          <span className="text-xs text-zinc-500">連線狀態：{logConnected ? "已連線" : "未連線"}</span>
+          <span className="text-xs text-zinc-500">
+            連線狀態：{logConnected ? "已連線" : "未連線"}
+          </span>
         </div>
         <pre className="mt-3 max-h-[360px] overflow-auto rounded-xl border border-white/8 bg-black/40 p-3 text-xs leading-5 text-zinc-200">
           {logLines.length > 0 ? logLines.join("\n") : "尚無 log"}

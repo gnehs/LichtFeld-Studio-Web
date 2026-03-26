@@ -5,7 +5,11 @@ import { Database, RefreshCw, Sparkles, UploadCloud } from "lucide-react";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Notice } from "@/lib/app-types";
-import type { DatasetFolderEntry, DatasetRecord, TrainingParamsForm } from "@/lib/types";
+import type {
+  DatasetFolderEntry,
+  DatasetRecord,
+  TrainingParamsForm,
+} from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,7 +20,15 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   applyVisibleStrategyDefaults,
@@ -43,7 +55,7 @@ interface CreateWizardValues extends CreateJobStrategyDefaults {
 
 function parseStringList(value: string): string[] | undefined {
   const items = value
-    .split(/\r?\n|,/) 
+    .split(/\r?\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
   return items.length > 0 ? items : undefined;
@@ -100,7 +112,7 @@ function ProgressBar({ progress }: { progress: number | null }) {
 
 function DatasetStructureGuide() {
   return (
-    <div className=" *: text-sm text-zinc-300">
+    <div className="*: text-sm text-zinc-300">
       <p>
         資料集根目錄必須直接包含{" "}
         <code className="rounded bg-black/40 px-1 py-0.5 text-xs">images/</code>{" "}
@@ -143,7 +155,7 @@ function SourcePanel({
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/8 pb-3">
         <div>
-          <h3 className="  text-sm font-semibold text-zinc-100">{title}</h3>
+          <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
           <p className="mt-1 text-xs leading-5 text-zinc-400">{description}</p>
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -371,7 +383,7 @@ function UploadFailureDialog({
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-[1.25rem] border border-white/10 bg-zinc-950 px-5 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
-        <h3 className="  text-lg font-semibold text-zinc-50">
+        <h3 className="text-lg font-semibold text-zinc-50">
           上傳失敗，要怎麼處理？
         </h3>
         <p className="mt-3 text-sm leading-6 text-zinc-300">{message}</p>
@@ -404,7 +416,7 @@ function ParameterPanel({
   return (
     <section className="rounded-[1.25rem] border border-white/10 bg-black/22 p-4">
       <div className="border-b border-white/8 pb-3">
-        <h3 className=" text-sm font-semibold text-zinc-100">{title}</h3>
+        <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
         <p className="mt-1 text-xs leading-5 text-zinc-400">{description}</p>
       </div>
       <div className="mt-4 space-y-4">{children}</div>
@@ -423,7 +435,7 @@ function ParameterMetric({
 }) {
   return (
     <div className="rounded-[1rem] border border-white/8 bg-black/30 p-4">
-      <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+      <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
         {label}
       </p>
       <div className="mt-2 text-lg font-semibold text-zinc-100">{value}</div>
@@ -510,14 +522,16 @@ export function CreateJobWizard({
   });
 
   const renameDatasetMutation = useMutation({
-    mutationFn: ({ id, datasetName }: { id: string; datasetName: string }) => api.renameDataset(id, datasetName),
+    mutationFn: ({ id, datasetName }: { id: string; datasetName: string }) =>
+      api.renameDataset(id, datasetName),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
     },
   });
 
   const createJobMutation = useMutation({
-    mutationFn: (payload: { datasetId: string; params: TrainingParamsForm }) => api.createJob(payload),
+    mutationFn: (payload: { datasetId: string; params: TrainingParamsForm }) =>
+      api.createJob(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
     },
@@ -529,7 +543,10 @@ export function CreateJobWizard({
   const selectableFolders = useMemo(
     () =>
       datasetFolders.filter(
-        (folder) => folder.isRegistered && folder.health === "ready" && Boolean(folder.datasetId),
+        (folder) =>
+          folder.isRegistered &&
+          folder.health === "ready" &&
+          Boolean(folder.datasetId),
       ),
     [datasetFolders],
   );
@@ -540,7 +557,9 @@ export function CreateJobWizard({
     [datasets, activeDatasetId],
   );
   const selectedDatasetFolder = useMemo(
-    () => datasetFolders.find((folder) => folder.datasetId === activeDatasetId) ?? null,
+    () =>
+      datasetFolders.find((folder) => folder.datasetId === activeDatasetId) ??
+      null,
     [datasetFolders, activeDatasetId],
   );
   const showMaskSettings = shouldShowMaskSettings(
@@ -566,7 +585,9 @@ export function CreateJobWizard({
       setSelectedDatasetId("");
       return;
     }
-    const currentStillValid = selectableFolders.some((folder) => folder.datasetId === selectedDatasetId);
+    const currentStillValid = selectableFolders.some(
+      (folder) => folder.datasetId === selectedDatasetId,
+    );
     if (!selectedDatasetId || !currentStillValid) {
       setSelectedDatasetId(selectableFolders[0].datasetId ?? "");
     }
@@ -577,7 +598,11 @@ export function CreateJobWizard({
       return;
     }
     setForm((prev) => {
-      if (prev.maskMode === "none" && !prev.invertMasks && !prev.noAlphaAsMask) {
+      if (
+        prev.maskMode === "none" &&
+        !prev.invertMasks &&
+        !prev.noAlphaAsMask
+      ) {
         return prev;
       }
       return {
@@ -732,7 +757,10 @@ export function CreateJobWizard({
     if (dataSourceMode !== "upload" || !activeDatasetId) return;
     const nextName = uploadDraft.name.trim();
     if (!nextName || nextName === selectedDataset?.name) return;
-    const res = await renameDatasetMutation.mutateAsync({ id: activeDatasetId, datasetName: nextName });
+    const res = await renameDatasetMutation.mutateAsync({
+      id: activeDatasetId,
+      datasetName: nextName,
+    });
     onDatasetCreated(res.item);
     setUploadDraft((prev) =>
       mergeUploadDraft(prev, { datasetId: res.item.id, name: res.item.name }),
@@ -831,203 +859,179 @@ export function CreateJobWizard({
   };
 
   return (
-    <div className="space-y-6 pb-32">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-zinc-50">建立新任務</h2>
-          <p className="text-sm text-zinc-400">
-            兩步驟流程：先準備資料，再設定訓練參數。
-          </p>
-        </div>
+        <h2 className="text-2xl font-semibold text-zinc-50">建立新任務</h2>
         <Button variant="outline" onClick={onCancel}>
           返回任務清單
         </Button>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div
-          className={`rounded-[1.15rem] border p-4 ${step === 1 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-            <Database className="h-4 w-4" /> Step 1：上傳或選擇資料集
-          </div>
-        </div>
-        <div
-          className={`rounded-[1.15rem] border p-4 ${step === 2 ? "border-cyan-400/30 bg-cyan-400/[0.08]" : "border-white/10 bg-white/[0.03]"}`}
-        >
-          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-            <Sparkles className="h-4 w-4" /> Step 2：參數設定
-          </div>
-        </div>
-      </div>
-
       {step === 1 ? (
-        <Card className="border-white/10 bg-white/[0.03]">
-          <CardHeader>
-            <CardTitle className="text-xl">資料集來源</CardTitle>
-            <CardDescription>
-              你可以直接上傳 zip，或從既有 dataset 清單挑選。
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="grid gap-3 md:grid-cols-2">
-              <SourceModeButton
-                active={dataSourceMode === "existing"}
-                icon={<Database className="h-4 w-4" />}
-                title="既有資料集"
-                description="從已註冊的 dataset 清單中選取。"
-                onClick={() => setDataSourceMode("existing")}
-              />
-              <SourceModeButton
-                active={dataSourceMode === "upload"}
-                icon={<UploadCloud className="h-4 w-4" />}
-                title="拖移 / 上傳 ZIP"
-                description="選取後會自動進入參數設定並背景上傳。"
-                onClick={() => setDataSourceMode("upload")}
-              />
-            </div>
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-2">
+            <SourceModeButton
+              active={dataSourceMode === "existing"}
+              icon={<Database className="h-4 w-4" />}
+              title="既有資料集"
+              description="從已註冊的 dataset 清單中選取。"
+              onClick={() => setDataSourceMode("existing")}
+            />
+            <SourceModeButton
+              active={dataSourceMode === "upload"}
+              icon={<UploadCloud className="h-4 w-4" />}
+              title="拖移 / 上傳 ZIP"
+              description="選取後會自動進入參數設定並背景上傳。"
+              onClick={() => setDataSourceMode("upload")}
+            />
+          </div>
 
-            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <SourcePanel
-                title={
-                  dataSourceMode === "existing"
-                    ? "從既有資料集中選擇"
-                    : "以拖移方式上傳 ZIP"
-                }
-                description={
-                  dataSourceMode === "existing"
-                    ? "會列出 DATASETS_DIR 內全部資料夾；可用者可直接選取，不可用者會附上原因。"
-                    : "選取後自動上傳；資料集命名移到參數設定區。"
-                }
-                active
-                actions={
-                  dataSourceMode === "existing" ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        void onRefreshDatasets()
-                          .then(() =>
-                            onNotice({
-                              tone: "success",
-                              text: "資料集清單已重新整理",
-                            }),
-                          )
-                          .catch((error) =>
-                            onNotice({
-                              tone: "error",
-                              text: `重新整理資料集失敗：${(error as Error).message}`,
-                            }),
-                          );
+          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <SourcePanel
+              title={
+                dataSourceMode === "existing"
+                  ? "從既有資料集中選擇"
+                  : "以拖移方式上傳 ZIP"
+              }
+              description={
+                dataSourceMode === "existing"
+                  ? "會列出 DATASETS 內全部資料夾。"
+                  : "選取後自動上傳；資料集命名移到參數設定區。"
+              }
+              active
+              actions={
+                dataSourceMode === "existing" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      void onRefreshDatasets()
+                        .then(() =>
+                          onNotice({
+                            tone: "success",
+                            text: "資料集清單已重新整理",
+                          }),
+                        )
+                        .catch((error) =>
+                          onNotice({
+                            tone: "error",
+                            text: `重新整理資料集失敗：${(error as Error).message}`,
+                          }),
+                        );
+                    }}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" /> 重新整理
+                  </Button>
+                ) : null
+              }
+            >
+              {dataSourceMode === "existing" ? (
+                <>
+                  <div>
+                    <Label>選擇資料集</Label>
+                    <Select
+                      value={selectedDatasetId || undefined}
+                      onValueChange={(value) => {
+                        setSelectedDatasetId(value ?? "");
                       }}
                     >
-                      <RefreshCw className="mr-2 h-4 w-4" /> 重新整理
-                    </Button>
-                  ) : null
-                }
-              >
-                {dataSourceMode === "existing" ? (
-                  <>
-                    <div>
-                      <Label>選擇 dataset</Label>
-                      <Select
-                        value={selectedDatasetId || undefined}
-                        onValueChange={(value) => {
-                          setSelectedDatasetId(value ?? "");
-                        }}
-                      >
-                        <SelectTrigger className="mt-2">
-                          <SelectValue placeholder="請選擇可用 dataset" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectLabel>所有資料夾</SelectLabel>
-                            {datasetFolders.map((folder) => {
-                              const disabled = !folder.isRegistered || folder.health !== "ready" || !folder.datasetId;
-                              const selectableDataset = folder.datasetId
-                                ? datasets.find((dataset) => dataset.id === folder.datasetId)
-                                : null;
-                              const title = selectableDataset?.name ?? folder.name;
-                              return (
-                                <SelectItem
-                                  key={folder.path}
-                                  value={folder.datasetId ?? `folder:${folder.path}`}
-                                  disabled={disabled}
-                                >
-                                  {`${title} - ${formatFolderMeta(folder)}`}
-                                </SelectItem>
-                              );
-                            })}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {datasetFolders.length === 0 ? (
-                      <p className="text-sm text-amber-200">
-                        目前沒有偵測到資料夾，請先上傳 ZIP 或確認 DATASETS_DIR。
-                      </p>
-                    ) : selectableFolders.length === 0 ? (
-                      <p className="text-sm text-amber-200">
-                        目前沒有可建立任務的 dataset，請先排除失敗原因或等待寫入完成。
-                      </p>
-                    ) : null}
-                    <p className="text-xs leading-5 text-zinc-400">
-                      會顯示 DATASETS_DIR 內所有資料夾；可用資料夾顯示照片數量，不可用資料夾顯示失敗原因。
+                      <SelectTrigger className="mt-2 w-full">
+                        <SelectValue placeholder="請選擇可用 dataset" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectLabel>所有資料夾</SelectLabel>
+                          {datasetFolders.map((folder) => {
+                            const disabled =
+                              !folder.isRegistered ||
+                              folder.health !== "ready" ||
+                              !folder.datasetId;
+                            const selectableDataset = folder.datasetId
+                              ? datasets.find(
+                                  (dataset) => dataset.id === folder.datasetId,
+                                )
+                              : null;
+                            const title =
+                              selectableDataset?.name ?? folder.name;
+                            return (
+                              <SelectItem
+                                key={folder.path}
+                                value={
+                                  folder.datasetId ?? `folder:${folder.path}`
+                                }
+                                disabled={disabled}
+                              >
+                                {`${title} - ${formatFolderMeta(folder)}`}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {datasetFolders.length === 0 ? (
+                    <p className="text-sm text-amber-200">
+                      目前沒有偵測到資料夾，請先上傳 ZIP 或確認 DATASETS_DIR。
                     </p>
-                  </>
-                ) : (
-                  <>
-                    <UploadDropzone
-                      file={uploadFile}
-                      dragging={draggingUpload}
-                      onPick={() => {
-                        const input = document.getElementById(
-                          "dataset-upload-input",
-                        ) as HTMLInputElement | null;
-                        input?.click();
-                      }}
-                      onDragState={setDraggingUpload}
-                      onFilesDropped={(files) =>
-                        applyUploadFile(files?.[0] ?? null)
-                      }
-                    />
-                    <input
-                      key={uploadInputKey}
-                      id="dataset-upload-input"
-                      type="file"
-                      accept=".zip"
-                      className="hidden"
-                      onChange={(e) =>
-                        applyUploadFile(e.target.files?.[0] ?? null)
-                      }
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => void goStepTwo()}
-                        disabled={!uploadFile && !uploadedDatasetId}
-                      >
-                        先調整參數
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </SourcePanel>
+                  ) : selectableFolders.length === 0 ? (
+                    <p className="text-sm text-amber-200">
+                      目前沒有可建立任務的
+                      dataset，請先排除失敗原因或等待寫入完成。
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <UploadDropzone
+                    file={uploadFile}
+                    dragging={draggingUpload}
+                    onPick={() => {
+                      const input = document.getElementById(
+                        "dataset-upload-input",
+                      ) as HTMLInputElement | null;
+                      input?.click();
+                    }}
+                    onDragState={setDraggingUpload}
+                    onFilesDropped={(files) =>
+                      applyUploadFile(files?.[0] ?? null)
+                    }
+                  />
+                  <input
+                    key={uploadInputKey}
+                    id="dataset-upload-input"
+                    type="file"
+                    accept=".zip"
+                    className="hidden"
+                    onChange={(e) =>
+                      applyUploadFile(e.target.files?.[0] ?? null)
+                    }
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => void goStepTwo()}
+                      disabled={!uploadFile && !uploadedDatasetId}
+                    >
+                      先調整參數
+                    </Button>
+                  </div>
+                </>
+              )}
+            </SourcePanel>
 
-              <SourcePanel
-                title="資料集格式"
-                description="建立任務前請先確認資料集根目錄結構正確，避免上傳或註冊後才發現格式不符。"
-                active={false}
-              >
-                <DatasetStructureGuide />
-              </SourcePanel>
-            </div>
+            <SourcePanel
+              title="資料集格式"
+              description="建立任務前請先確認資料集根目錄結構正確，避免上傳或註冊後才發現格式不符。"
+              active={false}
+            >
+              <DatasetStructureGuide />
+            </SourcePanel>
+          </div>
 
-            <div className="flex justify-end">
-              <Button onClick={() => void goStepTwo()}>下一步：參數設定</Button>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="flex justify-end">
+            <Button onClick={() => void goStepTwo()}>下一步：參數設定</Button>
+          </div>
+        </div>
       ) : (
         <Card className="border-white/10 bg-white/[0.03]">
           <CardHeader>
@@ -1120,9 +1124,13 @@ export function CreateJobWizard({
                         min={0}
                         step={1}
                         value={form.shDegree}
-                        onChange={(e) => updateForm("shDegree", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("shDegree", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>球諧函數階數，控制外觀表達能力；值越高，顏色/光照表現越細，但成本也越高。</FieldHint>
+                      <FieldHint>
+                        球諧函數階數，控制外觀表達能力；值越高，顏色/光照表現越細，但成本也越高。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>SH Degree Interval</Label>
@@ -1132,9 +1140,17 @@ export function CreateJobWizard({
                         min={0}
                         step={100}
                         value={form.shDegreeInterval}
-                        onChange={(e) => updateForm("shDegreeInterval", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm(
+                            "shDegreeInterval",
+                            Number(e.target.value || 0),
+                          )
+                        }
                       />
-                      <FieldHint>MCMC 會依間隔逐步提升 SH 階數；數值越小，越早增加外觀複雜度。</FieldHint>
+                      <FieldHint>
+                        MCMC 會依間隔逐步提升 SH
+                        階數；數值越小，越早增加外觀複雜度。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Min Opacity</Label>
@@ -1144,9 +1160,13 @@ export function CreateJobWizard({
                         min={0}
                         step="0.001"
                         value={form.minOpacity}
-                        onChange={(e) => updateForm("minOpacity", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("minOpacity", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>不透明度下限，用來抑制過淡的高斯；調高可能讓模型更乾淨，但也可能吃掉細節。</FieldHint>
+                      <FieldHint>
+                        不透明度下限，用來抑制過淡的高斯；調高可能讓模型更乾淨，但也可能吃掉細節。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Steps Scaler</Label>
@@ -1156,22 +1176,34 @@ export function CreateJobWizard({
                         min={0}
                         step="0.1"
                         value={form.stepsScaler}
-                        onChange={(e) => updateForm("stepsScaler", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("stepsScaler", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>依資料量放大訓練節奏；官方說明是依影像數量自動估算，調大通常代表更長的優化與延後某些階段切換。</FieldHint>
+                      <FieldHint>
+                        依資料量放大訓練節奏；官方說明是依影像數量自動估算，調大通常代表更長的優化與延後某些階段切換。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Tile Mode</Label>
                       <select
                         className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
                         value={String(form.tileMode)}
-                        onChange={(e) => updateForm("tileMode", Number(e.target.value) as 1 | 2 | 4)}
+                        onChange={(e) =>
+                          updateForm(
+                            "tileMode",
+                            Number(e.target.value) as 1 | 2 | 4,
+                          )
+                        }
                       >
                         <option value="1">1</option>
                         <option value="2">2</option>
                         <option value="4">4</option>
                       </select>
-                      <FieldHint>大圖分塊渲染模式；較大的 tile 常有助於穩定處理高解析影像，但也會影響效能與記憶體行為。</FieldHint>
+                      <FieldHint>
+                        大圖分塊渲染模式；較大的 tile
+                        常有助於穩定處理高解析影像，但也會影響效能與記憶體行為。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Init Num Pts</Label>
@@ -1181,9 +1213,13 @@ export function CreateJobWizard({
                         min={0}
                         step={1000}
                         value={form.initNumPts}
-                        onChange={(e) => updateForm("initNumPts", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("initNumPts", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>隨機初始化時使用的點數；只有搭配 `--random` 才有意義。</FieldHint>
+                      <FieldHint>
+                        隨機初始化時使用的點數；只有搭配 `--random` 才有意義。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Init Extent</Label>
@@ -1193,9 +1229,13 @@ export function CreateJobWizard({
                         min={0}
                         step="0.1"
                         value={form.initExtent}
-                        onChange={(e) => updateForm("initExtent", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("initExtent", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>隨機初始化邊界盒大小；值越大，初始點雲分布範圍越廣。</FieldHint>
+                      <FieldHint>
+                        隨機初始化邊界盒大小；值越大，初始點雲分布範圍越廣。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Images Folder</Label>
@@ -1205,7 +1245,10 @@ export function CreateJobWizard({
                         onChange={(e) => updateForm("images", e.target.value)}
                         placeholder="例如：images"
                       />
-                      <FieldHint>官方 CLI 的 `--images` 是影像子資料夾名稱，預設為 `images`，不是檔名萬用字元。</FieldHint>
+                      <FieldHint>
+                        官方 CLI 的 `--images` 是影像子資料夾名稱，預設為
+                        `images`，不是檔名萬用字元。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Test Every</Label>
@@ -1215,9 +1258,14 @@ export function CreateJobWizard({
                         min={0}
                         step={10}
                         value={form.testEvery}
-                        onChange={(e) => updateForm("testEvery", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("testEvery", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>每隔多少 iteration 做一次測試/評估；設太小會增加額外開銷。</FieldHint>
+                      <FieldHint>
+                        每隔多少 iteration
+                        做一次測試/評估；設太小會增加額外開銷。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Max Width</Label>
@@ -1227,29 +1275,42 @@ export function CreateJobWizard({
                         min={0}
                         step={64}
                         value={form.maxWidth}
-                        onChange={(e) => updateForm("maxWidth", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("maxWidth", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>限制輸入影像最大寬度（像素）；可用來降低顯存與加快訓練。</FieldHint>
+                      <FieldHint>
+                        限制輸入影像最大寬度（像素）；可用來降低顯存與加快訓練。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Strategy</Label>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {(["mcmc", "adc", "igs+", "lfs"] as const).map((strategy) => (
-                          <Button
-                            key={strategy}
-                            variant={
-                              form.strategy === strategy ? "default" : "outline"
-                            }
-                            onClick={() =>
-                              setForm((prev) => applyVisibleStrategyDefaults(prev, strategy))
-                            }
-                            type="button"
-                          >
-                            {strategy}
-                          </Button>
-                        ))}
+                        {(["mcmc", "adc", "igs+", "lfs"] as const).map(
+                          (strategy) => (
+                            <Button
+                              key={strategy}
+                              variant={
+                                form.strategy === strategy
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={() =>
+                                setForm((prev) =>
+                                  applyVisibleStrategyDefaults(prev, strategy),
+                                )
+                              }
+                              type="button"
+                            >
+                              {strategy}
+                            </Button>
+                          ),
+                        )}
                       </div>
-                      <FieldHint>訓練/密度化策略；`mcmc` 與 `lfs` 通常較通用，`gut` 與 `adc` / `igs+` 可能存在相容性限制。</FieldHint>
+                      <FieldHint>
+                        訓練/密度化策略；`mcmc` 與 `lfs` 通常較通用，`gut` 與
+                        `adc` / `igs+` 可能存在相容性限制。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Resize Factor</Label>
@@ -1271,7 +1332,9 @@ export function CreateJobWizard({
                         <option value="4">1/4</option>
                         <option value="8">1/8</option>
                       </select>
-                      <FieldHint>先對訓練影像降採樣；分母越大，解析度越低，速度越快但細節可能減少。</FieldHint>
+                      <FieldHint>
+                        先對訓練影像降採樣；分母越大，解析度越低，速度越快但細節可能減少。
+                      </FieldHint>
                     </div>
                   </div>
                 </ParameterPanel>
@@ -1287,19 +1350,36 @@ export function CreateJobWizard({
                         <select
                           className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
                           value={form.maskMode}
-                          onChange={(e) => updateForm("maskMode", e.target.value as CreateWizardValues["maskMode"])}
+                          onChange={(e) =>
+                            updateForm(
+                              "maskMode",
+                              e.target.value as CreateWizardValues["maskMode"],
+                            )
+                          }
                         >
                           <option value="none">none</option>
                           <option value="segment">segment</option>
                           <option value="ignore">ignore</option>
-                          <option value="alpha_consistent">alpha_consistent</option>
+                          <option value="alpha_consistent">
+                            alpha_consistent
+                          </option>
                         </select>
-                        <FieldHint>決定如何使用注意力遮罩，例如分割、忽略背景或維持 alpha 一致性。</FieldHint>
+                        <FieldHint>
+                          決定如何使用注意力遮罩，例如分割、忽略背景或維持 alpha
+                          一致性。
+                        </FieldHint>
                       </div>
                     ) : (
                       <div className="rounded-[1rem] border border-dashed border-white/10 bg-black/20 p-4 md:col-span-2">
-                        <p className="text-sm text-zinc-200">目前 dataset 未偵測到可自動讀取的 masks 資料夾，因此隱藏 mask 相關設定。</p>
-                        <FieldHint>參考 upstream，自動搜尋的資料夾名稱包含 {UPSTREAM_MASK_FOLDERS.join(" / ")}；若影像本身帶有 RGBA alpha，也會自動作為遮罩來源。</FieldHint>
+                        <p className="text-sm text-zinc-200">
+                          目前 dataset 未偵測到可自動讀取的 masks
+                          資料夾，因此隱藏 mask 相關設定。
+                        </p>
+                        <FieldHint>
+                          參考 upstream，自動搜尋的資料夾名稱包含{" "}
+                          {UPSTREAM_MASK_FOLDERS.join(" / ")}；若影像本身帶有
+                          RGBA alpha，也會自動作為遮罩來源。
+                        </FieldHint>
                       </div>
                     )}
                     <div>
@@ -1310,9 +1390,17 @@ export function CreateJobWizard({
                         min={0}
                         step={100}
                         value={form.sparsifySteps}
-                        onChange={(e) => updateForm("sparsifySteps", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm(
+                            "sparsifySteps",
+                            Number(e.target.value || 0),
+                          )
+                        }
                       />
-                      <FieldHint>啟用 sparsity 後的剪枝/稀疏化節奏；通常數值越小，壓縮動作越頻繁。</FieldHint>
+                      <FieldHint>
+                        啟用 sparsity
+                        後的剪枝/稀疏化節奏；通常數值越小，壓縮動作越頻繁。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Init Rho</Label>
@@ -1322,9 +1410,13 @@ export function CreateJobWizard({
                         min={0}
                         step="0.1"
                         value={form.initRho}
-                        onChange={(e) => updateForm("initRho", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("initRho", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>稀疏化初始化強度參數；屬於進階壓縮調整，建議有實驗需求時再改。</FieldHint>
+                      <FieldHint>
+                        稀疏化初始化強度參數；屬於進階壓縮調整，建議有實驗需求時再改。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>Prune Ratio</Label>
@@ -1335,45 +1427,145 @@ export function CreateJobWizard({
                         max={1}
                         step="0.01"
                         value={form.pruneRatio}
-                        onChange={(e) => updateForm("pruneRatio", Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          updateForm("pruneRatio", Number(e.target.value || 0))
+                        }
                       />
-                      <FieldHint>每輪稀疏化要裁掉的比例；過高可能快速壓縮，但也可能犧牲品質。</FieldHint>
+                      <FieldHint>
+                        每輪稀疏化要裁掉的比例；過高可能快速壓縮，但也可能犧牲品質。
+                      </FieldHint>
                     </div>
                     <div>
                       <Label>PPISP Sidecar</Label>
                       <Input
                         className="mt-2"
                         value={form.ppispSidecar}
-                        onChange={(e) => updateForm("ppispSidecar", e.target.value)}
+                        onChange={(e) =>
+                          updateForm("ppispSidecar", e.target.value)
+                        }
                         placeholder="例如：/data/ppisp/sidecar.json"
                       />
-                      <FieldHint>PPISP 外觀模型 sidecar 路徑；這是少數仍需要外部來源的進階欄位。</FieldHint>
+                      <FieldHint>
+                        PPISP 外觀模型 sidecar
+                        路徑；這是少數仍需要外部來源的進階欄位。
+                      </FieldHint>
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <ToggleChip checked={form.random} label="--random" onChange={(checked) => updateForm("random", checked)} />
-                    <ToggleChip checked={form.noCpuCache} label="--no-cpu-cache" onChange={(checked) => updateForm("noCpuCache", checked)} />
-                    <ToggleChip checked={form.noFsCache} label="--no-fs-cache" onChange={(checked) => updateForm("noFsCache", checked)} />
-                    {showMaskSettings ? <ToggleChip checked={form.invertMasks} label="--invert-masks" onChange={(checked) => updateForm("invertMasks", checked)} /> : null}
-                    {showMaskSettings ? <ToggleChip checked={form.noAlphaAsMask} label="--no-alpha-as-mask" onChange={(checked) => updateForm("noAlphaAsMask", checked)} /> : null}
-                    <ToggleChip checked={form.enableSparsity} label="--enable-sparsity" onChange={(checked) => updateForm("enableSparsity", checked)} />
-                    <ToggleChip checked={form.enableMip} label="--enable-mip" onChange={(checked) => updateForm("enableMip", checked)} />
-                    <ToggleChip checked={form.bilateralGrid} label="--bilateral-grid" onChange={(checked) => updateForm("bilateralGrid", checked)} />
-                    <ToggleChip checked={form.ppisp} label="--ppisp" onChange={(checked) => updateForm("ppisp", checked)} />
-                    <ToggleChip checked={form.ppispController} label="--ppisp-controller" onChange={(checked) => updateForm("ppispController", checked)} />
-                    <ToggleChip checked={form.ppispFreeze} label="--ppisp-freeze" onChange={(checked) => updateForm("ppispFreeze", checked)} />
-                    <ToggleChip checked={form.bgModulation} label="--bg-modulation" onChange={(checked) => updateForm("bgModulation", checked)} />
+                    <ToggleChip
+                      checked={form.random}
+                      label="--random"
+                      onChange={(checked) => updateForm("random", checked)}
+                    />
+                    <ToggleChip
+                      checked={form.noCpuCache}
+                      label="--no-cpu-cache"
+                      onChange={(checked) => updateForm("noCpuCache", checked)}
+                    />
+                    <ToggleChip
+                      checked={form.noFsCache}
+                      label="--no-fs-cache"
+                      onChange={(checked) => updateForm("noFsCache", checked)}
+                    />
+                    {showMaskSettings ? (
+                      <ToggleChip
+                        checked={form.invertMasks}
+                        label="--invert-masks"
+                        onChange={(checked) =>
+                          updateForm("invertMasks", checked)
+                        }
+                      />
+                    ) : null}
+                    {showMaskSettings ? (
+                      <ToggleChip
+                        checked={form.noAlphaAsMask}
+                        label="--no-alpha-as-mask"
+                        onChange={(checked) =>
+                          updateForm("noAlphaAsMask", checked)
+                        }
+                      />
+                    ) : null}
+                    <ToggleChip
+                      checked={form.enableSparsity}
+                      label="--enable-sparsity"
+                      onChange={(checked) =>
+                        updateForm("enableSparsity", checked)
+                      }
+                    />
+                    <ToggleChip
+                      checked={form.enableMip}
+                      label="--enable-mip"
+                      onChange={(checked) => updateForm("enableMip", checked)}
+                    />
+                    <ToggleChip
+                      checked={form.bilateralGrid}
+                      label="--bilateral-grid"
+                      onChange={(checked) =>
+                        updateForm("bilateralGrid", checked)
+                      }
+                    />
+                    <ToggleChip
+                      checked={form.ppisp}
+                      label="--ppisp"
+                      onChange={(checked) => updateForm("ppisp", checked)}
+                    />
+                    <ToggleChip
+                      checked={form.ppispController}
+                      label="--ppisp-controller"
+                      onChange={(checked) =>
+                        updateForm("ppispController", checked)
+                      }
+                    />
+                    <ToggleChip
+                      checked={form.ppispFreeze}
+                      label="--ppisp-freeze"
+                      onChange={(checked) => updateForm("ppispFreeze", checked)}
+                    />
+                    <ToggleChip
+                      checked={form.bgModulation}
+                      label="--bg-modulation"
+                      onChange={(checked) =>
+                        updateForm("bgModulation", checked)
+                      }
+                    />
                   </div>
                   <div className="grid gap-2 md:grid-cols-2">
-                    <FieldHint>`--random`：改用隨機點初始化，而不是依既有重建結果起步。</FieldHint>
-                    <FieldHint>`--no-cpu-cache` / `--no-fs-cache`：停用 RAM 或磁碟影像快取；通常只在快取造成壓力時才關閉。</FieldHint>
-                    {showMaskSettings ? <FieldHint>`--invert-masks` / `--no-alpha-as-mask`：控制是否反轉遮罩，以及是否停用 RGBA alpha 自動當作遮罩來源。</FieldHint> : null}
-                    <FieldHint>`--enable-sparsity`：開啟模型壓縮/剪枝流程，適合想降低模型大小時使用。</FieldHint>
-                    <FieldHint>`--enable-mip`：啟用 mip-splatting 抗鋸齒濾波，有助於高頻細節與縮放穩定性。</FieldHint>
-                    <FieldHint>`--bilateral-grid`：加入外觀嵌入，處理曝光或顏色不一致資料。</FieldHint>
-                    <FieldHint>`--ppisp` / `--ppisp-controller`：啟用每相機外觀校正，以及新視角合成用控制器 CNN。</FieldHint>
-                    <FieldHint>`--ppisp-freeze`：從既有 sidecar 啟動時凍結部分高斯參數，避免外觀模型覆蓋原始幾何。</FieldHint>
-                    <FieldHint>`--bg-modulation`：學習獨立背景顏色，對背景變化明顯的資料集較有幫助。</FieldHint>
+                    <FieldHint>
+                      `--random`：改用隨機點初始化，而不是依既有重建結果起步。
+                    </FieldHint>
+                    <FieldHint>
+                      `--no-cpu-cache` / `--no-fs-cache`：停用 RAM
+                      或磁碟影像快取；通常只在快取造成壓力時才關閉。
+                    </FieldHint>
+                    {showMaskSettings ? (
+                      <FieldHint>
+                        `--invert-masks` /
+                        `--no-alpha-as-mask`：控制是否反轉遮罩，以及是否停用
+                        RGBA alpha 自動當作遮罩來源。
+                      </FieldHint>
+                    ) : null}
+                    <FieldHint>
+                      `--enable-sparsity`：開啟模型壓縮/剪枝流程，適合想降低模型大小時使用。
+                    </FieldHint>
+                    <FieldHint>
+                      `--enable-mip`：啟用 mip-splatting
+                      抗鋸齒濾波，有助於高頻細節與縮放穩定性。
+                    </FieldHint>
+                    <FieldHint>
+                      `--bilateral-grid`：加入外觀嵌入，處理曝光或顏色不一致資料。
+                    </FieldHint>
+                    <FieldHint>
+                      `--ppisp` /
+                      `--ppisp-controller`：啟用每相機外觀校正，以及新視角合成用控制器
+                      CNN。
+                    </FieldHint>
+                    <FieldHint>
+                      `--ppisp-freeze`：從既有 sidecar
+                      啟動時凍結部分高斯參數，避免外觀模型覆蓋原始幾何。
+                    </FieldHint>
+                    <FieldHint>
+                      `--bg-modulation`：學習獨立背景顏色，對背景變化明顯的資料集較有幫助。
+                    </FieldHint>
                   </div>
                 </ParameterPanel>
 
@@ -1411,10 +1603,22 @@ export function CreateJobWizard({
                     />
                   </div>
                   <div className="grid gap-2 md:grid-cols-2">
-                    <FieldHint>`--eval`：訓練時同時跑評估流程，方便觀察品質指標。</FieldHint>
-                    <FieldHint>`--save-eval-images` / `--save-depth`：額外輸出評估影像或深度結果，會增加磁碟使用量。</FieldHint>
-                    <FieldHint>`--gut`：啟用 3DGUT，適合失真相機模型；官方文件指出它不適用於 `adc` / `igs+`。</FieldHint>
-                    <FieldHint>`--undistort`：在訓練前先做影像畸變校正，適合需要標準 pinhole 訓練流程時使用。</FieldHint>
+                    <FieldHint>
+                      `--eval`：訓練時同時跑評估流程，方便觀察品質指標。
+                    </FieldHint>
+                    <FieldHint>
+                      `--save-eval-images` /
+                      `--save-depth`：額外輸出評估影像或深度結果，會增加磁碟使用量。
+                    </FieldHint>
+                    <FieldHint>
+                      `--gut`：啟用
+                      3DGUT，適合失真相機模型；官方文件指出它不適用於 `adc` /
+                      `igs+`。
+                    </FieldHint>
+                    <FieldHint>
+                      `--undistort`：在訓練前先做影像畸變校正，適合需要標準
+                      pinhole 訓練流程時使用。
+                    </FieldHint>
                   </div>
                 </ParameterPanel>
 
