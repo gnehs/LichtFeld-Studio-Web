@@ -13,8 +13,8 @@
   --color-ring-offset-background: hsl(240 9% 6%);
   --color-card: hsl(240 10% 9%);
   --color-card-foreground: hsl(210 20% 95%);
-  --color-primary: hsl(0 0% 96%);
-  --color-primary-foreground: hsl(240 10% 6%);
+  --color-primary: hsl(221 83% 53%);
+  --color-primary-foreground: hsl(0 0% 100%);
   --color-secondary: hsl(240 7% 14%);
   --color-secondary-foreground: hsl(210 20% 95%);
   --color-muted: hsl(240 7% 12%);
@@ -40,8 +40,8 @@
   --card-foreground: oklch(0.97 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.97 0 0);
-  --primary: oklch(0.92 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.5 0.15 250);
+  --primary-foreground: oklch(0.97 0 0);
   --secondary: oklch(0.27 0 0);
   --secondary-foreground: oklch(0.97 0 0);
   --muted: oklch(0.24 0 0);
@@ -233,8 +233,8 @@ button:not(:disabled),
   --card-foreground: oklch(0.97 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.97 0 0);
-  --primary: oklch(0.92 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.5 0.15 250);
+  --primary-foreground: oklch(0.97 0 0);
   --secondary: oklch(0.27 0 0);
   --secondary-foreground: oklch(0.97 0 0);
   --muted: oklch(0.24 0 0);
@@ -258,6 +258,30 @@ button:not(:disabled),
   --sidebar-accent-foreground: oklch(0.97 0 0);
   --sidebar-border: oklch(1 0 0 / 16%);
   --sidebar-ring: oklch(0.72 0 0);
+}
+
+@utility glass-panel {
+  @apply relative shadow-sm shadow-black/5 isolate;
+
+  &::before {
+    content: '';
+    @apply absolute inset-0 pointer-events-none rounded-[inherit];
+    z-index: -1;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.025));
+    border: 0.5px solid rgba(255, 255, 255, 0.025);
+  }
+
+  &::after {
+    content: '';
+    @apply absolute inset-0 pointer-events-none rounded-[inherit];
+    z-index: -1;
+    border-top: 0.5px solid rgba(255, 255, 255, 0.15);
+  }
+}
+
+@utility icon-mask {
+  @apply drop-shadow-sm drop-shadow-white/5;
+  mask-image: radial-gradient(circle at bottom, black 0%, rgba(0,0,0,.75) 50%);
 }
 
 @layer base {

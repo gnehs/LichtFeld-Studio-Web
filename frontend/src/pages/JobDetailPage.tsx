@@ -280,12 +280,18 @@ export function JobDetailPage({
           <ArrowLeft className="size-4" /> 返回任務列表
         </Link>
         <div className="flex items-center gap-2">
-          <a
-            className={buttonVariants({ variant: "default" })}
-            href={`/api/jobs/${id}/model/download`}
-          >
-            <Download className="size-4" /> 下載模型
-          </a>
+          {job?.status === "completed" ? (
+            <a
+              className={buttonVariants({ variant: "default" })}
+              href={`/api/jobs/${id}/model/download`}
+            >
+              <Download className="size-4" /> 下載模型
+            </a>
+          ) : (
+            <Button variant="default" disabled>
+              <Download className="size-4" /> 下載模型
+            </Button>
+          )}
         </div>
       </div>
 
@@ -366,7 +372,7 @@ export function JobDetailPage({
             />
           ) : (
             <div className="flex h-[360px] items-center justify-center text-sm text-zinc-500">
-              此相機尚無 timelapse 影格
+              尚無可用預覽
             </div>
           )}
         </div>

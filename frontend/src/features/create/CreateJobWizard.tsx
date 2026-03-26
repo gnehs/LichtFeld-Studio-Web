@@ -169,7 +169,7 @@ function SourcePanel({
 }) {
   return (
     <section
-      className={`rounded-[1.25rem] border p-4 transition-colors ${active ? "border-cyan-300/35 bg-cyan-300/[0.05]" : "border-white/10 bg-black/20"}`}
+      className={`glass-panel rounded-[1.25rem] border-0 p-4 transition-colors ${active ? "bg-cyan-300/[0.05]" : "bg-black/20"}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/8 pb-3">
         <div>
@@ -391,7 +391,7 @@ function ParameterPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[1.25rem] border border-white/10 bg-black/22 p-4">
+    <section className="glass-panel rounded-[1.25rem] border-0 bg-black/22 p-4">
       <div className="border-b border-white/8 pb-3">
         <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
         <p className="mt-1 text-xs leading-5 text-zinc-400">{description}</p>
@@ -411,7 +411,7 @@ function ParameterMetric({
   hint?: string;
 }) {
   return (
-    <div className="rounded-[1rem] border border-white/8 bg-black/30 p-4">
+    <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
       <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
         {label}
       </p>
@@ -1092,7 +1092,7 @@ export function CreateJobWizard({
                     />
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-[1rem] border border-white/8 bg-black/30 p-4">
+                    <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
                       <Label>Iterations</Label>
                       <input
                         type="range"
@@ -1106,7 +1106,7 @@ export function CreateJobWizard({
                         className="range-dark mt-3 w-full"
                       />
                     </div>
-                    <div className="rounded-[1rem] border border-white/8 bg-black/30 p-4">
+                    <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
                       <Label>Max Cap</Label>
                       <input
                         type="range"
@@ -1192,20 +1192,21 @@ export function CreateJobWizard({
                     </div>
                     <div>
                       <Label>Tile Mode</Label>
-                      <select
-                        className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
+                      <Select
                         value={String(form.tileMode)}
-                        onChange={(e) =>
-                          updateForm(
-                            "tileMode",
-                            Number(e.target.value) as 1 | 2 | 4,
-                          )
+                        onValueChange={(val) =>
+                          updateForm("tileMode", Number(val) as 1 | 2 | 4)
                         }
                       >
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="4">4</option>
-                      </select>
+                        <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1</SelectItem>
+                          <SelectItem value="2">2</SelectItem>
+                          <SelectItem value="4">4</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FieldHint>
                         大圖分塊渲染模式；較大的 tile
                         常有助於穩定處理高解析影像，但也會影響效能與記憶體行為。
@@ -1320,24 +1321,26 @@ export function CreateJobWizard({
                     </div>
                     <div>
                       <Label>Resize Factor</Label>
-                      <select
-                        className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
+                      <Select
                         value={String(form.resizeFactor)}
-                        onChange={(e) =>
+                        onValueChange={(val) =>
                           updateForm(
                             "resizeFactor",
-                            e.target.value === "auto"
-                              ? "auto"
-                              : (Number(e.target.value) as 1 | 2 | 4 | 8),
+                            val === "auto" ? "auto" : (Number(val) as 1 | 2 | 4 | 8),
                           )
                         }
                       >
-                        <option value="auto">auto</option>
-                        <option value="1">1</option>
-                        <option value="2">1/2</option>
-                        <option value="4">1/4</option>
-                        <option value="8">1/8</option>
-                      </select>
+                        <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="auto">auto</SelectItem>
+                          <SelectItem value="1">1</SelectItem>
+                          <SelectItem value="2">1/2</SelectItem>
+                          <SelectItem value="4">1/4</SelectItem>
+                          <SelectItem value="8">1/8</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FieldHint>
                         先對訓練影像降採樣；分母越大，解析度越低，速度越快但細節可能減少。
                       </FieldHint>
@@ -1353,23 +1356,22 @@ export function CreateJobWizard({
                     {showMaskSettings ? (
                       <div>
                         <Label>Mask Mode</Label>
-                        <select
-                          className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm text-zinc-100"
+                        <Select
                           value={form.maskMode}
-                          onChange={(e) =>
-                            updateForm(
-                              "maskMode",
-                              e.target.value as CreateWizardValues["maskMode"],
-                            )
+                          onValueChange={(val) =>
+                            updateForm("maskMode", val as CreateWizardValues["maskMode"])
                           }
                         >
-                          <option value="none">none</option>
-                          <option value="segment">segment</option>
-                          <option value="ignore">ignore</option>
-                          <option value="alpha_consistent">
-                            alpha_consistent
-                          </option>
-                        </select>
+                          <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">none</SelectItem>
+                            <SelectItem value="segment">segment</SelectItem>
+                            <SelectItem value="ignore">ignore</SelectItem>
+                            <SelectItem value="alpha_consistent">alpha_consistent</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FieldHint>
                           決定如何使用注意力遮罩，例如分割、忽略背景或維持 alpha
                           一致性。

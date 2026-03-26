@@ -138,20 +138,24 @@ function ProgressBar({ progress }: { progress: number | null }) {
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-white/[0.03] p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.3)]">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-cyan-200">
-        <ListChecks className="h-7 w-7" />
+    <div className="rounded-[1.5rem] glass-panel p-8 text-center backdrop-blur-xl">
+      <div className="relative z-10 flex flex-col items-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full glass-panel">
+          <div className="icon-mask text-cyan-200">
+            <ListChecks className="h-7 w-7" />
+          </div>
+        </div>
+        <h2 className="mt-4 text-2xl font-semibold text-zinc-50 relative">
+          目前還沒有任務
+        </h2>
+        <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400 relative">
+          上傳 zip 或選擇既有 dataset
+          後，即可建立新任務並在這裡追蹤縮圖、進度、執行時間與 ETA。
+        </p>
+        <Button className="mt-6 relative" onClick={onCreate}>
+          <Plus className="size-4" /> 新增任務
+        </Button>
       </div>
-      <h2 className="mt-4 text-2xl font-semibold text-zinc-50">
-        目前還沒有任務
-      </h2>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-400">
-        上傳 zip 或選擇既有 dataset
-        後，即可建立新任務並在這裡追蹤縮圖、進度、執行時間與 ETA。
-      </p>
-      <Button className="mt-6" onClick={onCreate}>
-        <Plus className="size-4" /> 新增任務
-      </Button>
     </div>
   );
 }
@@ -230,24 +234,26 @@ export function TaskList({
       </div>
 
       {filteredJobs.length === 0 ? (
-        <div className="rounded-[1.5rem] border border-dashed border-white/12 bg-white/[0.03] p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.26)]">
-          <p className="text-base font-medium text-zinc-100">
-            目前沒有符合「{filterEmptyText(activeFilter)}」的任務
-          </p>
-          <p className="mt-2 text-sm text-zinc-400">
-            切換其他狀態，或直接建立新的訓練任務。
-          </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setActiveFilter("all")}
-            >
-              查看全部
-            </Button>
-            <Button size="sm" onClick={onCreate}>
-              <Plus className="size-4" /> 新增任務
-            </Button>
+        <div className="rounded-[1.5rem] p-8 text-center glass-panel backdrop-blur-xl relative overflow-hidden">
+          <div className="relative z-10">
+            <p className="text-base font-medium text-zinc-100 relative">
+              目前沒有符合「{filterEmptyText(activeFilter)}」的任務
+            </p>
+            <p className="mt-2 text-sm text-zinc-400">
+              切換其他狀態，或直接建立新的訓練任務。
+            </p>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setActiveFilter("all")}
+              >
+                查看全部
+              </Button>
+              <Button size="sm" onClick={onCreate}>
+                <Plus className="size-4" /> 新增任務
+              </Button>
+            </div>
           </div>
         </div>
       ) : (
@@ -267,91 +273,91 @@ export function TaskList({
               <article
                 key={job.id}
                 data-job-card
-                className="relative overflow-hidden rounded-2xl bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+                className="relative overflow-hidden rounded-2xl glass-panel p-4 backdrop-blur-xl"
               >
-                <div className="pointer-events-none absolute inset-0 size-full rounded-2xl border border-white/10" />
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-2xl bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(103,232,249,0.25),rgba(255,255,255,0))]" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px rounded-2xl bg-[linear-gradient(90deg,rgba(255,255,255,0),rgba(103,232,249,0.25),rgba(255,255,255,0))]" />
+                <div className="relative z-10">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-2">
+                      <div className="font-mono text-[11px] break-all text-zinc-500">
+                        {job.id}
+                      </div>
+                      <Badge variant={statusBadgeVariant(job.status)}>
+                        {statusText(job.status)}
+                      </Badge>
+                    </div>
+                    <div className="text-[11px] text-zinc-500">
+                      {new Date(job.createdAt).toLocaleString()}
+                    </div>
+                  </div>
 
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 space-y-2">
-                    <div className="font-mono text-[11px] break-all text-zinc-500">
-                      {job.id}
-                    </div>
-                    <Badge variant={statusBadgeVariant(job.status)}>
-                      {statusText(job.status)}
-                    </Badge>
+                  <div className="mt-4 overflow-hidden rounded-[1.2rem] glass-panel bg-black/25">
+                    {thumbnail ? (
+                      <img
+                        className="h-40 w-full object-cover"
+                        src={`/api/jobs/${job.id}/timelapse/frame?path=${encodeURIComponent(thumbnail)}`}
+                        alt={`job-${job.id}`}
+                      />
+                    ) : (
+                      <div className="flex h-40 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_55%)] text-sm text-zinc-500">
+                        尚無縮圖
+                      </div>
+                    )}
                   </div>
-                  <div className="text-[11px] text-zinc-500">
-                    {new Date(job.createdAt).toLocaleString()}
-                  </div>
-                </div>
 
-                <div className="mt-4 overflow-hidden rounded-[1.2rem] border border-white/10 bg-black/25">
-                  {thumbnail ? (
-                    <img
-                      className="h-40 w-full object-cover"
-                      src={`/api/jobs/${job.id}/timelapse/frame?path=${encodeURIComponent(thumbnail)}`}
-                      alt={`job-${job.id}`}
-                    />
-                  ) : (
-                    <div className="flex h-40 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.12),transparent_55%)] text-sm text-zinc-500">
-                      尚無縮圖
+                  <div className="mt-4 rounded-[1.2rem] glass-panel bg-black/20 p-3">
+                    <div className="flex items-center justify-between text-xs text-zinc-400">
+                      <span>進度</span>
+                      <span>{progressText(metrics.progress)}</span>
                     </div>
-                  )}
-                </div>
+                    <div className="mt-2">
+                      <ProgressBar progress={metrics.progress} />
+                    </div>
+                  </div>
 
-                <div className="mt-4 rounded-[1.2rem] border border-white/8 bg-black/20 p-3">
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <span>進度</span>
-                    <span>{progressText(metrics.progress)}</span>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[1.1rem] glass-panel bg-black/15 p-3">
+                      <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                        執行時間
+                      </div>
+                      <div className="mt-2 text-base font-medium text-zinc-100">
+                        {formatDuration(runElapsed)}
+                      </div>
+                    </div>
+                    <div className="rounded-[1.1rem] glass-panel bg-black/15 p-3">
+                      <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
+                        ETA
+                      </div>
+                      <div className="mt-2 text-base font-medium text-zinc-100">
+                        {job.status === "completed"
+                          ? "已完成"
+                          : formatEta(metrics.etaMs)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-2">
-                    <ProgressBar progress={metrics.progress} />
-                  </div>
-                </div>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[1.1rem] border border-white/8 bg-black/15 p-3">
-                    <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                      執行時間
-                    </div>
-                    <div className="mt-2 text-base font-medium text-zinc-100">
-                      {formatDuration(runElapsed)}
-                    </div>
-                  </div>
-                  <div className="rounded-[1.1rem] border border-white/8 bg-black/15 p-3">
-                    <div className="text-[11px] tracking-[0.18em] text-zinc-500 uppercase">
-                      ETA
-                    </div>
-                    <div className="mt-2 text-base font-medium text-zinc-100">
-                      {job.status === "completed"
-                        ? "已完成"
-                        : formatEta(metrics.etaMs)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-wrap justify-between gap-2 border-t border-white/8 pt-4">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => void onDelete(job.id)}
-                  >
-                    <Trash2 className="mr-1 h-3.5 w-3.5" /> 刪除
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    {job.status === "queued" || job.status === "running" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void onStop(job.id)}
-                      >
-                        <Square className="mr-1 h-3.5 w-3.5" /> 停止
-                      </Button>
-                    ) : null}
-                    <Button size="sm" onClick={() => onOpenDetail(job.id)}>
-                      查看詳細
+                  <div className="mt-4 flex flex-wrap justify-between gap-2 border-t border-white/8 pt-4">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => void onDelete(job.id)}
+                    >
+                      <Trash2 className="mr-1 h-3.5 w-3.5" /> 刪除
                     </Button>
+                    <div className="flex items-center gap-2">
+                      {job.status === "queued" || job.status === "running" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void onStop(job.id)}
+                        >
+                          <Square className="mr-1 h-3.5 w-3.5" /> 停止
+                        </Button>
+                      ) : null}
+                      <Button size="sm" onClick={() => onOpenDetail(job.id)}>
+                        查看詳細
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </article>

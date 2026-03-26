@@ -16,22 +16,10 @@ function SummaryCard({
 }) {
   return (
     <div
-      className={`relative flex items-center gap-2 rounded-full py-1 pr-4 pl-1 shadow-sm shadow-black/5 max-md:w-full md:min-w-24`}
+      className={`flex items-center gap-2 rounded-full py-1 pr-4 pl-1 max-md:w-full md:min-w-24 glass-panel`}
     >
-      <div className="absolute inset-0 rounded-full bg-linear-to-b from-white/10 to-white/2.5" />
-      <div className="absolute inset-0 rounded-full border-[0.5px] border-white/2.5" />
-      <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/15" />
-      <div className="relative grid size-8 shrink-0 place-content-center rounded-full shadow-sm shadow-black/5">
-        <div className="absolute inset-0 rounded-full bg-linear-to-b from-white/10 to-white/2.5" />
-        <div className="absolute inset-0 rounded-full border-[0.5px] border-white/2.5" />
-        <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/15" />
-        <div
-          className="drop-shadow-sm drop-shadow-white/5"
-          style={{
-            maskImage:
-              "radial-gradient(circle at bottom, black 0%, rgba(0,0,0,.75) 50%)",
-          }}
-        >
+      <div className="grid size-8 shrink-0 place-content-center rounded-full glass-panel">
+        <div className="icon-mask">
           {icon}
         </div>
       </div>
@@ -58,11 +46,8 @@ function UsageCard({
 }) {
   return (
     <div
-      className={`relative flex items-center gap-2 overflow-hidden py-1 pr-4 pl-1 max-md:w-full md:min-w-30`}
+      className={`flex items-center gap-2 overflow-hidden py-1 pr-4 pl-1 max-md:w-full md:min-w-30 glass-panel rounded-full`}
     >
-      <div className="absolute inset-0 rounded-full bg-linear-to-b from-white/10 to-white/2.5" />
-      <div className="absolute inset-0 rounded-full border-[0.5px] border-white/2.5" />
-      <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/15" />
       <CircleIndicator
         progress={progress}
         size={28}
