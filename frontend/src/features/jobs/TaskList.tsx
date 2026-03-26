@@ -188,7 +188,6 @@ export function TaskList({
             {jobs.map((job) => {
               const insight = insights[job.id];
               const metrics = buildJobMetrics(job, insight, nowMs);
-              const createdAt = toTimestamp(job.createdAt);
               const startedAt = toTimestamp(job.startedAt);
               const finishedAt = toTimestamp(job.finishedAt);
               const endTs = finishedAt ?? nowMs;
