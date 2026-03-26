@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { Database, RefreshCw, Sparkles, UploadCloud } from "lucide-react";
 import { api } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import type { Notice } from "@/lib/app-types";
 import type { DatasetFolderEntry, DatasetRecord, TrainingParamsForm } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -474,6 +476,7 @@ export function CreateJobWizard({
   onNotice: (notice: Notice) => void;
   onRefreshDatasets: () => Promise<void>;
 }) {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2>(1);
   const [dataSourceMode, setDataSourceMode] = useState<"existing" | "upload">(
     "existing",
@@ -490,6 +493,35 @@ export function CreateJobWizard({
     advancedJson: "",
   }));
   const [submitting, setSubmitting] = useState(false);
+
+  const uploadDatasetMutation = useMutation({
+    mutationFn: ({
+      file,
+      onProgress,
+      onBytesProgress,
+    }: {
+      file: File;
+      onProgress: (progress: number) => void;
+      onBytesProgress: (loaded: number, total: number) => void;
+    }) => api.uploadDataset(file, undefined, { onProgress, onBytesProgress }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
+    },
+  });
+
+  const renameDatasetMutation = useMutation({
+    mutationFn: ({ id, datasetName }: { id: string; datasetName: string }) => api.renameDataset(id, datasetName),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
+    },
+  });
+
+  const createJobMutation = useMutation({
+    mutationFn: (payload: { datasetId: string; params: TrainingParamsForm }) => api.createJob(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
+    },
+  });
 
   const uploadFile = uploadDraft.file;
   const uploading = uploadDraft.status === "uploading";
@@ -610,7 +642,8 @@ export function CreateJobWizard({
       startedAt: Date.now(),
     });
     try {
-      const res = await api.uploadDataset(uploadFile, undefined, {
+      const res = await uploadDatasetMutation.mutateAsync({
+        file: uploadFile,
         onProgress: (progress) => {
           setUploadDraft((prev) =>
             mergeUploadDraft(prev, {
@@ -699,7 +732,7 @@ export function CreateJobWizard({
     if (dataSourceMode !== "upload" || !activeDatasetId) return;
     const nextName = uploadDraft.name.trim();
     if (!nextName || nextName === selectedDataset?.name) return;
-    const res = await api.renameDataset(activeDatasetId, nextName);
+    const res = await renameDatasetMutation.mutateAsync({ id: activeDatasetId, datasetName: nextName });
     onDatasetCreated(res.item);
     setUploadDraft((prev) =>
       mergeUploadDraft(prev, { datasetId: res.item.id, name: res.item.name }),
@@ -781,7 +814,7 @@ export function CreateJobWizard({
 
       delete payloadParams.dataPath;
 
-      const res = await api.createJob({
+      const res = await createJobMutation.mutateAsync({
         datasetId: activeDatasetId,
         params: payloadParams,
       });

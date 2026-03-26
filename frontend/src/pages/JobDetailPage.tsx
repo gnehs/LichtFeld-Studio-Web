@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Download, Pause, Play, RefreshCw, SkipBack, SkipForward } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import type { Notice } from "@/lib/app-types";
 import type { JobStatus, TimelapseFrame, TrainingJob } from "@/lib/types";
 import { computeProgress, sortFramesAscending } from "@/pages/job-detail-utils";
@@ -46,20 +48,80 @@ function formatValue(value: unknown): string {
   }
 }
 
+async function collectCameraFrames(id: string, camera: string): Promise<TimelapseFrame[]> {
+  const collected: TimelapseFrame[] = [];
+  const seenCursors = new Set<number>();
+  let cursor: number | undefined;
+
+  while (true) {
+    const response = await api.getTimelapseFrames(id, camera, cursor);
+    if (response.items.length === 0) break;
+    collected.push(...response.items);
+    if (response.nextCursor === null || seenCursors.has(response.nextCursor)) break;
+    seenCursors.add(response.nextCursor);
+    cursor = response.nextCursor;
+  }
+
+  return sortFramesAscending(collected);
+}
+
 export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }) {
   const { id } = useParams();
-  const [loading, setLoading] = useState(true);
-  const [job, setJob] = useState<TrainingJob | null>(null);
-  const [logLines, setLogLines] = useState<string[]>([]);
-  const [logConnected, setLogConnected] = useState(false);
-  const [latestIteration, setLatestIteration] = useState<number | null>(null);
-  const [cameras, setCameras] = useState<Array<{ cameraName: string; frameCount: number; lastIteration: number }>>([]);
   const [selectedCamera, setSelectedCamera] = useState("");
-  const [frames, setFrames] = useState<TimelapseFrame[]>([]);
   const [frameIndex, setFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLive, setIsLive] = useState(true);
   const [playbackMs, setPlaybackMs] = useState(500);
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const [logConnected, setLogConnected] = useState(false);
+
+  const jobQuery = useQuery({
+    queryKey: queryKeys.jobs.detail(id ?? ""),
+    queryFn: async () => {
+      if (!id) throw new Error("missing job id");
+      const res = await api.getJob(id);
+      return res.item;
+    },
+    enabled: Boolean(id),
+    placeholderData: (previousData) => previousData,
+    refetchInterval: isLive ? 3_000 : false,
+  });
+
+  const timelapseOverviewQuery = useQuery({
+    queryKey: queryKeys.jobs.timelapseOverview(id ?? ""),
+    queryFn: async () => {
+      if (!id) throw new Error("missing job id");
+      const [camerasRes, latestRes] = await Promise.all([api.getTimelapseCameras(id), api.getTimelapseLatest(id)]);
+      const latestIteration = latestRes.items.reduce<number | null>((acc, item) => {
+        if (acc === null || item.iteration > acc) return item.iteration;
+        return acc;
+      }, null);
+      return {
+        cameras: camerasRes.items,
+        latestIteration,
+      };
+    },
+    enabled: Boolean(id),
+    placeholderData: (previousData) => previousData,
+    refetchInterval: isLive ? 3_000 : false,
+  });
+
+  const framesQuery = useQuery({
+    queryKey: queryKeys.jobs.timelapseFrames(id ?? "", selectedCamera),
+    queryFn: async () => {
+      if (!id || !selectedCamera) return [] as TimelapseFrame[];
+      return collectCameraFrames(id, selectedCamera);
+    },
+    enabled: Boolean(id && selectedCamera),
+    placeholderData: (previousData) => previousData,
+    refetchInterval: isLive ? 3_000 : false,
+    staleTime: 1_000,
+  });
+
+  const job = jobQuery.data ?? null;
+  const cameras = timelapseOverviewQuery.data?.cameras ?? [];
+  const latestIteration = timelapseOverviewQuery.data?.latestIteration ?? null;
+  const frames = framesQuery.data ?? [];
 
   const params = useMemo(() => parseJobParams(job), [job]);
   const entries = useMemo(() => Object.entries(params).sort(([a], [b]) => a.localeCompare(b)), [params]);
@@ -67,142 +129,39 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
   const progress = useMemo(() => computeProgress(job, latestIteration), [job, latestIteration]);
   const progressPercent = progress.ratio === null ? 0 : Math.round(progress.ratio * 1000) / 10;
 
-  const reloadTimelapseOverview = useCallback(async () => {
-    if (!id) return;
-    try {
-      const [camerasRes, latestRes] = await Promise.all([api.getTimelapseCameras(id), api.getTimelapseLatest(id)]);
-      setCameras(camerasRes.items);
+  useEffect(() => {
+    if (!timelapseOverviewQuery.error) return;
+    onNotice({ tone: "error", text: `讀取 Timelapse 失敗：${(timelapseOverviewQuery.error as Error).message}` });
+  }, [onNotice, timelapseOverviewQuery.error, timelapseOverviewQuery.errorUpdatedAt]);
 
-      const maxIteration = latestRes.items.reduce<number | null>((acc, item) => {
-        if (acc === null || item.iteration > acc) return item.iteration;
-        return acc;
-      }, null);
-      setLatestIteration(maxIteration);
+  useEffect(() => {
+    if (!framesQuery.error) return;
+    onNotice({ tone: "error", text: `讀取相機影格失敗：${(framesQuery.error as Error).message}` });
+  }, [framesQuery.error, framesQuery.errorUpdatedAt, onNotice]);
 
-      setSelectedCamera((prev) => {
-        if (prev && camerasRes.items.some((item) => item.cameraName === prev)) {
-          return prev;
-        }
-        return camerasRes.items[0]?.cameraName ?? "";
-      });
-    } catch (error) {
-      onNotice({ tone: "error", text: `讀取 Timelapse 失敗：${(error as Error).message}` });
+  useEffect(() => {
+    if (!jobQuery.error) return;
+    onNotice({ tone: "error", text: `讀取任務失敗：${(jobQuery.error as Error).message}` });
+  }, [jobQuery.error, jobQuery.errorUpdatedAt, onNotice]);
+
+  useEffect(() => {
+    if (cameras.length === 0) {
+      setSelectedCamera("");
+      return;
     }
-  }, [id, onNotice]);
-
-  const reloadSelectedCameraFrames = useCallback(
-    async (stickToLatest: boolean) => {
-      if (!id || !selectedCamera) {
-        setFrames([]);
-        setFrameIndex(0);
-        return;
+    setSelectedCamera((prev) => {
+      if (prev && cameras.some((item) => item.cameraName === prev)) {
+        return prev;
       }
-      try {
-        const collected: TimelapseFrame[] = [];
-        const seenCursors = new Set<number>();
-        let cursor: number | undefined;
+      return cameras[0]?.cameraName ?? "";
+    });
+  }, [cameras]);
 
-        while (true) {
-          const response = await api.getTimelapseFrames(id, selectedCamera, cursor);
-          if (response.items.length === 0) break;
-
-          collected.push(...response.items);
-
-          if (response.nextCursor === null) break;
-          if (seenCursors.has(response.nextCursor)) break;
-
-          seenCursors.add(response.nextCursor);
-          cursor = response.nextCursor;
-        }
-
-        const sorted = sortFramesAscending(collected);
-        setFrames(sorted);
-        setFrameIndex((prev) => {
-          if (sorted.length === 0) return 0;
-          if (stickToLatest || isLive) return sorted.length - 1;
-          return Math.max(0, Math.min(prev, sorted.length - 1));
-        });
-      } catch (error) {
-        onNotice({ tone: "error", text: `讀取相機影格失敗：${(error as Error).message}` });
-      }
-    },
-    [id, isLive, onNotice, selectedCamera]
-  );
-
-  const reloadLatestFrames = useCallback(async () => {
-    if (!id || !selectedCamera) return;
-    try {
-      const response = await api.getTimelapseFrames(id, selectedCamera);
-      const latest = response.items;
-
-      setFrames((prev) => {
-        if (latest.length === 0) return prev;
-        const map = new Map(prev.map((frame) => [`${frame.iteration}:${frame.filePath}`, frame]));
-        latest.forEach((frame) => {
-          map.set(`${frame.iteration}:${frame.filePath}`, frame);
-        });
-        return sortFramesAscending(Array.from(map.values()));
-      });
-    } catch (error) {
-      onNotice({ tone: "error", text: `讀取相機影格失敗：${(error as Error).message}` });
+  useEffect(() => {
+    if (!isLive) {
+      setFrameIndex((prev) => Math.max(0, Math.min(prev, Math.max(0, frames.length - 1))));
+      return;
     }
-  }, [id, onNotice, selectedCamera]);
-
-  const reloadJob = useCallback(async () => {
-    if (!id) return;
-    try {
-      const res = await api.getJob(id);
-      setJob(res.item);
-    } catch (error) {
-      onNotice({ tone: "error", text: `讀取任務失敗：${(error as Error).message}` });
-    }
-  }, [id, onNotice]);
-
-  useEffect(() => {
-    if (!id) return;
-
-    let cancelled = false;
-    setLoading(true);
-
-    api
-      .getJob(id)
-      .then((res) => {
-        if (!cancelled) setJob(res.item);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setJob(null);
-          onNotice({ tone: "error", text: `讀取任務失敗：${(error as Error).message}` });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    void reloadTimelapseOverview();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id, onNotice, reloadTimelapseOverview]);
-
-  useEffect(() => {
-    if (!selectedCamera) return;
-    void reloadSelectedCameraFrames(true);
-  }, [reloadSelectedCameraFrames, selectedCamera]);
-
-  useEffect(() => {
-    if (!id || !isLive) return;
-    const timer = setInterval(() => {
-      void reloadJob();
-      void reloadTimelapseOverview();
-      void reloadLatestFrames();
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [id, isLive, reloadJob, reloadLatestFrames, reloadTimelapseOverview]);
-
-  useEffect(() => {
-    if (!isLive) return;
     setFrameIndex(Math.max(0, frames.length - 1));
   }, [frames.length, isLive]);
 
@@ -231,7 +190,9 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
           if (merged.length <= 2000) return merged;
           return merged.slice(merged.length - 2000);
         });
-      } catch {}
+      } catch {
+        return;
+      }
     };
 
     source.addEventListener("open", () => {
@@ -263,7 +224,7 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
           <ArrowLeft className="mr-2 h-4 w-4" /> 返回任務列表
         </Link>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => void reloadJob()}>
+          <Button variant="outline" onClick={() => void jobQuery.refetch({ throwOnError: false })}>
             <RefreshCw className="mr-2 h-4 w-4" /> 重新讀取
           </Button>
           <a className={buttonVariants({ variant: "default" })} href={`/api/jobs/${id}/model/download`}>
@@ -302,14 +263,14 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
                 setIsLive(next);
                 if (next) {
                   setIsPlaying(false);
-                  void reloadTimelapseOverview();
-                  void reloadSelectedCameraFrames(true);
+                  void timelapseOverviewQuery.refetch({ throwOnError: false });
+                  void framesQuery.refetch({ throwOnError: false });
                 }
               }}
             >
               LIVE {isLive ? "ON" : "OFF"}
             </Button>
-            <Button variant="outline" onClick={() => void reloadTimelapseOverview()}>
+            <Button variant="outline" onClick={() => void timelapseOverviewQuery.refetch({ throwOnError: false })}>
               更新相機
             </Button>
           </div>
@@ -350,11 +311,7 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setFrameIndex((prev) => Math.max(0, prev - 1))}
-            disabled={isLive || frames.length === 0}
-          >
+          <Button variant="outline" onClick={() => setFrameIndex((prev) => Math.max(0, prev - 1))} disabled={isLive || frames.length === 0}>
             <SkipBack className="mr-2 h-4 w-4" /> 上一張
           </Button>
           <Button
@@ -367,20 +324,11 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
             {isPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
             {isPlaying ? "暫停" : "播放"}
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => setFrameIndex((prev) => Math.min(frames.length - 1, prev + 1))}
-            disabled={isLive || frames.length === 0}
-          >
+          <Button variant="outline" onClick={() => setFrameIndex((prev) => Math.min(frames.length - 1, prev + 1))} disabled={isLive || frames.length === 0}>
             <SkipForward className="mr-2 h-4 w-4" /> 下一張
           </Button>
 
-          <select
-            className="h-9 rounded-xl border border-white/12 bg-black/20 px-3 text-sm text-zinc-100"
-            value={String(playbackMs)}
-            onChange={(event) => setPlaybackMs(Number(event.target.value))}
-            disabled={isLive}
-          >
+          <select className="h-9 rounded-xl border border-white/12 bg-black/20 px-3 text-sm text-zinc-100" value={String(playbackMs)} onChange={(event) => setPlaybackMs(Number(event.target.value))} disabled={isLive}>
             <option value="1000">1x</option>
             <option value="500">2x</option>
             <option value="250">4x</option>
@@ -414,15 +362,13 @@ export function JobDetailPage({ onNotice }: { onNotice: (next: Notice) => void }
         </div>
 
         <div className="mt-2 text-xs text-zinc-400">
-          {selectedFrame
-            ? `iteration ${selectedFrame.iteration} | frame ${frameIndex + 1} / ${frames.length} | ${selectedFrame.cameraName}`
-            : "尚無可播放影格"}
+          {selectedFrame ? `iteration ${selectedFrame.iteration} | frame ${frameIndex + 1} / ${frames.length} | ${selectedFrame.cameraName}` : "尚無可播放影格"}
         </div>
       </div>
 
       <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
         <h2 className="text-lg font-semibold text-zinc-50">任務詳細</h2>
-        {loading ? (
+        {jobQuery.isPending && !job ? (
           <p className="mt-2 text-sm text-zinc-400">載入中...</p>
         ) : job ? (
           <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">

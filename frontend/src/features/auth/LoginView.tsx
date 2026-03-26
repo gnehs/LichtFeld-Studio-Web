@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,16 +15,21 @@ import { Input } from "@/components/ui/input";
 export function LoginView({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const loginMutation = useMutation({
+    mutationFn: (nextPassword: string) => api.login(nextPassword),
+    onSuccess: () => {
+      setError(null);
+      onLogin();
+    },
+    onError: (err) => {
+      setError((err as Error).message);
+    },
+  });
 
   const submit = async (event?: React.FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
-    try {
-      setError(null);
-      await api.login(password);
-      onLogin();
-    } catch (err) {
-      setError((err as Error).message);
-    }
+    setError(null);
+    await loginMutation.mutateAsync(password);
   };
 
   return (
@@ -44,8 +50,8 @@ export function LoginView({ onLogin }: { onLogin: () => void }) {
               placeholder="Password"
             />
             {error ? <p className="text-sm text-red-300">{error}</p> : null}
-            <Button className="w-full" type="submit">
-              Login
+            <Button className="w-full" type="submit" disabled={loginMutation.isPending}>
+              {loginMutation.isPending ? "登入中..." : "Login"}
             </Button>
           </CardContent>
         </form>

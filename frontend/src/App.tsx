@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ImagePlus, ListChecks, LogOut } from "lucide-react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import type { JobInsight, Notice } from "@/lib/app-types";
-import type { DatasetFolderEntry, DatasetRecord, SystemMetrics, TrainingJob } from "@/lib/types";
+import type { DatasetRecord, SystemMetrics, TrainingJob } from "@/lib/types";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
@@ -17,14 +19,16 @@ function isUnauthorizedError(error: unknown): boolean {
 
 function DashboardShell({
   datasets,
-  setAuthed,
   jobs,
-  systemMetrics
+  systemMetrics,
+  onLogout,
+  logoutPending,
 }: {
   datasets: DatasetRecord[];
   jobs: TrainingJob[];
   systemMetrics: SystemMetrics | null;
-  setAuthed: React.Dispatch<React.SetStateAction<boolean>>;
+  onLogout: () => Promise<void>;
+  logoutPending: boolean;
 }) {
   const location = useLocation();
   const onJobsRoute = location.pathname === "/" || location.pathname.startsWith("/jobs");
@@ -55,14 +59,8 @@ function DashboardShell({
             >
               <ImagePlus className="mr-2 h-4 w-4" /> 建立任務
             </Link>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                await api.logout();
-                setAuthed(false);
-              }}
-            >
-              <LogOut className="mr-2 h-4 w-4" /> Logout
+            <Button variant="outline" onClick={() => void onLogout()} disabled={logoutPending}>
+              <LogOut className="mr-2 h-4 w-4" /> {logoutPending ? "登出中..." : "Logout"}
             </Button>
           </div>
         </div>
@@ -92,12 +90,17 @@ function DashboardShell({
                 </div>
                 <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">gpu util</p>
-                  <div className="mt-2 text-2xl font-semibold text-zinc-50">{gpu?.utilizationGpu ?? "-"}{gpu?.utilizationGpu !== null && gpu?.utilizationGpu !== undefined ? "%" : ""}</div>
+                  <div className="mt-2 text-2xl font-semibold text-zinc-50">
+                    {gpu?.utilizationGpu ?? "-"}
+                    {gpu?.utilizationGpu !== null && gpu?.utilizationGpu !== undefined ? "%" : ""}
+                  </div>
                 </div>
                 <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">vram</p>
                   <div className="mt-2 text-sm font-semibold text-zinc-50">{vramText}</div>
-                  <div className="mt-1 text-xs text-zinc-400">{gpu?.memoryUsedPercent !== null && gpu?.memoryUsedPercent !== undefined ? `${gpu.memoryUsedPercent.toFixed(1)}%` : ""}</div>
+                  <div className="mt-1 text-xs text-zinc-400">
+                    {gpu?.memoryUsedPercent !== null && gpu?.memoryUsedPercent !== undefined ? `${gpu.memoryUsedPercent.toFixed(1)}%` : ""}
+                  </div>
                 </div>
                 <div className="rounded-2xl border border-white/8 bg-black/30 p-3">
                   <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">memory</p>
@@ -118,13 +121,7 @@ function DashboardShell({
 
 function App() {
   const navigate = useNavigate();
-  const [ready, setReady] = useState(false);
-  const [authed, setAuthed] = useState(false);
-  const [datasets, setDatasets] = useState<DatasetRecord[]>([]);
-  const [datasetFolders, setDatasetFolders] = useState<DatasetFolderEntry[]>([]);
-  const [jobs, setJobs] = useState<TrainingJob[]>([]);
-  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
-  const [insights, setInsights] = useState<Record<string, JobInsight>>({});
+  const queryClient = useQueryClient();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const setNoticeText = useCallback((next: Notice) => {
@@ -139,142 +136,144 @@ function App() {
     toast.message(next.text);
   }, []);
 
-  const refreshDatasets = useCallback(async () => {
-    const res = await api.listDatasets();
-    setDatasets(res.items);
-    setDatasetFolders(res.folders ?? []);
-  }, []);
-
-  const refreshJobs = useCallback(async () => {
-    const res = await api.listJobs();
-    setJobs(res.items);
-
-    if (res.items.length === 0) {
-      setInsights({});
-      return;
-    }
-
-    const settled = await Promise.allSettled(
-      res.items.map(async (job) => {
-        const latest = await api.getTimelapseLatest(job.id);
-        const newest = latest.items.reduce<{ filePath: string | null; iteration: number | null }>(
-          (acc, frame) => {
-            if (!acc.iteration || frame.iteration > acc.iteration) {
-              return { filePath: frame.filePath, iteration: frame.iteration };
-            }
-            return acc;
-          },
-          { filePath: null, iteration: null }
-        );
-
-        return {
-          id: job.id,
-          value: {
-            latestFramePath: newest.filePath,
-            latestIteration: newest.iteration
-          }
-        };
-      })
-    );
-
-    const next: Record<string, JobInsight> = {};
-    settled.forEach((result, index) => {
-      const jobId = res.items[index]?.id;
-      if (!jobId) return;
-      if (result.status === "fulfilled") {
-        next[result.value.id] = result.value.value;
-      } else {
-        next[jobId] = { latestFramePath: null, latestIteration: null };
-      }
-    });
-
-    setInsights(next);
-  }, []);
-
-  const refreshSystemMetrics = useCallback(async () => {
-    const metrics = await api.systemMetrics();
-    setSystemMetrics(metrics);
-  }, []);
-
-  useEffect(() => {
-    api
-      .me()
-      .then(() => setAuthed(true))
-      .catch(() => setAuthed(false))
-      .finally(() => setReady(true));
-  }, []);
-
-  useEffect(() => {
-    if (!authed) return;
-
-    let cancelled = false;
-
-    const load = async () => {
+  const guardAuth = useCallback(
+    async <T,>(work: () => Promise<T>): Promise<T> => {
       try {
-         await Promise.all([refreshDatasets(), refreshJobs(), refreshSystemMetrics()]);
+        return await work();
       } catch (error) {
-        if (!cancelled && isUnauthorizedError(error)) {
-          await new Promise((resolve) => setTimeout(resolve, 400));
-          try {
-             await Promise.all([refreshDatasets(), refreshJobs(), refreshSystemMetrics()]);
-            return;
-          } catch (retryError) {
-            if (!cancelled && isUnauthorizedError(retryError)) {
-              setAuthed(false);
-              return;
-            }
-            if (!cancelled) {
-              setNoticeText({ tone: "error", text: `讀取資料失敗：${(retryError as Error).message}` });
-            }
-            return;
-          }
+        if (isUnauthorizedError(error)) {
+          await queryClient.invalidateQueries({ queryKey: queryKeys.auth.me });
         }
-        if (!cancelled) {
-          setNoticeText({ tone: "error", text: `讀取資料失敗：${(error as Error).message}` });
-        }
+        throw error;
       }
-    };
+    },
+    [queryClient],
+  );
 
-    void load();
+  const meQuery = useQuery({
+    queryKey: queryKeys.auth.me,
+    queryFn: api.me,
+    retry: false,
+    staleTime: 30_000,
+  });
 
-    const timer = setInterval(() => {
-      void refreshJobs().catch((error) => {
-        if (!cancelled && isUnauthorizedError(error)) {
-          setAuthed(false);
-          return;
-        }
-        if (!cancelled) {
-          setNoticeText({ tone: "error", text: `任務更新失敗：${(error as Error).message}` });
-        }
-      });
-      void refreshSystemMetrics().catch((error) => {
-        if (!cancelled && isUnauthorizedError(error)) {
-          setAuthed(false);
-          return;
-        }
-        if (!cancelled) {
-          setNoticeText({ tone: "error", text: `系統資訊更新失敗：${(error as Error).message}` });
-        }
-      });
-    }, 5000);
+  const authed = meQuery.data?.authenticated === true;
 
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [authed, refreshDatasets, refreshJobs, refreshSystemMetrics, setNoticeText]);
+  const datasetsQuery = useQuery({
+    queryKey: queryKeys.datasets.all,
+    queryFn: () => guardAuth(() => api.listDatasets()),
+    enabled: authed,
+  });
+
+  const jobsQuery = useQuery({
+    queryKey: queryKeys.jobs.all,
+    queryFn: () => guardAuth(() => api.listJobs()),
+    enabled: authed,
+    refetchInterval: 5_000,
+  });
+
+  const systemMetricsQuery = useQuery({
+    queryKey: queryKeys.system.metrics,
+    queryFn: () => guardAuth(() => api.systemMetrics()),
+    enabled: authed,
+    refetchInterval: 5_000,
+  });
+
+  const jobs = jobsQuery.data?.items ?? [];
+  const datasets = datasetsQuery.data?.items ?? [];
+  const datasetFolders = datasetsQuery.data?.folders ?? [];
+  const systemMetrics = systemMetricsQuery.data ?? null;
+
+  const insightQueries = useQueries({
+    queries: jobs.map((job) => ({
+      queryKey: queryKeys.jobs.timelapseLatest(job.id),
+      queryFn: () => guardAuth(() => api.getTimelapseLatest(job.id)),
+      enabled: authed,
+      staleTime: 3_000,
+      refetchInterval: 5_000,
+      retry: 0,
+    })),
+  });
+
+  const insights = useMemo<Record<string, JobInsight>>(() => {
+    return jobs.reduce<Record<string, JobInsight>>((acc, job, index) => {
+      const latest = insightQueries[index]?.data?.items ?? [];
+      const newest = latest.reduce<{ filePath: string | null; iteration: number | null }>(
+        (current, frame) => {
+          if (current.iteration === null || frame.iteration > current.iteration) {
+            return { filePath: frame.filePath, iteration: frame.iteration };
+          }
+          return current;
+        },
+        { filePath: null, iteration: null },
+      );
+      acc[job.id] = {
+        latestFramePath: newest.filePath,
+        latestIteration: newest.iteration,
+      };
+      return acc;
+    }, {});
+  }, [jobs, insightQueries]);
+
+  const logoutMutation = useMutation({
+    mutationFn: () => guardAuth(() => api.logout()),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.me });
+      queryClient.removeQueries({ queryKey: queryKeys.jobs.all });
+      queryClient.removeQueries({ queryKey: queryKeys.datasets.all });
+      queryClient.removeQueries({ queryKey: queryKeys.system.metrics });
+    },
+    onError: (error) => {
+      setNoticeText({ tone: "error", text: `登出失敗：${(error as Error).message}` });
+    },
+  });
+
+  const stopJobMutation = useMutation({
+    mutationFn: (id: string) => guardAuth(() => api.stopJob(id)),
+    onSuccess: async (_result, id) => {
+      setNoticeText({ tone: "success", text: `任務 ${id} 已送出停止指令` });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.timelapseLatest(id) });
+    },
+  });
+
+  const deleteJobMutation = useMutation({
+    mutationFn: (id: string) => guardAuth(() => api.deleteJob(id, false)),
+    onSuccess: async (_result, id) => {
+      setNoticeText({ tone: "success", text: `任務 ${id} 已刪除` });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
+    },
+  });
 
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    const timer = setInterval(() => setNowMs(Date.now()), 1_000);
     return () => clearInterval(timer);
   }, []);
 
-  if (!ready) {
+  useEffect(() => {
+    if (datasetsQuery.error) {
+      setNoticeText({ tone: "error", text: `讀取資料集失敗：${(datasetsQuery.error as Error).message}` });
+    }
+  }, [datasetsQuery.error, datasetsQuery.errorUpdatedAt, setNoticeText]);
+
+  useEffect(() => {
+    if (jobsQuery.error) {
+      setNoticeText({ tone: "error", text: `讀取任務失敗：${(jobsQuery.error as Error).message}` });
+    }
+  }, [jobsQuery.error, jobsQuery.errorUpdatedAt, setNoticeText]);
+
+  useEffect(() => {
+    if (systemMetricsQuery.error) {
+      setNoticeText({ tone: "error", text: `讀取系統資訊失敗：${(systemMetricsQuery.error as Error).message}` });
+    }
+  }, [setNoticeText, systemMetricsQuery.error, systemMetricsQuery.errorUpdatedAt]);
+
+  if (meQuery.isPending) {
     return <div className="p-8 text-zinc-300">Loading...</div>;
   }
 
   if (!authed) {
-    return <LoginView onLogin={() => setAuthed(true)} />;
+    return <LoginView onLogin={() => void queryClient.invalidateQueries({ queryKey: queryKeys.auth.me })} />;
   }
 
   return (
@@ -282,7 +281,17 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={<DashboardShell datasets={datasets} jobs={jobs} systemMetrics={systemMetrics} setAuthed={setAuthed} />}
+          element={
+            <DashboardShell
+              datasets={datasets}
+              jobs={jobs}
+              systemMetrics={systemMetrics}
+              onLogout={async () => {
+                await logoutMutation.mutateAsync();
+              }}
+              logoutPending={logoutMutation.isPending}
+            />
+          }
         >
           <Route index element={<Navigate to="/jobs" replace />} />
           <Route
@@ -293,12 +302,12 @@ function App() {
                 insights={insights}
                 nowMs={nowMs}
                 onCreate={() => navigate("/create")}
-                onRefresh={refreshJobs}
+                onRefresh={async () => {
+                  await jobsQuery.refetch({ throwOnError: true });
+                }}
                 onStop={async (id) => {
                   try {
-                    await api.stopJob(id);
-                    setNoticeText({ tone: "success", text: `任務 ${id} 已送出停止指令` });
-                    await refreshJobs();
+                    await stopJobMutation.mutateAsync(id);
                   } catch (error) {
                     setNoticeText({ tone: "error", text: `停止任務失敗：${(error as Error).message}` });
                   }
@@ -307,9 +316,7 @@ function App() {
                   const ok = window.confirm("確定要刪除此任務？\n按「確定」會保留 Timelapse 檔案。");
                   if (!ok) return;
                   try {
-                    await api.deleteJob(id, false);
-                    setNoticeText({ tone: "success", text: `任務 ${id} 已刪除` });
-                    await refreshJobs();
+                    await deleteJobMutation.mutateAsync(id);
                   } catch (error) {
                     setNoticeText({ tone: "error", text: `刪除失敗：${(error as Error).message}` });
                   }
@@ -327,17 +334,20 @@ function App() {
                 datasetFolders={datasetFolders}
                 onCancel={() => navigate("/jobs")}
                 onDatasetCreated={(dataset) => {
-                  setDatasets((prev) => {
-                    const without = prev.filter((item) => item.id !== dataset.id);
-                    return [dataset, ...without];
-                  });
+                  void dataset;
+                  void queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
                 }}
                 onCreated={async () => {
-                  await Promise.all([refreshDatasets(), refreshJobs()]);
+                  await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all }),
+                    queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all }),
+                  ]);
                   navigate("/jobs");
                 }}
                 onNotice={setNoticeText}
-                onRefreshDatasets={refreshDatasets}
+                onRefreshDatasets={async () => {
+                  await datasetsQuery.refetch({ throwOnError: true });
+                }}
               />
             }
           />
