@@ -84,80 +84,94 @@ function DashboardShell({
 
       <main className="mx-auto mt-4 max-w-7xl space-y-4 px-4">
         {onJobsRoute ? (
-          <div className="flex w-full flex-wrap justify-center gap-2">
-            <div className="min-w-20 rounded-full border border-white/8 bg-black/30 px-4 py-2">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
-                訓練中
-              </p>
-              <div className="text-sm font-semibold text-zinc-50">
-                {runningCount}
-              </div>
-            </div>
-            <div className="min-w-20 rounded-full border border-white/8 bg-black/30 px-4 py-2">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
-                佇列
-              </p>
-              <div className="text-sm font-semibold text-zinc-50">
-                {queuedCount}
-              </div>
-            </div>
-            <div className="min-w-20 rounded-full border border-white/8 bg-black/30 px-4 py-2">
-              <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
-                資料集
-              </p>
-              <div className="text-sm font-semibold text-zinc-50">
-                {datasets.length}
-              </div>
-            </div>
-            <div className="flex min-w-30 items-center gap-3 rounded-full border border-white/8 bg-black/30 py-2 pr-4 pl-2">
-              <CircleIndicator
-                progress={gpu?.utilizationGpu ?? 0}
-                size={32}
-                color="var(--chart-1)"
-              />
-              <div>
+          <div className="flex flex-wrap justify-between gap-4">
+            <div className="flex flex-wrap justify-center gap-2">
+              <div className="min-w-15 rounded-xl border border-white/8 bg-black/30 px-2 py-2 md:min-w-20 md:px-4">
                 <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
-                  {gpu?.name ? gpu.name : "GPU"}
+                  訓練中
                 </p>
                 <div className="text-sm font-semibold text-zinc-50">
-                  {gpu?.utilizationGpu ?? "-"}
+                  {runningCount}
+                </div>
+              </div>
+              <div className="min-w-15 rounded-xl border border-white/8 bg-black/30 px-2 py-2 md:min-w-20 md:px-4">
+                <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                  佇列
+                </p>
+                <div className="text-sm font-semibold text-zinc-50">
+                  {queuedCount}
+                </div>
+              </div>
+              <div className="min-w-15 rounded-xl border border-white/8 bg-black/30 px-2 py-2 md:min-w-20 md:px-4">
+                <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                  資料集
+                </p>
+                <div className="text-sm font-semibold text-zinc-50">
+                  {datasets.length}
                 </div>
               </div>
             </div>
-            <div className="flex min-w-30 items-center gap-3 rounded-full border border-white/8 bg-black/30 py-2 pr-4 pl-2">
-              <CircleIndicator
-                progress={
-                  gpu?.memoryUsedPercent !== null &&
-                  gpu?.memoryUsedPercent !== undefined
-                    ? gpu.memoryUsedPercent
-                    : 0
-                }
-                size={32}
-                color="var(--chart-1)"
-              />
-              <div>
-                <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
-                  VRAM
-                </p>
-                <div className="text-sm font-semibold text-zinc-50">
-                  {vramText}
+            <div className="grid grid-cols-1 justify-center gap-2 max-md:w-full md:flex md:flex-wrap">
+              <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/30 py-2 pr-4 pl-2 max-md:w-full md:min-w-30">
+                <CircleIndicator
+                  progress={gpu?.utilizationGpu ?? 0}
+                  size={32}
+                  color="var(--chart-1)"
+                />
+                <div>
+                  <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                    {gpu?.name ? gpu.name : "GPU"}
+                  </p>
+                  <div className="text-sm font-semibold text-zinc-50">
+                    {gpu?.utilizationGpu ?? "-"}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex min-w-30 items-center gap-3 rounded-full border border-white/8 bg-black/30 py-2 pr-4 pl-2">
-              <CircleIndicator
-                progress={systemMetrics ? systemMetrics.memory.usedPercent : 0}
-                size={32}
-                color="var(--chart-1)"
-              />
-              <div>
-                <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
-                  RAM
-                </p>
-                <div className="text-sm font-semibold text-zinc-50">
-                  {systemMetrics
-                    ? `${systemMetrics.memory.usedGb.toFixed(1)} / ${systemMetrics.memory.totalGb.toFixed(1)} GB`
-                    : "-"}
+              <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/30 py-2 pr-4 pl-2 max-md:w-full md:min-w-30">
+                <CircleIndicator
+                  progress={
+                    gpu?.memoryUsedPercent !== null &&
+                    gpu?.memoryUsedPercent !== undefined
+                      ? gpu.memoryUsedPercent
+                      : 0
+                  }
+                  size={32}
+                  color="var(--chart-1)"
+                />
+                <div>
+                  <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                    VRAM
+                  </p>
+                  <div className="text-sm font-semibold text-zinc-50">
+                    {vramText}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl border border-white/8 bg-black/30 py-2 pr-4 pl-2 max-md:w-full md:min-w-30">
+                <CircleIndicator
+                  progress={
+                    systemMetrics ? systemMetrics.memory.usedPercent : 0
+                  }
+                  size={32}
+                  color="var(--chart-1)"
+                />
+                <div>
+                  <p className="text-[10px] tracking-[0.22em] text-zinc-500 uppercase">
+                    RAM
+                  </p>
+                  <div className="text-sm font-semibold text-zinc-50">
+                    {systemMetrics ? (
+                      <>
+                        <span>{systemMetrics.memory.usedGb.toFixed(1)}</span>
+                        <span className="text-xs opacity-75">
+                          {" "}
+                          / {systemMetrics.memory.totalGb}GB
+                        </span>
+                      </>
+                    ) : (
+                      "-"
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
