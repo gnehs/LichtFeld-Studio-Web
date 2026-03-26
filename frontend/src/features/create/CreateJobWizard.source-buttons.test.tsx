@@ -149,9 +149,12 @@ describe("CreateJobWizard source mode UI", () => {
     const value = container.querySelector('[data-slot="select-value"]');
     const content = value?.querySelector(":scope > span");
     const lines = content?.querySelectorAll(":scope > span");
+    const trigger = container.querySelector('[data-slot="select-trigger"]');
 
     expect(lines).toHaveLength(2);
     expect(lines?.[0]?.textContent).toBe("garden-folder");
     expect(lines?.[1]?.textContent).toBe("128 張相片 - 包含遮罩");
+    expect(trigger?.className).toContain("data-[size=default]:h-auto");
+    expect(trigger?.className).toContain("min-h-12");
   });
 });

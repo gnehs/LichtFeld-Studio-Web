@@ -926,7 +926,7 @@ export function CreateJobWizard({
                         setSelectedDatasetId(value ?? "");
                       }}
                     >
-                      <SelectTrigger className="mt-2 h-auto min-h-8 w-full items-start py-2 *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start">
+                      <SelectTrigger className="mt-2 w-full min-h-12 items-start whitespace-normal py-2 data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start">
                         <SelectValue placeholder="請選擇可用 dataset">
                           {(value) => {
                             if (!value) {
