@@ -107,6 +107,47 @@ const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
   startedAt: null,
 };
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  }
+
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  if (bytes >= 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${Math.round(bytes)} B`;
+}
+
+function getUploadProgress(draft: PendingUploadDraft): number {
+  if (draft.status === "uploaded" || draft.status === "processing") {
+    return 1;
+  }
+
+  return normalizeUploadProgress(draft.progress);
+}
+
+function getUploadTransferredBytes(draft: PendingUploadDraft): number {
+  const totalBytes = draft.totalBytes || draft.file?.size || 0;
+  if (draft.status === "uploaded" || draft.status === "processing") {
+    return totalBytes || draft.uploadedBytes;
+  }
+
+  if (!totalBytes) {
+    return draft.uploadedBytes;
+  }
+
+  return Math.min(draft.uploadedBytes, totalBytes);
+}
+
 function ProgressBar({ progress }: { progress: number | null }) {
   const width =
     progress === null
@@ -281,6 +322,103 @@ function CircularUploadProgress({ progress }: { progress: number }) {
   );
 }
 
+function UploadStatusPanel({
+  draft,
+  nowMs,
+}: {
+  draft: PendingUploadDraft;
+  nowMs: number;
+}) {
+  if (!draft.file || draft.status === "idle") {
+    return null;
+  }
+
+  const progress = getUploadProgress(draft);
+  const totalBytes = draft.totalBytes || draft.file.size;
+  const uploadedBytes = getUploadTransferredBytes(draft);
+  const speed =
+    draft.status === "uploading"
+      ? formatBytesPerSecond(
+          calculateUploadSpeed(draft.uploadedBytes, draft.startedAt, nowMs),
+        )
+      : null;
+  const phaseLabel = formatUploadPhase(draft.status);
+  const detailText =
+    draft.status === "processing"
+      ? "伺服器正在解壓縮與驗證 ZIP，完成後就能建立任務。"
+      : draft.status === "uploaded"
+        ? "ZIP 已驗證完成，可直接沿用這個 dataset 建立任務。"
+        : draft.status === "error"
+          ? draft.error ?? "上傳失敗，請重新選擇 ZIP。"
+          : speed && speed !== "—"
+            ? `目前傳輸速度約 ${speed}`
+            : "正在建立傳輸連線...";
+
+  return (
+    <div
+      className={cn(
+        "glass-panel rounded-[1.2rem] border-0 p-4",
+        draft.status === "error"
+          ? "bg-red-950/40"
+          : draft.status === "uploaded"
+            ? "bg-emerald-500/[0.08]"
+            : "bg-black/25",
+      )}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="shrink-0 self-center sm:self-start">
+          <CircularUploadProgress progress={progress} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-semibold text-zinc-100">
+              {draft.file.name}
+            </p>
+            <span className="rounded-full bg-white/8 px-2 py-1 text-[10px] tracking-[0.18em] text-cyan-100 uppercase">
+              {phaseLabel}
+            </span>
+          </div>
+          <div className="mt-3">
+            <ProgressBar progress={progress} />
+          </div>
+          <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-3">
+            <div className="rounded-2xl bg-black/25 px-3 py-2">
+              <p className="text-[10px] tracking-[0.18em] text-zinc-500 uppercase">
+                進度
+              </p>
+              <p className="mt-1 text-sm text-zinc-100">
+                {Math.round(progress * 100)}%
+              </p>
+            </div>
+            <div className="rounded-2xl bg-black/25 px-3 py-2">
+              <p className="text-[10px] tracking-[0.18em] text-zinc-500 uppercase">
+                已傳輸
+              </p>
+              <p className="mt-1 text-sm text-zinc-100">
+                {`${formatBytes(uploadedBytes)} / ${formatBytes(totalBytes)}`}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-black/25 px-3 py-2">
+              <p className="text-[10px] tracking-[0.18em] text-zinc-500 uppercase">
+                狀態
+              </p>
+              <p className="mt-1 text-sm text-zinc-100">{phaseLabel}</p>
+            </div>
+          </div>
+          <p
+            className={cn(
+              "mt-3 text-xs leading-5",
+              draft.status === "error" ? "text-red-100" : "text-zinc-400",
+            )}
+          >
+            {detailText}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FixedUploadDock({
   draft,
   nowMs,
@@ -291,6 +429,7 @@ function FixedUploadDock({
   if (
     !draft.file ||
     (draft.status !== "uploading" &&
+      draft.status !== "processing" &&
       draft.status !== "uploaded" &&
       draft.status !== "error")
   ) {
@@ -298,13 +437,17 @@ function FixedUploadDock({
   }
   if (typeof document === "undefined") return null;
 
-  const progress = draft.status === "uploaded" ? 1 : draft.progress;
+  const progress = getUploadProgress(draft);
+  const totalBytes = draft.totalBytes || draft.file.size;
+  const uploadedBytes = getUploadTransferredBytes(draft);
   const speed =
     draft.status === "uploaded"
       ? null
       : formatBytesPerSecond(
           calculateUploadSpeed(draft.uploadedBytes, draft.startedAt, nowMs),
         );
+  const phaseLabel = formatUploadPhase(draft.status);
+  const bytesLabel = `${formatBytes(uploadedBytes)} / ${formatBytes(totalBytes)}`;
 
   return createPortal(
     <div className="pointer-events-none fixed bottom-4 left-1/2 z-[140] w-[min(calc(100vw-1rem),20rem)] -translate-x-1/2">
@@ -324,9 +467,10 @@ function FixedUploadDock({
               {draft.file.name}
             </p>
             {draft.status !== "error" ? (
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
-                {speed ? speed : null}
-              </div>
+              <p className="text-xs text-zinc-400">{`${phaseLabel} · ${bytesLabel}`}</p>
+            ) : null}
+            {draft.status === "uploading" && speed && speed !== "—" ? (
+              <p className="text-[11px] text-zinc-500">{speed}</p>
             ) : null}
             {draft.status === "error" ? (
               <p className="text-[11px] text-red-100">
@@ -500,13 +644,22 @@ export function CreateJobWizard({
   const uploadDatasetMutation = useMutation({
     mutationFn: ({
       file,
+      datasetName,
       onProgress,
       onBytesProgress,
+      onPhaseChange,
     }: {
       file: File;
+      datasetName?: string;
       onProgress: (progress: number) => void;
       onBytesProgress: (loaded: number, total: number) => void;
-    }) => api.uploadDataset(file, undefined, { onProgress, onBytesProgress }),
+      onPhaseChange: (phase: "preparing" | "uploading" | "processing" | "complete") => void;
+    }) =>
+      api.uploadDataset(file, datasetName, {
+        onProgress,
+        onBytesProgress,
+        onPhaseChange,
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
     },
@@ -529,7 +682,8 @@ export function CreateJobWizard({
   });
 
   const uploadFile = uploadDraft.file;
-  const uploading = uploadDraft.status === "uploading";
+  const uploadBusy =
+    uploadDraft.status === "uploading" || uploadDraft.status === "processing";
   const uploadedDatasetId = uploadDraft.datasetId ?? "";
   const selectableFolders = useMemo(
     () =>
@@ -591,12 +745,12 @@ export function CreateJobWizard({
       : selectedDataset?.name || "未選擇";
   const canSubmit =
     Boolean(activeDatasetId) &&
-    !(dataSourceMode === "upload" && uploading) &&
+    !(dataSourceMode === "upload" && uploadBusy) &&
     !submitting;
   const blockingReason = !activeDatasetId
     ? "尚未完成資料集選擇或匯入"
-    : dataSourceMode === "upload" && uploading
-      ? "資料集仍在背景上傳中"
+    : dataSourceMode === "upload" && uploadBusy
+      ? "資料集仍在上傳或驗證中"
       : null;
 
   useEffect(() => {
@@ -688,6 +842,7 @@ export function CreateJobWizard({
     try {
       const res = await uploadDatasetMutation.mutateAsync({
         file: uploadFile,
+        datasetName: uploadDraft.name.trim() || undefined,
         onProgress: (progress) => {
           setUploadDraft((prev) =>
             mergeUploadDraft(prev, {
@@ -703,6 +858,22 @@ export function CreateJobWizard({
               status: "uploading",
               uploadedBytes: loaded,
               totalBytes: total,
+              error: null,
+            }),
+          );
+        },
+        onPhaseChange: (phase) => {
+          if (phase !== "processing") {
+            return;
+          }
+
+          setUploadDraft((prev) =>
+            mergeUploadDraft(prev, {
+              status: "processing",
+              progress: 1,
+              uploadedBytes:
+                prev.totalBytes || prev.file?.size || prev.uploadedBytes,
+              totalBytes: prev.totalBytes || prev.file?.size || prev.uploadedBytes,
               error: null,
             }),
           );
@@ -787,10 +958,10 @@ export function CreateJobWizard({
   };
 
   const submit = async () => {
-    if (dataSourceMode === "upload" && uploading) {
+    if (dataSourceMode === "upload" && uploadBusy) {
       onNotice({
         tone: "info",
-        text: "資料集仍在背景上傳中，請等上傳完成後再建立任務。",
+        text: "資料集仍在上傳或驗證中，請等完成後再建立任務。",
       });
       return;
     }
@@ -1036,6 +1207,7 @@ export function CreateJobWizard({
                       applyUploadFile(e.target.files?.[0] ?? null)
                     }
                   />
+                  <UploadStatusPanel draft={uploadDraft} nowMs={uploadNowMs} />
                 </>
               ) : null}
             </SourcePanel>

@@ -1,4 +1,4 @@
-export type UploadStatus = "idle" | "uploading" | "uploaded" | "error";
+export type UploadStatus = "idle" | "uploading" | "processing" | "uploaded" | "error";
 
 export interface PendingUploadDraft {
   status: UploadStatus;
@@ -20,7 +20,7 @@ export function normalizeUploadProgress(value: number): number {
 }
 
 export function shouldAllowStepTwoWhileUploading(draft: Pick<PendingUploadDraft, "status" | "file">): boolean {
-  return Boolean(draft.file) && (draft.status === "uploading" || draft.status === "uploaded");
+  return Boolean(draft.file) && (draft.status === "uploading" || draft.status === "processing" || draft.status === "uploaded");
 }
 
 export function shouldAutoStartUpload(draft: Pick<PendingUploadDraft, "status" | "file" | "datasetId">): boolean {
@@ -36,6 +36,7 @@ export function mergeUploadDraft(draft: PendingUploadDraft, patch: Partial<Pendi
 
 export function formatUploadPhase(status: UploadStatus): string {
   if (status === "uploading") return "背景上傳中";
+  if (status === "processing") return "伺服器驗證中";
   if (status === "uploaded") return "可建立任務";
   if (status === "error") return "需要重新上傳";
   return "等待上傳";

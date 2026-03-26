@@ -11,7 +11,8 @@ LichtFeld-Studio 的簡易 Web 控制台，提供 React + Tailwind 前端與 Nod
 - 單一管理者密碼登入
 - Session 會持久化到 SQLite，後端重啟後可沿用既有登入狀態
 - 會定期主動清理已過期的 session，避免資料表持續累積
-- 上傳 ZIP 或直接選用伺服器上的 dataset
+- 以 tus protocol 上傳 ZIP，支援續傳、進度顯示與伺服器驗證階段提示
+- 也可直接選用伺服器上的 dataset
 - 建立、停止、刪除訓練任務
 - 刪除任務時會一併移除該任務的 output、timelapse 與 log，無法復原
 - 查看 timelapse、模型輸出與系統資源資訊
@@ -110,7 +111,7 @@ my-dataset/
    \- ...
 ```
 
-不論是前端上傳 ZIP，或手動放進 `datasets/`，都應符合這個結構。
+不論是前端以 tus 上傳 ZIP，或手動放進 `datasets/`，都應符合這個結構。前端會先顯示上傳進度，ZIP 傳完後還會進入伺服器端的解壓縮與驗證階段，完成後才會註冊成可用 dataset。未完成的 tus 暫存 upload 會在最後活動 24 小時後自動過期並清理。
 
 ## 常用指令
 

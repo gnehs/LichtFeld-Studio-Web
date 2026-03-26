@@ -5,6 +5,7 @@ import type { PendingUploadDraft } from "@/upload-state";
 describe("upload state helpers", () => {
   test("allows moving to step two while upload is still running", () => {
     expect(shouldAllowStepTwoWhileUploading({ status: "uploading", file: new File(["zip"], "dataset.zip") })).toBe(true);
+    expect(shouldAllowStepTwoWhileUploading({ status: "processing", file: new File(["zip"], "dataset.zip") } as any)).toBe(true);
   });
 
   test("auto starts upload when file is chosen and not yet uploaded", () => {
@@ -42,6 +43,7 @@ describe("upload state helpers", () => {
   test("formats upload phase labels for tool-like status strips", () => {
     expect(formatUploadPhase("idle")).toBe("等待上傳");
     expect(formatUploadPhase("uploading")).toBe("背景上傳中");
+    expect(formatUploadPhase("processing" as any as never)).toBe("伺服器驗證中");
     expect(formatUploadPhase("uploaded")).toBe("可建立任務");
     expect(formatUploadPhase("error")).toBe("需要重新上傳");
   });

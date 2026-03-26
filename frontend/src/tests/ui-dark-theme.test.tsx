@@ -28,7 +28,8 @@ describe("dark compact ui primitives", () => {
     const markup = renderToStaticMarkup(<Input placeholder="dataset" />);
 
     expect(markup).toContain("h-8");
-    expect(markup).toContain("border-input");
+    expect(markup).toContain("glass-panel");
+    expect(markup).toContain("border-0");
     expect(markup).toContain("dark:bg-input/30");
     expect(markup).toContain("placeholder:text-muted-foreground");
   });
@@ -36,7 +37,8 @@ describe("dark compact ui primitives", () => {
   test("outline badge renders subdued telemetry chip styling", () => {
     const markup = renderToStaticMarkup(<Badge variant="outline">queued</Badge>);
 
-    expect(markup).toContain("border-border");
+    expect(markup).toContain("glass-panel");
+    expect(markup).toContain("border-0");
     expect(markup).toContain("text-foreground");
     expect(markup).toContain("rounded-4xl");
   });

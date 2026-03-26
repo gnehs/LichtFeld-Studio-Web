@@ -1,8 +1,22 @@
+import { Upload } from "tus-js-client";
 import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, SystemMetrics, TimelapseFrame, TrainingJob } from "./types";
+
+export type UploadDatasetPhase = "preparing" | "uploading" | "processing" | "complete";
 
 interface UploadDatasetOptions {
   onProgress?: (progress: number) => void;
   onBytesProgress?: (loaded: number, total: number) => void;
+  onPhaseChange?: (phase: UploadDatasetPhase) => void;
+}
+
+async function parseRequestError(response: Response): Promise<string> {
+  const body = await response.json().catch(() => ({}));
+  return body.message ?? response.statusText;
+}
+
+function getTusUploadCompletePath(uploadUrl: string): string {
+  const normalizedUrl = uploadUrl.replace(/\/+$/, "");
+  return `${normalizedUrl}/complete`;
 }
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
@@ -30,52 +44,75 @@ export const api = {
 
   listDatasets: () => request<{ items: DatasetRecord[]; folders: DatasetFolderEntry[] }>("/api/datasets"),
   uploadDataset: async (file: File, datasetName?: string, options?: UploadDatasetOptions) => {
-    const form = new FormData();
-    form.append("file", file);
-    if (datasetName) {
-      form.append("datasetName", datasetName);
-    }
-
     return new Promise<{ item: DatasetRecord }>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/datasets/upload", true);
-      xhr.withCredentials = true;
+      const upload = new Upload(file, {
+        endpoint: "/api/datasets/upload/tus",
+        retryDelays: [0, 1000, 3000, 5000],
+        metadata: {
+          filename: file.name,
+          filetype: file.type || "application/zip",
+          ...(datasetName?.trim() ? { datasetName: datasetName.trim() } : {})
+        },
+        removeFingerprintOnSuccess: true,
+        onBeforeRequest(req) {
+          const underlying = req.getUnderlyingObject();
+          if (underlying && typeof underlying === "object" && "withCredentials" in underlying) {
+            (underlying as XMLHttpRequest).withCredentials = true;
+          }
+        },
+        onError(error) {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+        onProgress(bytesUploaded, bytesTotal) {
+          options?.onPhaseChange?.("uploading");
+          options?.onBytesProgress?.(bytesUploaded, bytesTotal);
+          options?.onProgress?.(bytesTotal > 0 ? bytesUploaded / bytesTotal : 0);
+        },
+        async onSuccess() {
+          try {
+            if (!upload.url) {
+              throw new Error("Upload succeeded but server did not return upload URL");
+            }
 
-      xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) {
-          return;
+            options?.onPhaseChange?.("processing");
+            options?.onBytesProgress?.(file.size, file.size);
+            options?.onProgress?.(1);
+
+            const response = await fetch(getTusUploadCompletePath(upload.url), {
+              method: "POST",
+              credentials: "include"
+            });
+
+            if (!response.ok) {
+              throw new Error(await parseRequestError(response));
+            }
+
+            const body = (await response.json()) as { item?: DatasetRecord };
+            if (!body.item) {
+              throw new Error("Upload succeeded but response is missing dataset item");
+            }
+
+            options?.onPhaseChange?.("complete");
+            resolve({ item: body.item });
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
         }
-        options?.onBytesProgress?.(event.loaded, event.total);
-        options?.onProgress?.(event.loaded / event.total);
-      };
+      });
 
-      xhr.onerror = () => {
-        reject(new Error("Network error"));
-      };
-
-      xhr.onload = () => {
-        let body: { item?: DatasetRecord; message?: string } = {};
-        try {
-          body = xhr.responseText ? (JSON.parse(xhr.responseText) as { item?: DatasetRecord; message?: string }) : {};
-        } catch {
-          body = {};
-        }
-
-        if (xhr.status < 200 || xhr.status >= 300) {
-          reject(new Error(body.message ?? `HTTP ${xhr.status}`));
-          return;
-        }
-
-        if (!body.item) {
-          reject(new Error("Upload succeeded but response is missing dataset item"));
-          return;
-        }
-
-        options?.onProgress?.(1);
-        resolve({ item: body.item });
-      };
-
-      xhr.send(form);
+      options?.onPhaseChange?.("preparing");
+      upload
+        .findPreviousUploads()
+        .then((previousUploads) => {
+          const latestUpload = previousUploads[0];
+          if (latestUpload) {
+            upload.resumeFromPreviousUpload(latestUpload);
+          }
+          upload.start();
+        })
+        .catch((error) => {
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
     });
   },
   registerDatasetPath: (datasetName: string, targetPath: string) =>
