@@ -3,8 +3,7 @@ import { CircleIndicator } from "@/components/CircleIndicator";
 import { Play, Clock, Database, Gpu, MemoryStick } from "lucide-react";
 import type { SystemMetrics, TrainingJob } from "@/lib/types";
 
-const baseCardClass = "rounded-full border border-white/8 bg-black/30";
-const metricLabelClass = "text-[10px] text-zinc-500 leading-3";
+const metricLabelClass = "text-[10px] text-zinc-500 leading-[1em] ";
 
 function SummaryCard({
   label,
@@ -17,17 +16,30 @@ function SummaryCard({
 }) {
   return (
     <div
-      className={`py-1.5 pr-4 pl-1.5 max-md:w-full md:min-w-24 ${baseCardClass} flex items-center gap-2`}
+      className={`relative flex items-center gap-2 rounded-full py-1 pr-4 pl-1 shadow-sm shadow-black/5 max-md:w-full md:min-w-24`}
     >
-      <div className="grid size-8 shrink-0 place-content-center rounded-full border border-white/10 bg-linear-to-b from-white/10 to-white/5">
-        <div className="relative">
-          <div className="drop-shadow-2xl">{icon}</div>
-          <div className="absolute inset-0 opacity-20 blur-xs">{icon}</div>
+      <div className="absolute inset-0 rounded-full bg-linear-to-b from-white/10 to-white/2.5" />
+      <div className="absolute inset-0 rounded-full border-[0.5px] border-white/2.5" />
+      <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/15" />
+      <div className="relative grid size-8 shrink-0 place-content-center rounded-full shadow-sm shadow-black/5">
+        <div className="absolute inset-0 rounded-full bg-linear-to-b from-white/10 to-white/2.5" />
+        <div className="absolute inset-0 rounded-full border-[0.5px] border-white/2.5" />
+        <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/15" />
+        <div
+          className="drop-shadow-sm drop-shadow-white/5"
+          style={{
+            maskImage:
+              "radial-gradient(circle at bottom, black 0%, rgba(0,0,0,.75) 50%)",
+          }}
+        >
+          {icon}
         </div>
       </div>
-      <div>
+      <div className="relative flex flex-col gap-0.5 text-shadow-sm">
         <p className={metricLabelClass}>{label}</p>
-        <div className="text-sm font-semibold text-zinc-50">{value}</div>
+        <div className="bg-linear-to-b from-zinc-100 to-zinc-400 bg-clip-text font-mono text-sm leading-[1em] font-semibold text-transparent">
+          {value}
+        </div>
       </div>
     </div>
   );
@@ -46,12 +58,22 @@ function UsageCard({
 }) {
   return (
     <div
-      className={`relative flex items-center gap-2 overflow-hidden py-1.5 pr-4 pl-1.5 max-md:w-full md:min-w-30 ${baseCardClass}`}
+      className={`relative flex items-center gap-2 overflow-hidden py-1 pr-4 pl-1 max-md:w-full md:min-w-30`}
     >
-      <CircleIndicator progress={progress} size={28} color="var(--chart-1)" />
-      <div>
+      <div className="absolute inset-0 rounded-full bg-linear-to-b from-white/10 to-white/2.5" />
+      <div className="absolute inset-0 rounded-full border-[0.5px] border-white/2.5" />
+      <div className="absolute inset-0 rounded-full border-t-[0.5px] border-white/15" />
+      <CircleIndicator
+        progress={progress}
+        size={28}
+        color="var(--chart-1)"
+        trackColor="rgba(255, 255, 255, 0.05)"
+      />
+      <div className="relative flex flex-col gap-0.5 text-shadow-sm">
         <p className={metricLabelClass}>{label}</p>
-        <div className="text-sm font-semibold text-zinc-50">{value}</div>
+        <div className="bg-linear-to-b from-zinc-100 to-zinc-400 bg-clip-text font-mono text-sm leading-[1em] font-semibold text-transparent">
+          {value}
+        </div>
       </div>
       <div className="absolute right-2 bottom-0 m-auto opacity-10">{icon}</div>
     </div>
@@ -75,17 +97,17 @@ export function DashboardOverview({
     {
       label: "訓練中",
       value: runningCount,
-      icon: <Play size={16} className="text-green-400" />,
+      icon: <Play size={16} className="text-green-400" strokeWidth={2.5} />,
     },
     {
       label: "佇列",
       value: queuedCount,
-      icon: <Clock size={16} className="text-yellow-400" />,
+      icon: <Clock size={16} className="text-yellow-400" strokeWidth={2.5} />,
     },
     {
       label: "資料集",
       value: datasetCount,
-      icon: <Database size={16} className="text-blue-400" />,
+      icon: <Database size={16} className="text-blue-400" strokeWidth={2.5} />,
     },
   ];
 
@@ -104,10 +126,10 @@ export function DashboardOverview({
         gpu?.memoryTotalMiB !== null &&
         gpu?.memoryTotalMiB !== undefined ? (
           <>
-            <span>{(gpu.memoryUsedMiB / 1024).toFixed(1)}GB</span>
-            <span className="text-xs opacity-75">
-              {" "}
-              / {(gpu.memoryTotalMiB / 1024).toFixed(1)}GB
+            <span>{(gpu.memoryUsedMiB / 1024).toFixed(1)}</span>
+            <span className="mx-0.5 text-[10px]">/</span>
+            <span className="text-[10px]">
+              {(gpu.memoryTotalMiB / 1024).toFixed(1)}GB
             </span>
           </>
         ) : (
@@ -121,10 +143,8 @@ export function DashboardOverview({
       value: systemMetrics ? (
         <>
           <span>{systemMetrics.memory.usedGb.toFixed(1)}</span>
-          <span className="text-xs opacity-75">
-            {" "}
-            / {systemMetrics.memory.totalGb}GB
-          </span>
+          <span className="mx-0.5 text-[10px]">/</span>
+          <span className="text-[10px]">{systemMetrics.memory.totalGb}GB</span>
         </>
       ) : (
         "-"
