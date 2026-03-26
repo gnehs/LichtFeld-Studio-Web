@@ -70,13 +70,6 @@ export function DashboardOverview({
   const runningCount = jobs.filter((job) => job.status === "running").length;
   const queuedCount = jobs.filter((job) => job.status === "queued").length;
   const gpu = systemMetrics?.gpu.devices[0] ?? null;
-  const vramText =
-    gpu?.memoryUsedMiB !== null &&
-    gpu?.memoryUsedMiB !== undefined &&
-    gpu?.memoryTotalMiB !== null &&
-    gpu?.memoryTotalMiB !== undefined
-      ? `${(gpu.memoryUsedMiB / 1024).toFixed(1)} / ${(gpu.memoryTotalMiB / 1024).toFixed(1)} GB`
-      : "-";
 
   const summaryCards = [
     {
@@ -105,7 +98,21 @@ export function DashboardOverview({
     },
     {
       label: "VRAM",
-      value: vramText,
+      value:
+        gpu?.memoryUsedMiB !== null &&
+        gpu?.memoryUsedMiB !== undefined &&
+        gpu?.memoryTotalMiB !== null &&
+        gpu?.memoryTotalMiB !== undefined ? (
+          <>
+            <span>{(gpu.memoryUsedMiB / 1024).toFixed(1)}GB</span>
+            <span className="text-xs opacity-75">
+              {" "}
+              / {(gpu.memoryTotalMiB / 1024).toFixed(1)}GB
+            </span>
+          </>
+        ) : (
+          "-"
+        ),
       progress: gpu?.memoryUsedPercent ?? 0,
       icon: <MemoryStick size={32} className="text-white" />,
     },
