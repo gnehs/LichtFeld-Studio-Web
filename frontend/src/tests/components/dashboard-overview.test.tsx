@@ -66,8 +66,40 @@ describe("DashboardOverview", () => {
     expect(markup).toContain("佇列");
     expect(markup).toContain("資料集");
     expect(markup).toContain("RTX 4090");
-    expect(markup).toContain("12.0 / 24.0 GB");
+    expect(markup).toContain("12.0");
+    expect(markup).toContain("24.0GB");
     expect(markup).toContain("48.2");
-    expect(markup).toContain("/ 64GB");
+    expect(markup).toContain("64GB");
+  });
+
+  test("renders GPU utilization as 0% when usage is zero", () => {
+    const systemMetrics: SystemMetrics = {
+      gpu: {
+        devices: [
+          {
+            index: 0,
+            name: "RTX 4090",
+            utilizationGpu: 0,
+            temperatureC: 42,
+            memoryTotalMiB: 24576,
+            memoryUsedMiB: 0,
+            memoryUsedPercent: 0,
+          },
+        ],
+        available: true,
+      },
+      memory: {
+        totalGb: 64,
+        usedGb: 32,
+        usedPercent: 50,
+      },
+      ts: "2026-03-26T00:00:00.000Z",
+    };
+
+    const markup = renderToStaticMarkup(
+      <DashboardOverview jobs={[]} datasetCount={0} systemMetrics={systemMetrics} />,
+    );
+
+    expect(markup).toMatch(/RTX 4090<\/p><div[^>]*>0%<\/div>/);
   });
 });

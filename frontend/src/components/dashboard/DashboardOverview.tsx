@@ -92,6 +92,7 @@ export function DashboardOverview({
   const runningCount = jobs.filter((job) => job.status === "running").length;
   const queuedCount = jobs.filter((job) => job.status === "queued").length;
   const gpu = systemMetrics?.gpu.devices[0] ?? null;
+  const gpuUtilization = gpu?.utilizationGpu;
 
   const summaryCards = [
     {
@@ -114,8 +115,11 @@ export function DashboardOverview({
   const usageCards = [
     {
       label: gpu?.name || "GPU",
-      value: gpu?.utilizationGpu ? `${gpu.utilizationGpu}%` : "-",
-      progress: gpu?.utilizationGpu ?? 0,
+      value:
+        gpuUtilization !== null && gpuUtilization !== undefined
+          ? `${gpuUtilization}%`
+          : "-",
+      progress: gpuUtilization ?? 0,
       icon: <Gpu size={32} className="text-white" />,
     },
     {
