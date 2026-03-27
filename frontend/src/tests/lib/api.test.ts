@@ -91,6 +91,7 @@ describe("uploadDataset", () => {
     } as any);
 
     expect(tusMock.instances).toHaveLength(1);
+    expect(tusMock.instances[0]?.options.chunkSize).toBe(64 * 1024 * 1024);
     expect(tusMock.instances[0]?.resumeFromPreviousUpload).toHaveBeenCalledWith(tusMock.previousUploads[0]);
     expect(bytesProgress).toHaveBeenCalledWith(50, 100);
     expect(progress).toHaveBeenCalledWith(0.5);

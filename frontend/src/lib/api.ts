@@ -3,6 +3,8 @@ import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, SystemMetrics,
 
 export type UploadDatasetPhase = "preparing" | "uploading" | "processing" | "complete";
 
+const TUS_UPLOAD_CHUNK_SIZE = 64 * 1024 * 1024;
+
 interface UploadDatasetOptions {
   onProgress?: (progress: number) => void;
   onBytesProgress?: (loaded: number, total: number) => void;
@@ -47,6 +49,7 @@ export const api = {
     return new Promise<{ item: DatasetRecord }>((resolve, reject) => {
       const upload = new Upload(file, {
         endpoint: "/api/datasets/upload/tus",
+        chunkSize: TUS_UPLOAD_CHUNK_SIZE,
         retryDelays: [0, 1000, 3000, 5000],
         metadata: {
           filename: file.name,
