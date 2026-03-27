@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { config } from "./config.js";
 import type { DatasetRecord, JobRecord, JobStatus, TimelapseFrame } from "./types/models.js";
@@ -130,6 +132,47 @@ export const repo = {
   updateDatasetName(id: string, name: string) {
     db.prepare("UPDATE datasets SET name = ? WHERE id = ?").run(name, id);
     return this.getDataset(id);
+  },
+
+  updateDatasetPath(id: string, datasetPath: string) {
+    db.prepare("UPDATE datasets SET path = ? WHERE id = ?").run(datasetPath, id);
+    return this.getDataset(id);
+  },
+
+  listDatasetFileEntries(datasetPath: string) {
+    const entries: Array<{ relativePath: string; kind: "image" | "mask"; sizeBytes: number; previewable: boolean }> = [];
+    const visit = (root: string, kind: "image" | "mask") => {
+      if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return;
+      const walk = (current: string) => {
+        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+          const nextPath = path.join(current, entry.name);
+          if (entry.isDirectory()) {
+            walk(nextPath);
+            continue;
+          }
+          if (!entry.isFile()) continue;
+          entries.push({
+            relativePath: path.relative(datasetPath, nextPath).split(path.sep).join("/"),
+            kind,
+            sizeBytes: fs.statSync(nextPath).size,
+            previewable: kind === "image",
+          });
+        }
+      };
+      walk(root);
+    };
+    visit(path.join(datasetPath, "images"), "image");
+    visit(path.join(datasetPath, "masks"), "mask");
+    return entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+  },
+
+  deleteDataset(id: string) {
+    db.prepare("DELETE FROM datasets WHERE id = ?").run(id);
+  },
+
+  getDatasetByPath(datasetPath: string) {
+    const row = db.prepare("SELECT * FROM datasets WHERE path = ?").get(datasetPath);
+    return row ? mapDataset(row) : null;
   },
 
   createJob(job: JobRecord) {

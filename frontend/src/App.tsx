@@ -6,9 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
-import { LogOut } from "lucide-react";
 import {
-  Link,
   Navigate,
   Outlet,
   Route,
@@ -21,11 +19,13 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { JobInsight, Notice } from "@/lib/app-types";
 import type { DatasetRecord, SystemMetrics, TrainingJob } from "@/lib/types";
-import { Button } from "@/components/ui/button";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
 import { JobDetailPage } from "@/pages/JobDetailPage";
+import { DatasetEditPage } from "@/pages/DatasetEditPage";
+import { DatasetsPage } from "@/pages/DatasetsPage";
+import { AppHeader } from "@/components/app/AppHeader";
 
 function isUnauthorizedError(error: unknown): boolean {
   return error instanceof Error && /unauthorized/i.test(error.message);
@@ -50,34 +50,15 @@ function DashboardShell({
 
   return (
     <div className="bg-app-base min-h-screen pb-8 text-zinc-100">
-      <header className="border-b border-white/10 bg-black/20 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-50">
-              LichtFeld Studio Web
-            </h1>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => void onLogout()}
-              disabled={logoutPending}
-            >
-              <LogOut className="size-4" />
-              {logoutPending ? "登出中..." : "登出"}
-            </Button>
-          </div>
-        </div>
-      </header>
+      <AppHeader onLogout={onLogout} logoutPending={logoutPending} />
 
       <main className="mx-auto mt-4 max-w-7xl space-y-4 px-4">
         {onJobsRoute ? (
-          <DashboardOverview
-            jobs={jobs}
-            datasetCount={datasets.length}
-            systemMetrics={systemMetrics}
-          />
+            <DashboardOverview
+              jobs={jobs}
+              datasetCount={datasets.length}
+              systemMetrics={systemMetrics}
+            />
         ) : null}
         <Outlet />
       </main>
@@ -333,6 +314,16 @@ function App() {
             path="jobs/:id"
             element={<JobDetailPage onNotice={setNoticeText} />}
           />
+          <Route
+            path="datasets"
+            element={
+              <DatasetsPage
+                datasets={datasets}
+                datasetFolders={datasetFolders}
+              />
+            }
+          />
+          <Route path="datasets/:id/edit" element={<DatasetEditPage />} />
           <Route
             path="create"
             element={

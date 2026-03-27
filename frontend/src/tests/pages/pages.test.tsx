@@ -6,6 +6,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
 import { JobDetailPage } from "@/pages/JobDetailPage";
+import { DatasetEditPage } from "@/pages/DatasetEditPage";
+import { DatasetsPage } from "@/pages/DatasetsPage";
 import type { DatasetFolderEntry, DatasetRecord, TrainingJob } from "@/lib/types";
 
 function withQueryClient(node: ReactElement) {
@@ -64,5 +66,28 @@ describe("route pages", () => {
     );
 
     expect(markup).toContain("data-route=\"job-detail\"");
+  });
+
+  test("dataset edit page renders loading state", () => {
+    const markup = renderToStaticMarkup(
+      withQueryClient(
+        <MemoryRouter initialEntries={["/datasets/ds-1/edit"]}>
+          <Routes>
+            <Route path="/datasets/:id/edit" element={<DatasetEditPage />} />
+          </Routes>
+        </MemoryRouter>,
+      ),
+    );
+
+    expect(markup).toContain("載入中");
+  });
+
+  test("datasets page renders route marker", () => {
+    const markup = renderToStaticMarkup(
+      <DatasetsPage datasets={[]} datasetFolders={[]} />,
+    );
+
+    expect(markup).toContain('data-route="datasets"');
+    expect(markup).toContain("資料集列表");
   });
 });

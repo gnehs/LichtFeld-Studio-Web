@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import { config } from "../config.js";
 import { repo } from "../db.js";
 import { extractZipToDirectory } from "../lib/zipExtract.js";
-import type { DatasetFolderEntry, DatasetRecord } from "../types/models.js";
+import type { DatasetDetail, DatasetFileEntry, DatasetFolderEntry, DatasetRecord } from "../types/models.js";
 import {
   evaluateDatasetForAutoRegister,
   inspectDatasetFolder,
@@ -24,6 +24,17 @@ function isAllowedPath(targetPath: string): boolean {
 
 function removePathSafe(targetPath: string) {
   fs.rmSync(targetPath, { recursive: true, force: true });
+}
+
+function getDirectorySizeBytes(targetPath: string): number {
+  if (!fs.existsSync(targetPath)) return 0;
+  const stat = fs.statSync(targetPath);
+  if (stat.isFile()) return stat.size;
+  if (!stat.isDirectory()) return 0;
+  return fs.readdirSync(targetPath, { withFileTypes: true }).reduce((sum, entry) => {
+    const nextPath = path.join(targetPath, entry.name);
+    return sum + getDirectorySizeBytes(nextPath);
+  }, 0);
 }
 
 function stripFileExtension(fileName: string): string {
@@ -58,6 +69,67 @@ function resolveUploadNames(params: {
     displayName: folderName,
     folderName,
   };
+}
+
+function classifyMaskSource(folderPath: string): DatasetDetail["maskSource"] {
+  const masksDir = path.join(folderPath, "masks");
+  const hasMasksDir = fs.existsSync(masksDir) && fs.statSync(masksDir).isDirectory();
+  const hasAlpha = inspectDatasetFolder(folderPath).hasAlphaImages;
+  if (hasMasksDir && hasAlpha) return "mixed";
+  if (hasMasksDir) return "separate_mask";
+  if (hasAlpha) return "alpha";
+  return "none";
+}
+
+function listDatasetFiles(folderPath: string): DatasetFileEntry[] {
+  const results: DatasetFileEntry[] = [];
+  const pushFiles = (root: string, kind: "image" | "mask") => {
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return;
+    const walk = (current: string) => {
+      for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+        const nextPath = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          walk(nextPath);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        const rel = path.relative(folderPath, nextPath).split(path.sep).join("/");
+        results.push({ relativePath: rel, kind, sizeBytes: fs.statSync(nextPath).size, previewable: kind === "image" });
+      }
+    };
+    walk(root);
+  };
+
+  pushFiles(path.join(folderPath, "images"), "image");
+  pushFiles(path.join(folderPath, "masks"), "mask");
+
+  return results.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
+}
+
+function resolveDatasetRelativeFilePath(datasetPath: string, relativePath: string) {
+  const trimmed = relativePath.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (!IMAGE_EXTENSIONS.has(path.extname(trimmed).toLowerCase())) {
+    return null;
+  }
+
+  const normalizedDatasetPath = normalizePath(datasetPath);
+  const targetPath = normalizePath(path.join(datasetPath, trimmed));
+  if (
+    targetPath === normalizedDatasetPath ||
+    !targetPath.startsWith(normalizedDatasetPath + path.sep)
+  ) {
+    return null;
+  }
+
+  if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isFile()) {
+    return null;
+  }
+
+  return targetPath;
 }
 
 export const datasetService = {
@@ -113,7 +185,9 @@ export const datasetService = {
 
       const datasetPath = normalizePath(path.join(config.datasetsDir, entry.name));
       const registered = registeredByPath.get(datasetPath);
-      const inspected = inspectDatasetFolder(datasetPath);
+      const inspected = inspectDatasetFolder(datasetPath) as ReturnType<typeof inspectDatasetFolder> & {
+        previewImageRelativePath: string | null;
+      };
       folders.push({
         name: entry.name,
         path: datasetPath,
@@ -124,12 +198,46 @@ export const datasetService = {
         imageCount: inspected.imageCount,
         hasMasks: inspected.hasMasks,
         hasAlphaImages: inspected.hasAlphaImages,
-        previewImageRelativePath: inspected.previewImageRelativePath
+        previewImageRelativePath: inspected.previewImageRelativePath ?? null
       });
     }
 
     folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
     return folders;
+  },
+
+  getDatasetDetail(id: string) {
+    const dataset = repo.getDataset(id);
+    if (!dataset) return null;
+    const inspected = inspectDatasetFolder(dataset.path) as ReturnType<typeof inspectDatasetFolder> & {
+      previewImageRelativePath: string | null;
+    };
+    return {
+      ...dataset,
+      folderSizeBytes: getDirectorySizeBytes(dataset.path),
+      imageCount: inspected.imageCount,
+      hasMasks: inspected.hasMasks,
+      hasAlphaImages: inspected.hasAlphaImages,
+      previewImageRelativePath: inspected.previewImageRelativePath ?? null,
+      health: inspected.status,
+      reason: inspected.reason,
+      maskSource: classifyMaskSource(dataset.path),
+    } satisfies DatasetDetail;
+  },
+
+  listDatasetFiles(id: string) {
+    const dataset = repo.getDataset(id);
+    if (!dataset) return null;
+    return { items: listDatasetFiles(dataset.path) };
+  },
+
+  resolveDatasetFilePath(id: string, relativePath: string) {
+    const dataset = repo.getDataset(id);
+    if (!dataset) {
+      return null;
+    }
+
+    return resolveDatasetRelativeFilePath(dataset.path, relativePath);
   },
 
   resolvePreviewImagePath(params: { folderName: string; imageRelativePath?: string }) {
@@ -163,6 +271,28 @@ export const datasetService = {
     }
 
     return imagePath;
+  },
+
+  renameDataset(id: string, datasetName: string) {
+    const existing = repo.getDataset(id);
+    if (!existing) throw new Error(`Dataset not found: ${id}`);
+    const nextName = normalizeUploadFolderName(datasetName);
+    const nextPath = path.join(path.dirname(existing.path), nextName);
+    if (nextPath !== existing.path && fs.existsSync(nextPath)) throw new Error(`Dataset folder already exists: ${nextName}`);
+    fs.renameSync(existing.path, nextPath);
+    const updated = repo.updateDatasetName(id, nextName);
+    if (!updated) throw new Error(`Dataset not found: ${id}`);
+    repo.updateDatasetPath(id, nextPath);
+    return repo.getDataset(id);
+  },
+
+  deleteDataset(id: string, confirmName: string) {
+    const existing = repo.getDataset(id);
+    if (!existing) throw new Error(`Dataset not found: ${id}`);
+    if (existing.name !== confirmName.trim()) throw new Error("confirmName does not match dataset name");
+    removePathSafe(existing.path);
+    repo.deleteDataset(id);
+    return { id, path: existing.path };
   },
 
   async createFromUpload(params: { originalName: string; zipPath: string; datasetName?: string }) {

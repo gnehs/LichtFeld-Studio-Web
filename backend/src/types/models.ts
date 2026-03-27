@@ -27,6 +27,29 @@ export interface DatasetFolderEntry {
   previewImageRelativePath?: string | null;
 }
 
+export interface DatasetFileEntry {
+  relativePath: string;
+  kind: "image" | "mask";
+  sizeBytes: number;
+  previewable: boolean;
+}
+
+export interface DatasetDetail {
+  id: string;
+  name: string;
+  type: "upload" | "registered";
+  path: string;
+  createdAt: string;
+  folderSizeBytes: number;
+  imageCount: number | null;
+  hasMasks: boolean;
+  hasAlphaImages: boolean;
+  previewImageRelativePath: string | null;
+  health: "ready" | "uploading" | "stabilizing" | "invalid";
+  reason: string | null;
+  maskSource: "separate_mask" | "alpha" | "mixed" | "none";
+}
+
 export interface TimelapseConfig {
   images: string[];
   every: number;

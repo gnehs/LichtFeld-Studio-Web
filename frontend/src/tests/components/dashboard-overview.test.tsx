@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
 import type { SystemMetrics, TrainingJob } from "@/lib/types";
 
@@ -54,11 +55,13 @@ describe("DashboardOverview", () => {
     };
 
     const markup = renderToStaticMarkup(
-      <DashboardOverview
-        jobs={jobs}
-        datasetCount={3}
-        systemMetrics={systemMetrics}
-      />,
+      <MemoryRouter>
+        <DashboardOverview
+          jobs={jobs}
+          datasetCount={3}
+          systemMetrics={systemMetrics}
+        />
+      </MemoryRouter>,
     );
 
     expect(markup).toContain("訓練中");
@@ -97,7 +100,9 @@ describe("DashboardOverview", () => {
     };
 
     const markup = renderToStaticMarkup(
-      <DashboardOverview jobs={[]} datasetCount={0} systemMetrics={systemMetrics} />,
+      <MemoryRouter>
+        <DashboardOverview jobs={[]} datasetCount={0} systemMetrics={systemMetrics} />
+      </MemoryRouter>,
     );
 
     expect(markup).toMatch(/RTX 4090<\/p><div[^>]*>0%<\/div>/);

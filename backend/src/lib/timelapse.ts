@@ -19,6 +19,43 @@ export function parseIterationFromFilename(filePath: string): number | null {
   return Number(match[1]);
 }
 
+function toCameraName(relativeDir: string): string {
+  return relativeDir.split(path.sep).join("/");
+}
+
+function collectTimelapseFrames(root: string, currentDir: string, frames: ScannedTimelapse[]) {
+  const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+  const relativeDir = path.relative(root, currentDir);
+  const cameraName = relativeDir ? toCameraName(relativeDir) : "";
+
+  for (const entry of entries) {
+    const entryPath = path.join(currentDir, entry.name);
+
+    if (entry.isDirectory()) {
+      collectTimelapseFrames(root, entryPath, frames);
+      continue;
+    }
+
+    if (!entry.isFile() || !cameraName) {
+      continue;
+    }
+
+    const iteration = parseIterationFromFilename(entryPath);
+    if (iteration === null) {
+      continue;
+    }
+
+    const stat = fs.statSync(entryPath);
+    frames.push({
+      cameraName,
+      iteration,
+      filePath: entryPath,
+      sizeBytes: stat.size,
+      createdAt: new Date(stat.mtimeMs).toISOString()
+    });
+  }
+}
+
 export function scanTimelapseDir(outputPath: string): ScannedTimelapse[] {
   const root = path.join(outputPath, "timelapse");
   if (!fs.existsSync(root)) {
@@ -30,25 +67,7 @@ export function scanTimelapseDir(outputPath: string): ScannedTimelapse[] {
 
   for (const cameraDir of cameras) {
     const cameraPath = path.join(root, cameraDir.name);
-    const files = fs
-      .readdirSync(cameraPath, { withFileTypes: true })
-      .filter((entry) => entry.isFile())
-      .map((entry) => path.join(cameraPath, entry.name));
-
-    for (const filePath of files) {
-      const iteration = parseIterationFromFilename(filePath);
-      if (iteration === null) {
-        continue;
-      }
-      const stat = fs.statSync(filePath);
-      frames.push({
-        cameraName: cameraDir.name,
-        iteration,
-        filePath,
-        sizeBytes: stat.size,
-        createdAt: new Date(stat.mtimeMs).toISOString()
-      });
-    }
+    collectTimelapseFrames(root, cameraPath, frames);
   }
 
   return frames.sort((a, b) => b.iteration - a.iteration);

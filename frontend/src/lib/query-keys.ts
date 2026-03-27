@@ -4,6 +4,8 @@ export const queryKeys = {
   },
   datasets: {
     all: ["datasets"] as const,
+    detail: (id: string) => ["datasets", id] as const,
+    files: (id: string) => ["datasets", id, "files"] as const,
   },
   jobs: {
     all: ["jobs"] as const,

@@ -161,6 +161,8 @@ export const api = {
   logout: () => request<{ success: boolean }>("/api/auth/logout", { method: "POST" }),
 
   listDatasets: () => request<{ items: DatasetRecord[]; folders: DatasetFolderEntry[] }>("/api/datasets"),
+  getDataset: (id: string) => request<{ item: import("./types").DatasetDetail }>(`/api/datasets/${id}`),
+  getDatasetFiles: (id: string) => request<{ item: { items: import("./types").DatasetFileEntry[] } }>(`/api/datasets/${id}/files`),
   uploadDataset: async (file: File, datasetName?: string, options?: UploadDatasetOptions) => {
     const storage = getUploadStorage();
     const fingerprint = getTusUploadFingerprint(file, datasetName);
@@ -233,6 +235,11 @@ export const api = {
     request<{ item: DatasetRecord }>(`/api/datasets/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ datasetName })
+    }),
+  deleteDataset: (id: string, confirmName: string) =>
+    request<{ success: boolean; deleted: { id: string; path: string } }>(`/api/datasets/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirmName })
     }),
 
   listJobs: () => request<{ items: TrainingJob[] }>("/api/jobs"),

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { CircleIndicator } from "@/components/CircleIndicator";
 import { Play, Clock, Database, Gpu, MemoryStick } from "lucide-react";
 import type { SystemMetrics, TrainingJob } from "@/lib/types";
+import { Link } from "react-router-dom";
 
 const metricLabelClass = "text-[10px] text-zinc-500 leading-[1em] ";
 
@@ -152,6 +153,15 @@ export function DashboardOverview({
             icon={card.icon}
           />
         ))}
+        <Link
+          to="/datasets"
+          className="glass-panel inline-flex items-center gap-2 rounded-full py-1 pr-4 pl-1 text-sm font-medium text-zinc-100 no-underline transition hover:bg-white/10 max-md:w-full"
+        >
+          <div className="glass-panel grid size-8 shrink-0 place-content-center rounded-full">
+            <div className="icon-mask"><Database size={16} className="text-blue-400" strokeWidth={2.5} /></div>
+          </div>
+          <span>資料集</span>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 justify-center gap-2 max-md:w-full md:flex md:flex-wrap">

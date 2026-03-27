@@ -27,6 +27,10 @@ const renameSchema = z.object({
   datasetName: z.string().min(1)
 });
 
+const deleteSchema = z.object({
+  confirmName: z.string().min(1)
+});
+
 export const datasetsRouter = Router();
 
 function setTusHeaders(res: Response) {
@@ -74,6 +78,35 @@ datasetsRouter.get("/folders/:name/preview", (req, res) => {
   }
 
   return res.sendFile(imagePath);
+});
+
+datasetsRouter.get("/:id", (req, res) => {
+  const item = datasetService.getDatasetDetail(req.params.id);
+  if (!item) {
+    return res.status(404).json({ message: "Dataset not found" });
+  }
+  return res.json({ item });
+});
+
+datasetsRouter.get("/:id/files", (req, res) => {
+  const item = datasetService.listDatasetFiles(req.params.id);
+  if (!item) {
+    return res.status(404).json({ message: "Dataset not found" });
+  }
+  return res.json({ item });
+});
+
+datasetsRouter.get("/:id/file", (req, res) => {
+  const filePath = datasetService.resolveDatasetFilePath(
+    req.params.id,
+    typeof req.query.path === "string" ? req.query.path : "",
+  );
+
+  if (!filePath) {
+    return res.status(404).json({ message: "Dataset file not found" });
+  }
+
+  return res.sendFile(filePath);
 });
 
 datasetsRouter.options("/upload/tus", (_req, res) => {
@@ -206,6 +239,20 @@ datasetsRouter.patch("/:id", (req, res) => {
   try {
     const item = datasetService.rename(req.params.id, parsed.data.datasetName);
     return res.json({ item });
+  } catch (error) {
+    return res.status(400).json({ message: (error as Error).message });
+  }
+});
+
+datasetsRouter.delete("/:id", (req, res) => {
+  const parsed = deleteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ message: parsed.error.message });
+  }
+
+  try {
+    const deleted = datasetService.deleteDataset(req.params.id, parsed.data.confirmName);
+    return res.json({ success: true, deleted });
   } catch (error) {
     return res.status(400).json({ message: (error as Error).message });
   }
