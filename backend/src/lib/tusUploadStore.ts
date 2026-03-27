@@ -31,11 +31,13 @@ const finalizeInFlight = new Map<string, Promise<DatasetRecord>>();
 fs.mkdirSync(tusUploadDir, { recursive: true });
 
 function getUploadRecordPath(id: string) {
-  return path.join(tusUploadDir, `${id}.json`);
+  const safeId = path.basename(id);
+  return path.join(tusUploadDir, `${safeId}.json`);
 }
 
 function getUploadBinaryPath(id: string) {
-  return path.join(tusUploadDir, `${id}.zip`);
+  const safeId = path.basename(id);
+  return path.join(tusUploadDir, `${safeId}.zip`);
 }
 
 function readUploadRecord(id: string): TusUploadRecord | null {
