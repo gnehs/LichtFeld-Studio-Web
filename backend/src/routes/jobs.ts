@@ -235,7 +235,7 @@ jobsRouter.get("/:id/timelapse/download", (req, res) => {
     archive.directory(timelapseRoot, "timelapse");
   } else {
     const target = path.join(timelapseRoot, camera);
-    if (!target.startsWith(path.resolve(timelapseRoot)) || !fs.existsSync(target)) {
+    if ((target !== path.resolve(timelapseRoot) && !target.startsWith(path.resolve(timelapseRoot) + path.sep)) || !fs.existsSync(target)) {
       return res.status(404).json({ message: "Camera timelapse not found" });
     }
     res.setHeader("Content-Disposition", `attachment; filename="${job.id}-timelapse-${camera}.zip"`);
@@ -260,7 +260,7 @@ jobsRouter.get("/:id/timelapse/frame", (req, res) => {
 
   const resolved = path.resolve(filePath);
   const allowRoot = path.resolve(path.join(job.outputPath, "timelapse"));
-  if (!resolved.startsWith(allowRoot) || !fs.existsSync(resolved)) {
+  if ((resolved !== allowRoot && !resolved.startsWith(allowRoot + path.sep)) || !fs.existsSync(resolved)) {
     return res.status(404).json({ message: "Frame not found" });
   }
 

@@ -18,7 +18,7 @@ function normalizePath(targetPath: string): string {
 
 function isAllowedPath(targetPath: string): boolean {
   const normalized = normalizePath(targetPath);
-  return config.allowedDatasetRoots.some((root) => normalized.startsWith(root));
+  return config.allowedDatasetRoots.some((root) => normalized === root || normalized.startsWith(root + path.sep));
 }
 
 function removePathSafe(targetPath: string) {
