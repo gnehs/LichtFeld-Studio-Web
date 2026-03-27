@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { pipeline } from "node:stream/promises";
 import unzipper from "unzipper";
 
@@ -22,7 +23,7 @@ function resolveEntryPath(rootDir: string, entryPath: string): string {
   return targetPath;
 }
 
-export async function extractZipToDirectory(zipPath: string, targetDir: string): Promise<void> {
+async function extractWithUnzipper(zipPath: string, targetDir: string): Promise<void> {
   const directory = await unzipper.Open.file(zipPath);
   fs.mkdirSync(targetDir, { recursive: true });
 
@@ -36,5 +37,42 @@ export async function extractZipToDirectory(zipPath: string, targetDir: string):
 
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     await pipeline(file.stream(), fs.createWriteStream(outputPath));
+  }
+}
+
+async function extractWithSystemUnzip(zipPath: string, targetDir: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    fs.mkdirSync(targetDir, { recursive: true });
+    
+    const child = spawn("unzip", ["-q", "-o", zipPath, "-d", targetDir]);
+    
+    let errorOutput = "";
+    
+    child.stderr.on("data", (data) => {
+      errorOutput += data.toString();
+    });
+    
+    child.on("error", (error) => {
+      reject(new Error(`Failed to spawn unzip: ${error.message}`));
+    });
+    
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`unzip process exited with code ${code}. Error: ${errorOutput}`));
+      }
+    });
+  });
+}
+
+export async function extractZipToDirectory(zipPath: string, targetDir: string): Promise<void> {
+  try {
+    // Try system unzip first as it handles massive files (> 2GiB) much better and faster
+    await extractWithSystemUnzip(zipPath, targetDir);
+  } catch (error) {
+    console.warn(`[zipExtract] System unzip failed, falling back to unzipper: ${(error as Error).message}`);
+    // Fallback to unzipper for portability (e.g. Windows without unzip)
+    await extractWithUnzipper(zipPath, targetDir);
   }
 }
