@@ -5,6 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { CreateJobWizard } from "@/features/create/CreateJobWizard";
+import { api } from "@/lib/api";
 import type { DatasetFolderEntry, DatasetRecord } from "@/lib/types";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
@@ -18,9 +19,11 @@ function mountWizard(options: {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
+  const onNotice = vi.fn();
 
   return {
     container,
+    onNotice,
     root,
     async render() {
       await act(async () => {
@@ -32,7 +35,7 @@ function mountWizard(options: {
               onCancel={vi.fn()}
               onCreated={vi.fn(async () => {})}
               onDatasetCreated={vi.fn()}
-              onNotice={vi.fn()}
+              onNotice={onNotice}
               onRefreshDatasets={vi.fn(async () => {})}
             />
           </QueryClientProvider>,
@@ -48,6 +51,16 @@ describe("CreateJobWizard source mode UI", () => {
   let root: Root | null = null;
 
   beforeEach(() => {
+    class MockIntersectionObserver {
+      disconnect() {}
+      observe() {}
+      unobserve() {}
+      takeRecords() {
+        return [];
+      }
+    }
+
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
     container = null;
     root = null;
   });
@@ -116,6 +129,130 @@ describe("CreateJobWizard source mode UI", () => {
     expect(container.textContent).toContain("alpha 通道");
   });
 
+  test("asks for folder name after selecting a zip and prefills it from the zip filename", async () => {
+    const uploadDatasetSpy = vi
+      .spyOn(api, "uploadDataset")
+      .mockImplementation(async () =>
+        new Promise(() => undefined) as Promise<Awaited<ReturnType<typeof api.uploadDataset>>>,
+      );
+    const mounted = mountWizard({});
+    container = mounted.container;
+    root = mounted.root;
+
+    await mounted.render();
+
+    const uploadButton = Array.from(
+      container.querySelectorAll('[data-slot="button"]'),
+    ).find((button) => button.textContent?.trim() === "上傳 ZIP");
+
+    await act(async () => {
+      uploadButton?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+
+    const fileInput = container.querySelector(
+      '#dataset-upload-input',
+    ) as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+
+    const file = new File(["zip"], "garden-v2.zip", {
+      type: "application/zip",
+    });
+
+    Object.defineProperty(fileInput, "files", {
+      configurable: true,
+      value: [file],
+    });
+
+    await act(async () => {
+      fileInput?.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const nameInput = container.querySelector(
+      'input:not([type="file"])',
+    ) as HTMLInputElement | null;
+
+    expect(container.textContent).toContain("資料夾名稱");
+    expect(container.textContent).toContain("拖移 ZIP 到這裡");
+    expect(nameInput?.value).toBe("garden-v2");
+    expect(uploadDatasetSpy).not.toHaveBeenCalled();
+  });
+
+  test("warns before upload when the chosen folder name already exists", async () => {
+    const uploadDatasetSpy = vi.spyOn(api, "uploadDataset");
+    const mounted = mountWizard({
+      datasetFolders: [
+        {
+          name: "garden-v2",
+          path: "/data/garden-v2",
+          datasetId: "ds-existing",
+          isRegistered: true,
+          health: "ready",
+          reason: null,
+          imageCount: 128,
+          hasMasks: false,
+          hasAlphaImages: false,
+        },
+      ],
+    });
+    container = mounted.container;
+    root = mounted.root;
+
+    await mounted.render();
+
+    const uploadButton = Array.from(
+      container.querySelectorAll('[data-slot="button"]'),
+    ).find((button) => button.textContent?.trim() === "上傳 ZIP");
+
+    await act(async () => {
+      uploadButton?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+
+    const fileInput = container.querySelector(
+      '#dataset-upload-input',
+    ) as HTMLInputElement | null;
+    const file = new File(["zip"], "garden-v2.zip", {
+      type: "application/zip",
+    });
+
+    Object.defineProperty(fileInput, "files", {
+      configurable: true,
+      value: [file],
+    });
+
+    await act(async () => {
+      fileInput?.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("資料夾名稱已存在");
+
+    const nextButton = Array.from(
+      container.querySelectorAll('[data-slot="button"]'),
+    ).find((button) => button.textContent?.trim() === "下一步：參數設定");
+
+    await act(async () => {
+      nextButton?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(uploadDatasetSpy).not.toHaveBeenCalled();
+    expect(mounted.onNotice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: "error",
+        text: "資料夾名稱已存在，請改用其他名稱",
+      }),
+    );
+  });
+
   test("shows selected dataset trigger in two lines", async () => {
     const mounted = mountWizard({
       datasets: [
@@ -138,8 +275,9 @@ describe("CreateJobWizard source mode UI", () => {
           imageCount: 128,
           hasMasks: true,
           hasAlphaImages: false,
+          previewImageRelativePath: "cam-a/0001.jpg",
         },
-      ],
+      ] as unknown as DatasetFolderEntry[],
     });
     container = mounted.container;
     root = mounted.root;
@@ -148,12 +286,17 @@ describe("CreateJobWizard source mode UI", () => {
 
     const value = container.querySelector('[data-slot="select-value"]');
     const content = value?.querySelector(":scope > span");
-    const lines = content?.querySelectorAll(":scope > span");
+    const textBlock = content?.querySelector(":scope > span:last-child");
+    const lines = textBlock?.querySelectorAll(":scope > span");
     const trigger = container.querySelector('[data-slot="select-trigger"]');
+    const preview = content?.querySelector('img[alt="garden-folder preview"]');
 
     expect(lines).toHaveLength(2);
     expect(lines?.[0]?.textContent).toBe("garden-folder");
     expect(lines?.[1]?.textContent).toBe("128 張相片 - 包含遮罩");
+    expect(preview?.getAttribute("src")).toBe(
+      "/api/datasets/folders/garden-folder/preview?path=cam-a%2F0001.jpg",
+    );
     expect(trigger?.className).toContain("data-[size=default]:h-auto");
     expect(trigger?.className).toContain("min-h-12");
   });

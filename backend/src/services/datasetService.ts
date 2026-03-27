@@ -11,6 +11,7 @@ import {
   UPLOAD_IN_PROGRESS_MARKER,
   validateDatasetStructure
 } from "../lib/datasetAutoRegister.js";
+import { IMAGE_EXTENSIONS, pickDatasetPreviewImageRelativePath } from "../lib/datasetImages.js";
 
 function normalizePath(targetPath: string): string {
   return path.resolve(targetPath);
@@ -23,6 +24,40 @@ function isAllowedPath(targetPath: string): boolean {
 
 function removePathSafe(targetPath: string) {
   fs.rmSync(targetPath, { recursive: true, force: true });
+}
+
+function stripFileExtension(fileName: string): string {
+  const baseName = path.basename(fileName.trim());
+  return baseName.replace(/\.[^.]+$/, "").trim();
+}
+
+function normalizeUploadFolderName(rawName: string): string {
+  const sanitized = rawName
+    .trim()
+    .replace(/[\\/]+/g, "-")
+    .replace(/[<>:"|?*\u0000-\u001f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[._\- ]+/, "")
+    .replace(/[. ]+$/g, "")
+    .trim();
+
+  if (!sanitized || sanitized === "." || sanitized === "..") {
+    throw new Error("datasetName is invalid");
+  }
+
+  return sanitized;
+}
+
+function resolveUploadNames(params: {
+  originalName: string;
+  datasetName?: string;
+}) {
+  const preferredName = params.datasetName?.trim() || stripFileExtension(params.originalName) || "dataset";
+  const folderName = normalizeUploadFolderName(preferredName);
+  return {
+    displayName: folderName,
+    folderName,
+  };
 }
 
 export const datasetService = {
@@ -88,7 +123,8 @@ export const datasetService = {
         reason: inspected.reason,
         imageCount: inspected.imageCount,
         hasMasks: inspected.hasMasks,
-        hasAlphaImages: inspected.hasAlphaImages
+        hasAlphaImages: inspected.hasAlphaImages,
+        previewImageRelativePath: inspected.previewImageRelativePath
       });
     }
 
@@ -96,12 +132,49 @@ export const datasetService = {
     return folders;
   },
 
+  resolvePreviewImagePath(params: { folderName: string; imageRelativePath?: string }) {
+    const datasetsRoot = normalizePath(config.datasetsDir);
+    const datasetPath = normalizePath(path.join(config.datasetsDir, params.folderName));
+    if (datasetPath === datasetsRoot || !datasetPath.startsWith(datasetsRoot + path.sep)) {
+      return null;
+    }
+
+    if (!fs.existsSync(datasetPath) || !fs.statSync(datasetPath).isDirectory()) {
+      return null;
+    }
+
+    const imagesDir = normalizePath(path.join(datasetPath, "images"));
+    const imageRelativePath = params.imageRelativePath?.trim() || pickDatasetPreviewImageRelativePath(imagesDir);
+    if (!imageRelativePath) {
+      return null;
+    }
+
+    if (!IMAGE_EXTENSIONS.has(path.extname(imageRelativePath).toLowerCase())) {
+      return null;
+    }
+
+    const imagePath = normalizePath(path.join(imagesDir, imageRelativePath));
+    if (imagePath === imagesDir || !imagePath.startsWith(imagesDir + path.sep)) {
+      return null;
+    }
+
+    if (!fs.existsSync(imagePath) || !fs.statSync(imagePath).isFile()) {
+      return null;
+    }
+
+    return imagePath;
+  },
+
   async createFromUpload(params: { originalName: string; zipPath: string; datasetName?: string }) {
     const id = nanoid();
-    const name = params.datasetName?.trim() || params.originalName.replace(/\.[^.]+$/, "");
-    const extractDir = path.join(config.datasetsDir, id);
+    const { displayName, folderName } = resolveUploadNames(params);
+    const extractDir = path.join(config.datasetsDir, folderName);
     const markerPath = path.join(extractDir, UPLOAD_IN_PROGRESS_MARKER);
-    fs.mkdirSync(extractDir, { recursive: true });
+    if (fs.existsSync(extractDir)) {
+      throw new Error(`Dataset folder already exists: ${folderName}`);
+    }
+
+    fs.mkdirSync(extractDir, { recursive: false });
     fs.writeFileSync(markerPath, "1");
 
     try {
@@ -114,7 +187,7 @@ export const datasetService = {
 
       const record: DatasetRecord = {
         id,
-        name,
+        name: displayName,
         type: "upload",
         path: extractDir,
         createdAt: new Date().toISOString()

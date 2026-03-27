@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { listDatasetImageRelativePaths, pickDatasetPreviewImageRelativePath } from "./datasetImages.js";
 
 export const UPLOAD_IN_PROGRESS_MARKER = ".lfs-uploading";
 export const DATASET_STABLE_WINDOW_MS = 15000;
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"]);
 const UPSTREAM_MASK_FOLDERS = ["masks", "mask", "segmentation", "dynamic_masks"] as const;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -37,8 +37,7 @@ function getLatestDatasetWriteMs(datasetPath: string): number {
 
 function countDatasetImages(datasetPath: string): number {
   const imagesDir = path.join(datasetPath, "images");
-  const entries = fs.readdirSync(imagesDir, { withFileTypes: true });
-  return entries.filter((entry) => entry.isFile() && IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())).length;
+  return listDatasetImageRelativePaths(imagesDir).length;
 }
 
 function pngHasAlpha(filePath: string): boolean {
@@ -93,11 +92,10 @@ function detectAlphaImages(datasetPath: string): boolean {
     return false;
   }
 
-  const entries = fs.readdirSync(imagesDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const imagePath = path.join(imagesDir, entry.name);
-    const ext = path.extname(entry.name).toLowerCase();
+  const imagePaths = listDatasetImageRelativePaths(imagesDir);
+  for (const imageRelativePath of imagePaths) {
+    const imagePath = path.join(imagesDir, imageRelativePath);
+    const ext = path.extname(imageRelativePath).toLowerCase();
     if (ext !== ".png") continue;
     try {
       if (pngHasAlpha(imagePath)) {
@@ -124,27 +122,35 @@ function detectSupportedMaskFolder(datasetPath: string): boolean {
 export function inspectDatasetFolder(
   datasetPath: string,
   options: { nowMs?: number; stableWindowMs?: number } = {}
-): { status: DatasetFolderHealth; reason: string | null; imageCount: number | null; hasMasks: boolean; hasAlphaImages: boolean } {
+): {
+  status: DatasetFolderHealth;
+  reason: string | null;
+  imageCount: number | null;
+  hasMasks: boolean;
+  hasAlphaImages: boolean;
+  previewImageRelativePath: string | null;
+} {
+  const previewImageRelativePath = pickDatasetPreviewImageRelativePath(path.join(datasetPath, "images"));
   const hasMasks = detectSupportedMaskFolder(datasetPath);
   const hasAlphaImages = detectAlphaImages(datasetPath);
   const markerPath = path.join(datasetPath, UPLOAD_IN_PROGRESS_MARKER);
   if (fs.existsSync(markerPath)) {
-    return { status: "uploading", reason: "upload in progress marker exists", imageCount: null, hasMasks, hasAlphaImages };
+    return { status: "uploading", reason: "upload in progress marker exists", imageCount: null, hasMasks, hasAlphaImages, previewImageRelativePath };
   }
 
   const structure = validateDatasetStructure(datasetPath);
   if (!structure.valid) {
-    return { status: "invalid", reason: structure.reason ?? "invalid structure", imageCount: null, hasMasks, hasAlphaImages };
+    return { status: "invalid", reason: structure.reason ?? "invalid structure", imageCount: null, hasMasks, hasAlphaImages, previewImageRelativePath };
   }
 
   const nowMs = options.nowMs ?? Date.now();
   const stableWindowMs = options.stableWindowMs ?? DATASET_STABLE_WINDOW_MS;
   const latestWriteMs = getLatestDatasetWriteMs(datasetPath);
   if (!latestWriteMs || nowMs - latestWriteMs < stableWindowMs) {
-    return { status: "stabilizing", reason: "dataset is still being written", imageCount: countDatasetImages(datasetPath), hasMasks, hasAlphaImages };
+    return { status: "stabilizing", reason: "dataset is still being written", imageCount: countDatasetImages(datasetPath), hasMasks, hasAlphaImages, previewImageRelativePath };
   }
 
-  return { status: "ready", reason: null, imageCount: countDatasetImages(datasetPath), hasMasks, hasAlphaImages };
+  return { status: "ready", reason: null, imageCount: countDatasetImages(datasetPath), hasMasks, hasAlphaImages, previewImageRelativePath };
 }
 
 export function evaluateDatasetForAutoRegister(

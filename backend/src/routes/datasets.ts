@@ -63,6 +63,19 @@ datasetsRouter.get("/", (_req, res) => {
   res.json({ items: datasetService.list(), folders: datasetService.listDatasetFolders() });
 });
 
+datasetsRouter.get("/folders/:name/preview", (req, res) => {
+  const imagePath = datasetService.resolvePreviewImagePath({
+    folderName: req.params.name,
+    imageRelativePath: typeof req.query.path === "string" ? req.query.path : undefined
+  });
+
+  if (!imagePath) {
+    return res.status(404).json({ message: "Dataset preview not found" });
+  }
+
+  return res.sendFile(imagePath);
+});
+
 datasetsRouter.options("/upload/tus", (_req, res) => {
   setTusHeaders(res);
   res.status(204).end();

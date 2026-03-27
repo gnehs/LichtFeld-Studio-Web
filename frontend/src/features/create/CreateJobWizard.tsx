@@ -47,12 +47,12 @@ import {
   mergeUploadDraft,
   normalizeUploadProgress,
   shouldAllowStepTwoWhileUploading,
-  shouldAutoStartUpload,
   type PendingUploadDraft,
 } from "@/upload-state";
 import {
   formatDatasetFolderLabel,
   formatDatasetFolderMeta,
+  getDatasetFolderPreviewSrc,
   getDatasetSelectItems,
 } from "./create-job-dataset-select";
 import {
@@ -80,6 +80,40 @@ function SourceModeButton({
     >
       {label}
     </Button>
+  );
+}
+
+function DatasetFolderPreview({
+  folder,
+  className,
+}: {
+  folder: DatasetFolderEntry;
+  className?: string;
+}) {
+  const previewSrc = getDatasetFolderPreviewSrc(folder);
+  const initials = folder.name.slice(0, 2).toUpperCase();
+
+  return (
+    <div
+      className={cn(
+        "glass-panel relative overflow-hidden rounded-lg border-0 bg-white/5",
+        className,
+      )}
+    >
+      <div className="absolute inset-0 flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(125,211,252,0.16),transparent_60%),linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] text-[10px] font-semibold tracking-[0.28em] text-zinc-300">
+        {initials || "DS"}
+      </div>
+      {previewSrc ? (
+        <img
+          className="relative z-10 h-full w-full object-cover"
+          src={previewSrc}
+          alt={`${folder.name} preview`}
+          onError={(event) => {
+            event.currentTarget.classList.add("hidden");
+          }}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -125,6 +159,46 @@ function formatBytes(bytes: number): string {
   }
 
   return `${Math.round(bytes)} B`;
+}
+
+function getDefaultUploadFolderName(fileName: string): string {
+  const trimmed = fileName.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const strippedZipExtension = trimmed.replace(/\.zip$/i, "").trim();
+  return strippedZipExtension || trimmed;
+}
+
+function normalizeUploadFolderNameForValidation(rawName: string): string {
+  const sanitized = rawName
+    .trim()
+    .replace(/[\\/]+/g, "-")
+    .replace(/[<>:"|?*\u0000-\u001f]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[._\- ]+/, "")
+    .replace(/[. ]+$/g, "")
+    .trim();
+
+  return sanitized;
+}
+
+function getUploadFolderConflictName(
+  folderName: string,
+  datasetFolders: DatasetFolderEntry[],
+): string | null {
+  const normalizedTarget = normalizeUploadFolderNameForValidation(folderName);
+  if (!normalizedTarget) {
+    return null;
+  }
+
+  const conflict = datasetFolders.find(
+    (folder) =>
+      normalizeUploadFolderNameForValidation(folder.name) === normalizedTarget,
+  );
+
+  return conflict?.name ?? null;
 }
 
 function getUploadProgress(draft: PendingUploadDraft): number {
@@ -711,6 +785,7 @@ export function CreateJobWizard({
                     name: folder.name,
                     meta: formatDatasetFolderMeta(folder),
                     label: formatDatasetFolderLabel(folder),
+                    folder,
                   },
                 ] as const,
               ]
@@ -734,6 +809,10 @@ export function CreateJobWizard({
       datasetFolders.find((folder) => folder.datasetId === activeDatasetId) ??
       null,
     [datasetFolders, activeDatasetId],
+  );
+  const uploadFolderConflictName = useMemo(
+    () => getUploadFolderConflictName(uploadDraft.name, datasetFolders),
+    [datasetFolders, uploadDraft.name],
   );
   const showMaskSettings = shouldShowMaskSettings(
     selectedDatasetFolder?.hasMasks ?? false,
@@ -810,7 +889,7 @@ export function CreateJobWizard({
     setUploadDraft((prev) => ({
       status: "idle",
       file,
-      name: prev.name,
+      name: file ? getDefaultUploadFolderName(file.name) : "",
       progress: 0,
       datasetId: null,
       error: null,
@@ -821,7 +900,7 @@ export function CreateJobWizard({
     setUploadInputKey((prev) => prev + 1);
     if (file) {
       setDataSourceMode("upload");
-      setStep(2);
+      setStep(1);
     }
   };
 
@@ -911,13 +990,6 @@ export function CreateJobWizard({
     }
   };
 
-  useEffect(() => {
-    if (!shouldAutoStartUpload(uploadDraft)) {
-      return;
-    }
-    void uploadZip();
-  }, [uploadDraft]);
-
   const goStepTwo = async () => {
     if (dataSourceMode === "existing") {
       if (!selectedDatasetId) {
@@ -931,9 +1003,27 @@ export function CreateJobWizard({
       setStep(2);
       return;
     }
-    const datasetId = uploadedDatasetId || (await uploadZip());
-    if (!datasetId) return;
+
+    if (!uploadFile) {
+      onNotice({ tone: "error", text: "請先選擇 ZIP 檔案" });
+      return;
+    }
+
+    if (!uploadDraft.name.trim()) {
+      onNotice({ tone: "error", text: "請先確認資料夾名稱" });
+      return;
+    }
+
+    if (uploadFolderConflictName) {
+      onNotice({
+        tone: "error",
+        text: "資料夾名稱已存在，請改用其他名稱",
+      });
+      return;
+    }
+
     setStep(2);
+    void uploadZip();
   };
 
   const updateForm = <K extends keyof CreateWizardValues>(
@@ -1125,12 +1215,18 @@ export function CreateJobWizard({
                               return String(value);
                             }
                             return (
-                              <span className="flex min-w-0 flex-col py-0.5 leading-tight">
-                                <span className="truncate text-sm text-zinc-100">
-                                  {selected.name}
-                                </span>
-                                <span className="truncate text-xs text-zinc-400">
-                                  {selected.meta}
+                              <span className="flex min-w-0 items-center gap-3 py-0.5 leading-tight">
+                                <DatasetFolderPreview
+                                  folder={selected.folder}
+                                  className="h-10 w-14 shrink-0"
+                                />
+                                <span className="flex min-w-0 flex-col">
+                                  <span className="truncate text-sm text-zinc-100">
+                                    {selected.name}
+                                  </span>
+                                  <span className="truncate text-xs text-zinc-400">
+                                    {selected.meta}
+                                  </span>
                                 </span>
                               </span>
                             );
@@ -1153,13 +1249,19 @@ export function CreateJobWizard({
                                 }
                                 disabled={disabled}
                               >
-                                <div className="flex flex-col gap-0.5 py-0.5">
-                                  <span className="text-sm text-zinc-100">
-                                    {folder.name}
-                                  </span>
-                                  <span className="text-xs text-zinc-400">
-                                    {formatDatasetFolderMeta(folder)}
-                                  </span>
+                                <div className="flex items-center gap-3 py-0.5">
+                                  <DatasetFolderPreview
+                                    folder={folder}
+                                    className="h-10 w-14 shrink-0"
+                                  />
+                                  <div className="flex min-w-0 flex-col gap-0.5">
+                                    <span className="text-sm text-zinc-100">
+                                      {folder.name}
+                                    </span>
+                                    <span className="text-xs text-zinc-400">
+                                      {formatDatasetFolderMeta(folder)}
+                                    </span>
+                                  </div>
                                 </div>
                               </SelectItem>
                             );
@@ -1207,6 +1309,32 @@ export function CreateJobWizard({
                       applyUploadFile(e.target.files?.[0] ?? null)
                     }
                   />
+                  <div>
+                    <Label>資料夾名稱</Label>
+                    <Input
+                      className="mt-2"
+                      value={uploadDraft.name}
+                      onChange={(e) => updateUploadDraft({ name: e.target.value })}
+                      placeholder="選擇 ZIP 後會自動帶入檔名"
+                      disabled={
+                        !uploadFile ||
+                        uploadBusy ||
+                        uploadDraft.status === "uploaded"
+                      }
+                    />
+                    <p className="mt-2 text-xs leading-5 text-zinc-400">
+                      會用這個名稱建立 <code className="rounded bg-black/40 px-1 py-0.5">datasets/</code> 內的資料夾，預設會帶入 ZIP 檔名，送出前可先確認或修改。
+                    </p>
+                    {uploadFolderConflictName ? (
+                      <p className="mt-2 text-xs leading-5 text-amber-200">
+                        資料夾名稱已存在：
+                        <code className="ml-1 rounded bg-black/40 px-1 py-0.5">
+                          {uploadFolderConflictName}
+                        </code>
+                        ，請改用其他名稱。
+                      </p>
+                    ) : null}
+                  </div>
                   <UploadStatusPanel draft={uploadDraft} nowMs={uploadNowMs} />
                 </>
               ) : null}
@@ -1230,14 +1358,14 @@ export function CreateJobWizard({
           <div className="space-y-4">
             <ParameterPanel
               title="資料集與命名"
-              description="ZIP 選取後才在這裡命名，避免把來源選擇與命名綁在一起。"
+              description="上傳前會先確認資料夾名稱，這裡則保留給目前 dataset 資訊與顯示名稱調整。"
             >
               <div>
                 <Label>目前資料集</Label>
                 <Input className="mt-2" value={activeDatasetLabel} disabled />
               </div>
               <div>
-                <Label>資料集名稱</Label>
+                <Label>資料集顯示名稱</Label>
                 <Input
                   className="mt-2"
                   value={uploadDraft.name}

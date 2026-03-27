@@ -185,6 +185,7 @@ describe("dataset tus upload route", () => {
         };
       };
       expect(body.item.name).toBe("garden-v2");
+      expect(path.basename(body.item.path)).toBe("garden-v2");
       expect(fs.existsSync(path.join(body.item.path, "images"))).toBe(true);
       expect(fs.existsSync(path.join(body.item.path, "sparse"))).toBe(true);
 
@@ -276,6 +277,84 @@ describe("dataset tus upload route", () => {
       expect(headResponse.status).toBe(404);
       expect(fs.existsSync(recordPath)).toBe(false);
       expect(fs.existsSync(zipPath)).toBe(false);
+    } finally {
+      if (server) {
+        await stopServer(server);
+      }
+      env.restore();
+    }
+  });
+
+  it("uses the zip filename as the default dataset folder name when metadata omits datasetName", async () => {
+    const env = setupTestEnv();
+    process.env.ADMIN_PASSWORD_HASH = await bcrypt.hash("secret-pass", 4);
+
+    let server: import("node:http").Server | null = null;
+
+    try {
+      const started = await startServer();
+      server = started.server;
+      const { baseUrl } = started;
+
+      const loginResponse = await fetch(`${baseUrl}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ password: "secret-pass" })
+      });
+
+      const cookie = loginResponse.headers.get("set-cookie")?.split(";", 1)[0];
+      expect(cookie).toContain("lfs.sid=");
+
+      const zipBuffer = createValidDatasetZip();
+
+      const createResponse = await fetch(`${baseUrl}/api/datasets/upload/tus`, {
+        method: "POST",
+        headers: {
+          cookie: cookie ?? "",
+          "Tus-Resumable": "1.0.0",
+          "Upload-Length": String(zipBuffer.length),
+          "Upload-Metadata": buildTusMetadata({
+            filename: "garden-default.zip"
+          })
+        }
+      });
+
+      expect(createResponse.status).toBe(201);
+      const uploadPath = createResponse.headers.get("location");
+      expect(uploadPath).toBeTruthy();
+
+      const patchResponse = await fetch(`${baseUrl}${uploadPath}`, {
+        method: "PATCH",
+        headers: {
+          cookie: cookie ?? "",
+          "Tus-Resumable": "1.0.0",
+          "Upload-Offset": "0",
+          "Content-Type": "application/offset+octet-stream"
+        },
+        body: new Uint8Array(zipBuffer)
+      });
+
+      expect(patchResponse.status).toBe(204);
+
+      const completeResponse = await fetch(`${baseUrl}${uploadPath}/complete`, {
+        method: "POST",
+        headers: {
+          cookie: cookie ?? ""
+        }
+      });
+
+      expect(completeResponse.status).toBe(200);
+      const body = (await completeResponse.json()) as {
+        item: {
+          name: string;
+          path: string;
+        };
+      };
+
+      expect(body.item.name).toBe("garden-default");
+      expect(path.basename(body.item.path)).toBe("garden-default");
     } finally {
       if (server) {
         await stopServer(server);

@@ -24,6 +24,7 @@ export interface DatasetFolderEntry {
   imageCount: number | null;
   hasMasks: boolean;
   hasAlphaImages: boolean;
+  previewImageRelativePath?: string | null;
 }
 
 export interface TimelapseConfig {

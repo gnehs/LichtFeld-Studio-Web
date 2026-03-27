@@ -71,6 +71,22 @@ describe("dataset auto register guard", () => {
     expect(result.reason).toBeNull();
   });
 
+  it("counts images inside nested images subfolders", () => {
+    const datasetPath = createDatasetRoot();
+    fs.mkdirSync(path.join(datasetPath, "images", "cam-a"), { recursive: true });
+    fs.mkdirSync(path.join(datasetPath, "images", "cam-b"), { recursive: true });
+    fs.writeFileSync(path.join(datasetPath, "images", "cam-a", "0001.jpg"), "image");
+    fs.writeFileSync(path.join(datasetPath, "images", "cam-b", "0002.png"), "image");
+    fs.writeFileSync(path.join(datasetPath, "images", "cam-b", "notes.txt"), "text");
+
+    const result = inspectDatasetFolder(datasetPath, {
+      nowMs: Date.now() + DATASET_STABLE_WINDOW_MS + 1
+    });
+
+    expect(result.status).toBe("ready");
+    expect(result.imageCount).toBe(2);
+  });
+
   it("detects upstream-compatible masks folders", () => {
     const datasetPath = createDatasetRoot();
     fs.writeFileSync(path.join(datasetPath, "images", "0001.jpg"), "image");

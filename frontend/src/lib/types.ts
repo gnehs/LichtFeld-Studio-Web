@@ -16,6 +16,7 @@ export interface DatasetFolderEntry {
   imageCount: number | null;
   hasMasks: boolean;
   hasAlphaImages: boolean;
+  previewImageRelativePath?: string | null;
 }
 
 export type JobStatus = "queued" | "running" | "completed" | "failed" | "stopped" | "stopped_low_disk";

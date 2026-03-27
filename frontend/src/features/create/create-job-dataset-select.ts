@@ -28,6 +28,14 @@ export function formatDatasetFolderLabel(folder: DatasetFolderEntry): string {
   return `${folder.name} - ${formatDatasetFolderMeta(folder)}`;
 }
 
+export function getDatasetFolderPreviewSrc(folder: DatasetFolderEntry): string | null {
+  if (!folder.previewImageRelativePath) {
+    return null;
+  }
+
+  return `/api/datasets/folders/${encodeURIComponent(folder.name)}/preview?path=${encodeURIComponent(folder.previewImageRelativePath)}`;
+}
+
 export function getDatasetSelectItems(datasetFolders: DatasetFolderEntry[]) {
   return datasetFolders.flatMap((folder) =>
     folder.datasetId
