@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { TimelapseConfig } from "../types/models.js";
+import { listDatasetImageRelativePaths } from "./datasetImages.js";
 
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"]);
 const DEFAULT_TIMELAPSE_EVERY = 100;
 const DEFAULT_TIMELAPSE_IMAGE_COUNT = 2;
 
@@ -30,12 +30,7 @@ export function pickTimelapseImagesFromDataset(dataPath: string | undefined, cou
     return [];
   }
 
-  const names = fs
-    .readdirSync(imagesDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name)
-    .filter((name) => IMAGE_EXTENSIONS.has(path.extname(name).toLowerCase()))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+  const names = listDatasetImageRelativePaths(imagesDir);
 
   return names.slice(0, Math.max(1, count));
 }

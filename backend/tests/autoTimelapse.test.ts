@@ -9,6 +9,7 @@ function createDatasetWithImages(names: string[]) {
   const imagesDir = path.join(root, "images");
   fs.mkdirSync(imagesDir, { recursive: true });
   for (const name of names) {
+    fs.mkdirSync(path.dirname(path.join(imagesDir, name)), { recursive: true });
     fs.writeFileSync(path.join(imagesDir, name), "image");
   }
   return root;
@@ -19,6 +20,19 @@ describe("autoTimelapse", () => {
     const dataset = createDatasetWithImages(["IMG_20.JPG", "IMG_2.JPG", "README.txt", "IMG_10.JPG"]);
     const picked = pickTimelapseImagesFromDataset(dataset);
     expect(picked).toEqual(["IMG_2.JPG", "IMG_10.JPG"]);
+  });
+
+  it("includes nested image paths under dataset images folder", () => {
+    const dataset = createDatasetWithImages([
+      "cam-b/IMG_20.JPG",
+      "cam-a/IMG_2.JPG",
+      "cam-a/README.txt",
+      "cam-b/IMG_10.JPG"
+    ]);
+
+    const picked = pickTimelapseImagesFromDataset(dataset);
+
+    expect(picked).toEqual(["cam-a/IMG_2.JPG", "cam-b/IMG_10.JPG"]);
   });
 
   it("builds config with dataset images and custom interval", () => {
