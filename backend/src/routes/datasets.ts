@@ -152,13 +152,13 @@ datasetsRouter.post("/upload/tus/:id/complete", async (req, res) => {
   }
 });
 
-datasetsRouter.post("/upload", upload.single("file"), (req, res) => {
+datasetsRouter.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: "file is required" });
     }
 
-    const item = datasetService.createFromUpload({
+    const item = await datasetService.createFromUpload({
       originalName: req.file.originalname,
       zipPath: req.file.path,
       datasetName: req.body?.datasetName

@@ -261,7 +261,7 @@ export const tusUploadStore = {
         throw new Error("Upload is not complete yet");
       }
 
-      const item = datasetService.createFromUpload({
+      const item = await datasetService.createFromUpload({
         originalName: record.metadata.filename?.trim() || `${record.id}.zip`,
         zipPath: record.filePath,
         datasetName: record.metadata.datasetName?.trim() || undefined

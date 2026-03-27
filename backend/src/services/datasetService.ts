@@ -1,9 +1,9 @@
 import path from "node:path";
 import fs from "node:fs";
-import AdmZip from "adm-zip";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
 import { repo } from "../db.js";
+import { extractZipToDirectory } from "../lib/zipExtract.js";
 import type { DatasetFolderEntry, DatasetRecord } from "../types/models.js";
 import {
   evaluateDatasetForAutoRegister,
@@ -96,7 +96,7 @@ export const datasetService = {
     return folders;
   },
 
-  createFromUpload(params: { originalName: string; zipPath: string; datasetName?: string }) {
+  async createFromUpload(params: { originalName: string; zipPath: string; datasetName?: string }) {
     const id = nanoid();
     const name = params.datasetName?.trim() || params.originalName.replace(/\.[^.]+$/, "");
     const extractDir = path.join(config.datasetsDir, id);
@@ -105,8 +105,7 @@ export const datasetService = {
     fs.writeFileSync(markerPath, "1");
 
     try {
-      const zip = new AdmZip(params.zipPath);
-      zip.extractAllTo(extractDir, true);
+      await extractZipToDirectory(params.zipPath, extractDir);
 
       const structure = validateDatasetStructure(extractDir);
       if (!structure.valid) {

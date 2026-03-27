@@ -1,9 +1,10 @@
-import { Upload } from "tus-js-client";
 import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, SystemMetrics, TimelapseFrame, TrainingJob } from "./types";
 
 export type UploadDatasetPhase = "preparing" | "uploading" | "processing" | "complete";
 
 const TUS_UPLOAD_CHUNK_SIZE = 64 * 1024 * 1024;
+const TUS_RESUMABLE_VERSION = "1.0.0";
+const TUS_UPLOAD_STORAGE_PREFIX = "lfs:tus-upload:";
 
 interface UploadDatasetOptions {
   onProgress?: (progress: number) => void;
@@ -14,6 +15,121 @@ interface UploadDatasetOptions {
 async function parseRequestError(response: Response): Promise<string> {
   const body = await response.json().catch(() => ({}));
   return body.message ?? response.statusText;
+}
+
+function getUploadStorage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> | null {
+  try {
+    if (typeof localStorage === "undefined") {
+      return null;
+    }
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function getTusUploadFingerprint(file: File, datasetName?: string): string {
+  return `${TUS_UPLOAD_STORAGE_PREFIX}${file.name}:${file.size}:${file.lastModified}:${datasetName?.trim() ?? ""}`;
+}
+
+function encodeTusMetadataValue(value: string): string {
+  return btoa(unescape(encodeURIComponent(value)));
+}
+
+function buildTusMetadataHeader(file: File, datasetName?: string): string {
+  const metadata = [
+    `filename ${encodeTusMetadataValue(file.name)}`,
+    `filetype ${encodeTusMetadataValue(file.type || "application/zip")}`
+  ];
+
+  if (datasetName?.trim()) {
+    metadata.push(`datasetName ${encodeTusMetadataValue(datasetName.trim())}`);
+  }
+
+  return metadata.join(",");
+}
+
+function getUploadOffset(headers: Headers): number | null {
+  const rawOffset = headers.get("Upload-Offset") ?? headers.get("upload-offset");
+  if (!rawOffset) {
+    return null;
+  }
+
+  const offset = Number(rawOffset);
+  return Number.isSafeInteger(offset) && offset >= 0 ? offset : null;
+}
+
+async function createTusUpload(file: File, datasetName?: string): Promise<{ uploadUrl: string; offset: number }> {
+  const response = await fetch("/api/datasets/upload/tus", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Tus-Resumable": TUS_RESUMABLE_VERSION,
+      "Upload-Length": String(file.size),
+      "Upload-Metadata": buildTusMetadataHeader(file, datasetName)
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseRequestError(response));
+  }
+
+  const uploadUrl = response.headers.get("Location") ?? response.headers.get("location");
+  if (!uploadUrl) {
+    throw new Error("Upload creation succeeded but response is missing upload URL");
+  }
+
+  return {
+    uploadUrl,
+    offset: getUploadOffset(response.headers) ?? 0
+  };
+}
+
+async function headTusUpload(uploadUrl: string): Promise<{ exists: boolean; offset: number }> {
+  const response = await fetch(uploadUrl, {
+    method: "HEAD",
+    credentials: "include",
+    headers: {
+      "Tus-Resumable": TUS_RESUMABLE_VERSION
+    }
+  });
+
+  if (response.status === 404) {
+    return { exists: false, offset: 0 };
+  }
+
+  if (!response.ok) {
+    throw new Error(await parseRequestError(response));
+  }
+
+  return {
+    exists: true,
+    offset: getUploadOffset(response.headers) ?? 0
+  };
+}
+
+async function patchTusUpload(uploadUrl: string, offset: number, chunk: Blob): Promise<number> {
+  const response = await fetch(uploadUrl, {
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      "Tus-Resumable": TUS_RESUMABLE_VERSION,
+      "Upload-Offset": String(offset),
+      "Content-Type": "application/offset+octet-stream"
+    },
+    body: chunk
+  });
+
+  const nextOffset = getUploadOffset(response.headers);
+  if (response.status === 409 && nextOffset !== null) {
+    return nextOffset;
+  }
+
+  if (!response.ok) {
+    throw new Error(await parseRequestError(response));
+  }
+
+  return nextOffset ?? offset + chunk.size;
 }
 
 function getTusUploadCompletePath(uploadUrl: string): string {
@@ -46,77 +162,67 @@ export const api = {
 
   listDatasets: () => request<{ items: DatasetRecord[]; folders: DatasetFolderEntry[] }>("/api/datasets"),
   uploadDataset: async (file: File, datasetName?: string, options?: UploadDatasetOptions) => {
-    return new Promise<{ item: DatasetRecord }>((resolve, reject) => {
-      const upload = new Upload(file, {
-        endpoint: "/api/datasets/upload/tus",
-        chunkSize: TUS_UPLOAD_CHUNK_SIZE,
-        retryDelays: [0, 1000, 3000, 5000],
-        metadata: {
-          filename: file.name,
-          filetype: file.type || "application/zip",
-          ...(datasetName?.trim() ? { datasetName: datasetName.trim() } : {})
-        },
-        removeFingerprintOnSuccess: true,
-        onBeforeRequest(req) {
-          const underlying = req.getUnderlyingObject();
-          if (underlying && typeof underlying === "object" && "withCredentials" in underlying) {
-            (underlying as XMLHttpRequest).withCredentials = true;
-          }
-        },
-        onError(error) {
-          reject(error instanceof Error ? error : new Error(String(error)));
-        },
-        onProgress(bytesUploaded, bytesTotal) {
-          options?.onPhaseChange?.("uploading");
-          options?.onBytesProgress?.(bytesUploaded, bytesTotal);
-          options?.onProgress?.(bytesTotal > 0 ? bytesUploaded / bytesTotal : 0);
-        },
-        async onSuccess() {
-          try {
-            if (!upload.url) {
-              throw new Error("Upload succeeded but server did not return upload URL");
-            }
+    const storage = getUploadStorage();
+    const fingerprint = getTusUploadFingerprint(file, datasetName);
+    options?.onPhaseChange?.("preparing");
 
-            options?.onPhaseChange?.("processing");
-            options?.onBytesProgress?.(file.size, file.size);
-            options?.onProgress?.(1);
+    let uploadUrl = storage?.getItem(fingerprint) ?? null;
+    let offset = 0;
 
-            const response = await fetch(getTusUploadCompletePath(upload.url), {
-              method: "POST",
-              credentials: "include"
-            });
+    if (uploadUrl) {
+      const headResult = await headTusUpload(uploadUrl);
+      if (headResult.exists) {
+        offset = headResult.offset;
+      } else {
+        storage?.removeItem(fingerprint);
+        uploadUrl = null;
+      }
+    }
 
-            if (!response.ok) {
-              throw new Error(await parseRequestError(response));
-            }
+    if (!uploadUrl) {
+      const created = await createTusUpload(file, datasetName);
+      uploadUrl = created.uploadUrl;
+      offset = created.offset;
+      storage?.setItem(fingerprint, uploadUrl);
+    }
 
-            const body = (await response.json()) as { item?: DatasetRecord };
-            if (!body.item) {
-              throw new Error("Upload succeeded but response is missing dataset item");
-            }
+    while (offset < file.size) {
+      options?.onPhaseChange?.("uploading");
+      const chunk = file.slice(offset, offset + TUS_UPLOAD_CHUNK_SIZE);
+      const nextOffset = await patchTusUpload(uploadUrl, offset, chunk);
+      if (nextOffset <= offset) {
+        throw new Error("Upload did not make progress");
+      }
+      offset = nextOffset;
+      options?.onBytesProgress?.(offset, file.size);
+      options?.onProgress?.(file.size > 0 ? offset / file.size : 0);
+    }
 
-            options?.onPhaseChange?.("complete");
-            resolve({ item: body.item });
-          } catch (error) {
-            reject(error instanceof Error ? error : new Error(String(error)));
-          }
-        }
+    options?.onPhaseChange?.("processing");
+    options?.onBytesProgress?.(file.size, file.size);
+    options?.onProgress?.(1);
+
+    try {
+      const response = await fetch(getTusUploadCompletePath(uploadUrl), {
+        method: "POST",
+        credentials: "include"
       });
 
-      options?.onPhaseChange?.("preparing");
-      upload
-        .findPreviousUploads()
-        .then((previousUploads) => {
-          const latestUpload = previousUploads[0];
-          if (latestUpload) {
-            upload.resumeFromPreviousUpload(latestUpload);
-          }
-          upload.start();
-        })
-        .catch((error) => {
-          reject(error instanceof Error ? error : new Error(String(error)));
-        });
-    });
+      if (!response.ok) {
+        throw new Error(await parseRequestError(response));
+      }
+
+      const body = (await response.json()) as { item?: DatasetRecord };
+      if (!body.item) {
+        throw new Error("Upload succeeded but response is missing dataset item");
+      }
+
+      storage?.removeItem(fingerprint);
+      options?.onPhaseChange?.("complete");
+      return { item: body.item };
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
   },
   registerDatasetPath: (datasetName: string, targetPath: string) =>
     request<{ item: DatasetRecord }>("/api/datasets/register-path", {

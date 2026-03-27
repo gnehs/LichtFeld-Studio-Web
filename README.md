@@ -11,7 +11,7 @@ LichtFeld-Studio 的簡易 Web 控制台，提供 React + Tailwind 前端與 Nod
 - 單一管理者密碼登入
 - Session 會持久化到 SQLite，後端重啟後可沿用既有登入狀態
 - 會定期主動清理已過期的 session，避免資料表持續累積
-- 以 tus protocol 上傳 ZIP，支援續傳、進度顯示與伺服器驗證階段提示
+- 以 tus protocol 上傳 ZIP，支援續傳、進度顯示、伺服器驗證階段提示，以及超過 2 GiB 的大型 ZIP
 - 也可直接選用伺服器上的 dataset
 - 建立、停止、刪除訓練任務
 - 刪除任務時會一併移除該任務的 output、timelapse 與 log，無法復原
