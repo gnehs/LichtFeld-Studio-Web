@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@types/unzipper": "^0.10.11",
-    "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.2",
     "check-disk-space": "^3.4.0",
@@ -34,6 +33,7 @@
     "@types/mime-types": "^2.1.4",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.13.10",
+    "adm-zip": "^0.5.16",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vitest": "^3.0.8"
