@@ -1,25 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createPortal } from "react-dom";
-import { RefreshCw, Sparkles, UploadCloud } from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Notice } from "@/lib/app-types";
 
-import { CircleIndicator } from "@/components/CircleIndicator";
 import type {
   DatasetFolderEntry,
   DatasetRecord,
   TrainingParamsForm,
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,48 +32,15 @@ import {
   type CreateJobStrategyDefaults,
 } from "./create-job-defaults";
 import {
-  calculateUploadSpeed,
-  formatBytesPerSecond,
-  formatUploadPhase,
-  isDraggedFileZip,
-  mergeUploadDraft,
-  normalizeUploadProgress,
-  shouldAllowStepTwoWhileUploading,
-  type PendingUploadDraft,
-} from "@/upload-state";
-import {
+  getDatasetDisplayName,
   formatDatasetFolderLabel,
   formatDatasetFolderMeta,
   getDatasetFolderPreviewSrc,
+  getDatasetNameByIdMap,
   getDatasetSelectItems,
 } from "./create-job-dataset-select";
-import {
-  CREATE_JOB_SOURCE_MODE_BUTTONS,
-  getCreateJobSourceModeState,
-  type CreateJobSourceMode,
-} from "./create-job-source-mode";
+import { getCreateJobSelectionState } from "./create-job-selection-state";
 import { cn } from "@/lib/utils";
-
-function SourceModeButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      variant={active ? "default" : "outline"}
-      className="min-w-[160px] flex-1"
-      onClick={onClick}
-    >
-      {label}
-    </Button>
-  );
-}
 
 function DatasetFolderPreview({
   folder,
@@ -119,122 +78,6 @@ function DatasetFolderPreview({
 
 interface CreateWizardValues extends CreateJobStrategyDefaults {
   advancedJson: string;
-}
-
-function parseStringList(value: string): string[] | undefined {
-  const items = value
-    .split(/\r?\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return items.length > 0 ? items : undefined;
-}
-
-const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
-  status: "idle",
-  file: null,
-  name: "",
-  progress: 0,
-  datasetId: null,
-  error: null,
-  uploadedBytes: 0,
-  totalBytes: 0,
-  startedAt: null,
-};
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
-
-  if (bytes >= 1024 * 1024 * 1024) {
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  }
-
-  if (bytes >= 1024 * 1024) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${Math.round(bytes)} B`;
-}
-
-function getDefaultUploadFolderName(fileName: string): string {
-  const trimmed = fileName.trim();
-  if (!trimmed) {
-    return "";
-  }
-
-  const strippedZipExtension = trimmed.replace(/\.zip$/i, "").trim();
-  return strippedZipExtension || trimmed;
-}
-
-function normalizeUploadFolderNameForValidation(rawName: string): string {
-  const sanitized = rawName
-    .trim()
-    .replace(/[\\/]+/g, "-")
-    .replace(/[<>:"|?*\u0000-\u001f]/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/^[._\- ]+/, "")
-    .replace(/[. ]+$/g, "")
-    .trim();
-
-  return sanitized;
-}
-
-function getUploadFolderConflictName(
-  folderName: string,
-  datasetFolders: DatasetFolderEntry[],
-): string | null {
-  const normalizedTarget = normalizeUploadFolderNameForValidation(folderName);
-  if (!normalizedTarget) {
-    return null;
-  }
-
-  const conflict = datasetFolders.find(
-    (folder) =>
-      normalizeUploadFolderNameForValidation(folder.name) === normalizedTarget,
-  );
-
-  return conflict?.name ?? null;
-}
-
-function getUploadProgress(draft: PendingUploadDraft): number {
-  if (draft.status === "uploaded" || draft.status === "processing") {
-    return 1;
-  }
-
-  return normalizeUploadProgress(draft.progress);
-}
-
-function getUploadTransferredBytes(draft: PendingUploadDraft): number {
-  const totalBytes = draft.totalBytes || draft.file?.size || 0;
-  if (draft.status === "uploaded" || draft.status === "processing") {
-    return totalBytes || draft.uploadedBytes;
-  }
-
-  if (!totalBytes) {
-    return draft.uploadedBytes;
-  }
-
-  return Math.min(draft.uploadedBytes, totalBytes);
-}
-
-function ProgressBar({ progress }: { progress: number | null }) {
-  const width =
-    progress === null
-      ? 15
-      : Math.round(normalizeUploadProgress(progress) * 100);
-  return (
-    <div className="h-2 w-full overflow-hidden rounded-full border border-white/8 bg-white/[0.05]">
-      <div
-        className="h-full rounded-full bg-[linear-gradient(90deg,rgba(103,232,249,0.95),rgba(45,212,191,0.92),rgba(255,255,255,0.85))] shadow-[0_0_18px_rgba(103,232,249,0.25)] transition-[width] duration-500"
-        style={{ width: `${width}%` }}
-      />
-    </div>
-  );
 }
 
 function DatasetStructureGuide() {
@@ -296,307 +139,6 @@ function SourcePanel({
       </div>
       <div className="mt-4 space-y-4">{children}</div>
     </section>
-  );
-}
-
-function UploadDropzone({
-  file,
-  dragging,
-  onPick,
-  onFilesDropped,
-  onDragState,
-}: {
-  file: File | null;
-  dragging: boolean;
-  onPick: () => void;
-  onFilesDropped: (files: FileList | null) => void;
-  onDragState: (dragging: boolean) => void;
-}) {
-  return (
-    <label
-      onDragEnter={(event) => {
-        event.preventDefault();
-        onDragState(true);
-      }}
-      onDragLeave={(event) => {
-        event.preventDefault();
-        onDragState(false);
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        onDragState(true);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        onDragState(false);
-        onFilesDropped(event.dataTransfer.files);
-      }}
-      className={`block cursor-pointer rounded-[1.1rem] border border-dashed px-4 py-6 transition ${dragging ? "border-cyan-300/40 bg-cyan-300/[0.08]" : "border-white/12 bg-black/25 hover:border-white/24 hover:bg-black/35"}`}
-    >
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-sm font-medium text-zinc-100">
-            拖移 ZIP 到這裡，或點擊選擇檔案
-          </p>
-          <p className="mt-1 text-xs leading-5 text-zinc-400">
-            只接受 `.zip` 格式。
-          </p>
-        </div>
-        <div className="text-xs text-zinc-500">
-          {file ? (
-            `已選擇：${file.name}`
-          ) : (
-            <Button type="button" variant="outline" onClick={onPick}>
-              <UploadCloud className="size-4" /> 選擇 ZIP
-            </Button>
-          )}
-        </div>
-      </div>
-    </label>
-  );
-}
-
-function CircularUploadProgress({ progress }: { progress: number }) {
-  const normalized = normalizeUploadProgress(progress);
-  const radius = 24;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - normalized);
-
-  return (
-    <svg viewBox="0 0 72 72" className="h-14 w-14">
-      <circle
-        cx="36"
-        cy="36"
-        r={radius}
-        fill="none"
-        stroke="rgba(255,255,255,0.08)"
-        strokeWidth="4"
-      />
-      <circle
-        cx="36"
-        cy="36"
-        r={radius}
-        fill="none"
-        stroke="rgba(103,232,249,0.95)"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        transform="rotate(-90 36 36)"
-      />
-      <text
-        x="36"
-        y="39"
-        textAnchor="middle"
-        className="fill-zinc-100 text-[11px] font-semibold"
-      >
-        {Math.round(normalized * 100)}%
-      </text>
-    </svg>
-  );
-}
-
-function UploadStatusPanel({
-  draft,
-  nowMs,
-}: {
-  draft: PendingUploadDraft;
-  nowMs: number;
-}) {
-  if (!draft.file || draft.status === "idle") {
-    return null;
-  }
-
-  const progress = getUploadProgress(draft);
-  const totalBytes = draft.totalBytes || draft.file.size;
-  const uploadedBytes = getUploadTransferredBytes(draft);
-  const speed =
-    draft.status === "uploading"
-      ? formatBytesPerSecond(
-          calculateUploadSpeed(draft.uploadedBytes, draft.startedAt, nowMs),
-        )
-      : null;
-  const phaseLabel = formatUploadPhase(draft.status);
-  const detailText =
-    draft.status === "processing"
-      ? "伺服器正在解壓縮與驗證 ZIP，完成後就能建立任務。"
-      : draft.status === "uploaded"
-        ? "ZIP 已驗證完成，可直接沿用這個 dataset 建立任務。"
-        : draft.status === "error"
-          ? draft.error ?? "上傳失敗，請重新選擇 ZIP。"
-          : speed && speed !== "—"
-            ? `目前傳輸速度約 ${speed}`
-            : "正在建立傳輸連線...";
-
-  return (
-    <div
-      className={cn(
-        "glass-panel rounded-[1.2rem] border-0 p-4",
-        draft.status === "error"
-          ? "bg-red-950/40"
-          : draft.status === "uploaded"
-            ? "bg-emerald-500/[0.08]"
-            : "bg-black/25",
-      )}
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="shrink-0 self-center sm:self-start">
-          <CircularUploadProgress progress={progress} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate text-sm font-semibold text-zinc-100">
-              {draft.file.name}
-            </p>
-            <span className="rounded-full bg-white/8 px-2 py-1 text-[10px] tracking-[0.18em] text-cyan-100 uppercase">
-              {phaseLabel}
-            </span>
-          </div>
-          <div className="mt-3">
-            <ProgressBar progress={progress} />
-          </div>
-          <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-3">
-            <div className="rounded-2xl bg-black/25 px-3 py-2">
-              <p className="text-[10px] tracking-[0.18em] text-zinc-500 uppercase">
-                進度
-              </p>
-              <p className="mt-1 text-sm text-zinc-100">
-                {Math.round(progress * 100)}%
-              </p>
-            </div>
-            <div className="rounded-2xl bg-black/25 px-3 py-2">
-              <p className="text-[10px] tracking-[0.18em] text-zinc-500 uppercase">
-                已傳輸
-              </p>
-              <p className="mt-1 text-sm text-zinc-100">
-                {`${formatBytes(uploadedBytes)} / ${formatBytes(totalBytes)}`}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-black/25 px-3 py-2">
-              <p className="text-[10px] tracking-[0.18em] text-zinc-500 uppercase">
-                狀態
-              </p>
-              <p className="mt-1 text-sm text-zinc-100">{phaseLabel}</p>
-            </div>
-          </div>
-          <p
-            className={cn(
-              "mt-3 text-xs leading-5",
-              draft.status === "error" ? "text-red-100" : "text-zinc-400",
-            )}
-          >
-            {detailText}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FixedUploadDock({
-  draft,
-  nowMs,
-}: {
-  draft: PendingUploadDraft;
-  nowMs: number;
-}) {
-  if (
-    !draft.file ||
-    (draft.status !== "uploading" &&
-      draft.status !== "processing" &&
-      draft.status !== "uploaded" &&
-      draft.status !== "error")
-  ) {
-    return null;
-  }
-  if (typeof document === "undefined") return null;
-
-  const progress = getUploadProgress(draft);
-  const totalBytes = draft.totalBytes || draft.file.size;
-  const uploadedBytes = getUploadTransferredBytes(draft);
-  const speed =
-    draft.status === "uploaded"
-      ? null
-      : formatBytesPerSecond(
-          calculateUploadSpeed(draft.uploadedBytes, draft.startedAt, nowMs),
-        );
-  const phaseLabel = formatUploadPhase(draft.status);
-  const bytesLabel = `${formatBytes(uploadedBytes)} / ${formatBytes(totalBytes)}`;
-
-  return createPortal(
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-[140] w-[min(calc(100vw-1rem),20rem)] -translate-x-1/2">
-      <div
-        className={`pointer-events-auto rounded-full border px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm ${draft.status === "error" ? "border-red-400/25 bg-red-950/85" : "border-white/10 bg-black/50"}`}
-      >
-        <div className="flex items-center gap-3">
-          <div className="shrink-0">
-            <CircleIndicator
-              progress={progress * 100}
-              size={40}
-              color="var(--chart-1)"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-zinc-100">
-              {draft.file.name}
-            </p>
-            {draft.status !== "error" ? (
-              <p className="text-xs text-zinc-400">{`${phaseLabel} · ${bytesLabel}`}</p>
-            ) : null}
-            {draft.status === "uploading" && speed && speed !== "—" ? (
-              <p className="text-[11px] text-zinc-500">{speed}</p>
-            ) : null}
-            {draft.status === "error" ? (
-              <p className="text-[11px] text-red-100">
-                {draft.error ?? "上傳失敗，請重新選擇 ZIP。"}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-function UploadFailureDialog({
-  open,
-  message,
-  onClose,
-  onRetry,
-  onReselect,
-}: {
-  open: boolean;
-  message: string;
-  onClose: () => void;
-  onRetry: () => void;
-  onReselect: () => void;
-}) {
-  if (!open || typeof document === "undefined") {
-    return null;
-  }
-
-  return createPortal(
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[1.25rem] border border-white/10 bg-zinc-950 px-5 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
-        <h3 className="text-lg font-semibold text-zinc-50">
-          上傳失敗，要怎麼處理？
-        </h3>
-        <p className="mt-3 text-sm leading-6 text-zinc-300">{message}</p>
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={onClose}>
-            先保留
-          </Button>
-          <Button type="button" variant="outline" onClick={onReselect}>
-            重新選擇 ZIP
-          </Button>
-          <Button type="button" onClick={onRetry}>
-            再試一次
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
   );
 }
 
@@ -686,7 +228,6 @@ export function CreateJobWizard({
   datasetFolders,
   onCancel,
   onCreated,
-  onDatasetCreated,
   onNotice,
   onRefreshDatasets,
 }: {
@@ -694,58 +235,17 @@ export function CreateJobWizard({
   datasetFolders: DatasetFolderEntry[];
   onCancel: () => void;
   onCreated: (jobId: string) => Promise<void>;
-  onDatasetCreated: (dataset: DatasetRecord) => void;
   onNotice: (notice: Notice) => void;
   onRefreshDatasets: () => Promise<void>;
 }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2>(1);
-  const [dataSourceMode, setDataSourceMode] =
-    useState<CreateJobSourceMode>("existing");
-  const [draggingUpload, setDraggingUpload] = useState(false);
-  const [uploadInputKey, setUploadInputKey] = useState(0);
-  const [uploadNowMs, setUploadNowMs] = useState(() => Date.now());
-  const [uploadErrorDialogOpen, setUploadErrorDialogOpen] = useState(false);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
-  const [uploadDraft, setUploadDraft] =
-    useState<PendingUploadDraft>(EMPTY_UPLOAD_DRAFT);
   const [form, setForm] = useState<CreateWizardValues>(() => ({
     ...getStrategyDefaults("mcmc"),
     advancedJson: "",
   }));
   const [submitting, setSubmitting] = useState(false);
-
-  const uploadDatasetMutation = useMutation({
-    mutationFn: ({
-      file,
-      datasetName,
-      onProgress,
-      onBytesProgress,
-      onPhaseChange,
-    }: {
-      file: File;
-      datasetName?: string;
-      onProgress: (progress: number) => void;
-      onBytesProgress: (loaded: number, total: number) => void;
-      onPhaseChange: (phase: "preparing" | "uploading" | "processing" | "complete") => void;
-    }) =>
-      api.uploadDataset(file, datasetName, {
-        onProgress,
-        onBytesProgress,
-        onPhaseChange,
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
-    },
-  });
-
-  const renameDatasetMutation = useMutation({
-    mutationFn: ({ id, datasetName }: { id: string; datasetName: string }) =>
-      api.renameDataset(id, datasetName),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
-    },
-  });
 
   const createJobMutation = useMutation({
     mutationFn: (payload: { datasetId: string; params: TrainingParamsForm }) =>
@@ -755,10 +255,6 @@ export function CreateJobWizard({
     },
   });
 
-  const uploadFile = uploadDraft.file;
-  const uploadBusy =
-    uploadDraft.status === "uploading" || uploadDraft.status === "processing";
-  const uploadedDatasetId = uploadDraft.datasetId ?? "";
   const selectableFolders = useMemo(
     () =>
       datasetFolders.filter(
@@ -769,9 +265,10 @@ export function CreateJobWizard({
       ),
     [datasetFolders],
   );
+  const datasetNameById = useMemo(() => getDatasetNameByIdMap(datasets), [datasets]);
   const datasetSelectItems = useMemo(
-    () => getDatasetSelectItems(datasetFolders),
-    [datasetFolders],
+    () => getDatasetSelectItems(datasetFolders, datasetNameById),
+    [datasetFolders, datasetNameById],
   );
   const datasetSelectValueMap = useMemo(
     () =>
@@ -782,9 +279,9 @@ export function CreateJobWizard({
                 [
                   folder.datasetId,
                   {
-                    name: folder.name,
+                    name: getDatasetDisplayName(folder, datasetNameById),
                     meta: formatDatasetFolderMeta(folder),
-                    label: formatDatasetFolderLabel(folder),
+                    label: formatDatasetFolderLabel(folder, datasetNameById),
                     folder,
                   },
                 ] as const,
@@ -792,45 +289,32 @@ export function CreateJobWizard({
             : [],
         ),
       ),
-    [datasetFolders],
+    [datasetFolders, datasetNameById],
   );
-  const sourceModeState = useMemo(
-    () => getCreateJobSourceModeState(dataSourceMode),
-    [dataSourceMode],
-  );
-  const activeDatasetId =
-    dataSourceMode === "existing" ? selectedDatasetId : uploadedDatasetId;
   const selectedDataset = useMemo(
-    () => datasets.find((item) => item.id === activeDatasetId),
-    [datasets, activeDatasetId],
+    () => datasets.find((item) => item.id === selectedDatasetId),
+    [datasets, selectedDatasetId],
   );
   const selectedDatasetFolder = useMemo(
     () =>
-      datasetFolders.find((folder) => folder.datasetId === activeDatasetId) ??
+      datasetFolders.find((folder) => folder.datasetId === selectedDatasetId) ??
       null,
-    [datasetFolders, activeDatasetId],
-  );
-  const uploadFolderConflictName = useMemo(
-    () => getUploadFolderConflictName(uploadDraft.name, datasetFolders),
-    [datasetFolders, uploadDraft.name],
+    [datasetFolders, selectedDatasetId],
   );
   const showMaskSettings = shouldShowMaskSettings(
     selectedDatasetFolder?.hasMasks ?? false,
     selectedDatasetFolder?.hasAlphaImages ?? false,
   );
-  const activeDatasetLabel =
-    dataSourceMode === "upload"
-      ? uploadDraft.name || selectedDataset?.name || "未選擇"
-      : selectedDataset?.name || "未選擇";
-  const canSubmit =
-    Boolean(activeDatasetId) &&
-    !(dataSourceMode === "upload" && uploadBusy) &&
-    !submitting;
-  const blockingReason = !activeDatasetId
-    ? "尚未完成資料集選擇或匯入"
-    : dataSourceMode === "upload" && uploadBusy
-      ? "資料集仍在上傳或驗證中"
-      : null;
+  const { activeDatasetId, activeDatasetLabel, canSubmit, blockingReason } =
+    useMemo(
+      () =>
+        getCreateJobSelectionState({
+          selectedDatasetId,
+          selectedDatasetName: selectedDataset?.name ?? null,
+          submitting,
+        }),
+      [selectedDataset?.name, selectedDatasetId, submitting],
+    );
 
   useEffect(() => {
     if (selectableFolders.length === 0) {
@@ -866,164 +350,13 @@ export function CreateJobWizard({
     });
   }, [showMaskSettings]);
 
-  useEffect(() => {
-    const timer = setInterval(() => setUploadNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const updateUploadDraft = (patch: Partial<PendingUploadDraft>) => {
-    setUploadDraft((prev) => mergeUploadDraft(prev, patch));
-  };
-
-  const clearUploadDraft = () => {
-    setUploadDraft(EMPTY_UPLOAD_DRAFT);
-    setUploadInputKey((prev) => prev + 1);
-  };
-
-  const applyUploadFile = (file: File | null) => {
-    setUploadErrorDialogOpen(false);
-    if (file && !isDraggedFileZip(file)) {
-      onNotice({ tone: "error", text: "只支援上傳 .zip 檔案" });
-      return;
-    }
-    setUploadDraft((prev) => ({
-      status: "idle",
-      file,
-      name: file ? getDefaultUploadFolderName(file.name) : "",
-      progress: 0,
-      datasetId: null,
-      error: null,
-      uploadedBytes: 0,
-      totalBytes: file?.size ?? 0,
-      startedAt: null,
-    }));
-    setUploadInputKey((prev) => prev + 1);
-    if (file) {
-      setDataSourceMode("upload");
-      setStep(1);
-    }
-  };
-
-  const uploadZip = async (): Promise<string | null> => {
-    if (!uploadFile) {
-      return null;
-    }
-
-    setUploadErrorDialogOpen(false);
-    updateUploadDraft({
-      status: "uploading",
-      progress: 0,
-      error: null,
-      uploadedBytes: 0,
-      totalBytes: uploadFile.size,
-      startedAt: Date.now(),
-    });
-    try {
-      const res = await uploadDatasetMutation.mutateAsync({
-        file: uploadFile,
-        datasetName: uploadDraft.name.trim() || undefined,
-        onProgress: (progress) => {
-          setUploadDraft((prev) =>
-            mergeUploadDraft(prev, {
-              status: "uploading",
-              progress: normalizeUploadProgress(progress),
-              error: null,
-            }),
-          );
-        },
-        onBytesProgress: (loaded, total) => {
-          setUploadDraft((prev) =>
-            mergeUploadDraft(prev, {
-              status: "uploading",
-              uploadedBytes: loaded,
-              totalBytes: total,
-              error: null,
-            }),
-          );
-        },
-        onPhaseChange: (phase) => {
-          if (phase !== "processing") {
-            return;
-          }
-
-          setUploadDraft((prev) =>
-            mergeUploadDraft(prev, {
-              status: "processing",
-              progress: 1,
-              uploadedBytes:
-                prev.totalBytes || prev.file?.size || prev.uploadedBytes,
-              totalBytes: prev.totalBytes || prev.file?.size || prev.uploadedBytes,
-              error: null,
-            }),
-          );
-        },
-      });
-      setUploadDraft((prev) =>
-        mergeUploadDraft(prev, {
-          status: "uploaded",
-          progress: 1,
-          datasetId: res.item.id,
-          error: null,
-          name: prev.name.trim() || res.item.name,
-          uploadedBytes: prev.totalBytes || prev.uploadedBytes,
-          totalBytes: prev.totalBytes || prev.uploadedBytes,
-        }),
-      );
-      setUploadErrorDialogOpen(false);
-      onDatasetCreated(res.item);
-      await onRefreshDatasets().catch(() => undefined);
-      onNotice({ tone: "success", text: `資料集 ${res.item.name} 上傳完成` });
-      return res.item.id;
-    } catch (error) {
-      updateUploadDraft({
-        status: "error",
-        error: `上傳失敗：${(error as Error).message}`,
-      });
-      setStep(1);
-      setDataSourceMode("upload");
-      setUploadErrorDialogOpen(true);
-      onNotice({
-        tone: "error",
-        text: `上傳失敗：${(error as Error).message}`,
-      });
-      return null;
-    }
-  };
-
   const goStepTwo = async () => {
-    if (dataSourceMode === "existing") {
-      if (!selectedDatasetId) {
-        onNotice({ tone: "error", text: "請先選擇一個 dataset" });
-        return;
-      }
-      setStep(2);
-      return;
-    }
-    if (shouldAllowStepTwoWhileUploading(uploadDraft)) {
-      setStep(2);
-      return;
-    }
-
-    if (!uploadFile) {
-      onNotice({ tone: "error", text: "請先選擇 ZIP 檔案" });
-      return;
-    }
-
-    if (!uploadDraft.name.trim()) {
-      onNotice({ tone: "error", text: "請先確認資料夾名稱" });
-      return;
-    }
-
-    if (uploadFolderConflictName) {
-      onNotice({
-        tone: "error",
-        text: "資料夾名稱已存在，請改用其他名稱",
-      });
+    if (!selectedDatasetId) {
+      onNotice({ tone: "error", text: "請先選擇一個 dataset" });
       return;
     }
 
     setStep(2);
-    void uploadZip();
   };
 
   const updateForm = <K extends keyof CreateWizardValues>(
@@ -1033,30 +366,9 @@ export function CreateJobWizard({
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const syncUploadedDatasetName = async () => {
-    if (dataSourceMode !== "upload" || !activeDatasetId) return;
-    const nextName = uploadDraft.name.trim();
-    if (!nextName || nextName === selectedDataset?.name) return;
-    const res = await renameDatasetMutation.mutateAsync({
-      id: activeDatasetId,
-      datasetName: nextName,
-    });
-    onDatasetCreated(res.item);
-    setUploadDraft((prev) =>
-      mergeUploadDraft(prev, { datasetId: res.item.id, name: res.item.name }),
-    );
-  };
-
   const submit = async () => {
-    if (dataSourceMode === "upload" && uploadBusy) {
-      onNotice({
-        tone: "info",
-        text: "資料集仍在上傳或驗證中，請等完成後再建立任務。",
-      });
-      return;
-    }
     if (!activeDatasetId) {
-      onNotice({ tone: "error", text: "請先完成資料集步驟" });
+      onNotice({ tone: "error", text: "請先選擇資料集" });
       setStep(1);
       return;
     }
@@ -1079,7 +391,6 @@ export function CreateJobWizard({
 
     setSubmitting(true);
     try {
-      await syncUploadedDatasetName();
       const payloadParams: TrainingParamsForm = {
         ...advanced,
         iterations: form.iterations,
@@ -1152,10 +463,10 @@ export function CreateJobWizard({
           <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <SourcePanel
               title="資料集來源"
-              description="先用上方按鈕切換既有資料集或上傳 ZIP，再決定這次任務要使用哪個資料來源。"
+              description="建立任務時只會選擇既有資料集；若還沒有資料集，請先前往資料集頁面新增。"
               active
               actions={
-                sourceModeState.showRefreshAction ? (
+                <>
                   <Button
                     type="button"
                     variant="outline"
@@ -1177,166 +488,103 @@ export function CreateJobWizard({
                   >
                     <RefreshCw className="size-4" /> 重新整理
                   </Button>
-                ) : null
+                  <Link
+                    to="/datasets"
+                    className={cn(
+                      "glass-panel inline-flex items-center justify-center rounded-lg border-0 bg-background px-2.5 text-sm font-medium transition-all hover:bg-muted hover:text-foreground dark:bg-input/30 dark:hover:bg-input/50",
+                    )}
+                  >
+                    前往資料集頁面新增資料集
+                  </Link>
+                </>
               }
             >
-              <div className="flex flex-wrap gap-2">
-                {CREATE_JOB_SOURCE_MODE_BUTTONS.map((item) => (
-                  <SourceModeButton
-                    key={item.mode}
-                    active={dataSourceMode === item.mode}
-                    label={item.label}
-                    onClick={() => setDataSourceMode(item.mode)}
-                  />
-                ))}
+              <div>
+                <Label>選擇資料集</Label>
+                <Select
+                  items={datasetSelectItems}
+                  value={selectedDatasetId || null}
+                  onValueChange={(value) => {
+                    setSelectedDatasetId(value ?? "");
+                  }}
+                >
+                  <SelectTrigger className="mt-2 min-h-12 w-full items-start py-2 whitespace-normal data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start">
+                    <SelectValue placeholder="請選擇可用 dataset">
+                      {(value) => {
+                        if (!value) {
+                          return "請選擇可用 dataset";
+                        }
+                        const selected = datasetSelectValueMap.get(value as string);
+                        if (!selected) {
+                          return String(value);
+                        }
+                        return (
+                          <span className="flex min-w-0 items-center gap-3 py-0.5 leading-tight">
+                            <DatasetFolderPreview
+                              folder={selected.folder}
+                              className="h-10 w-14 shrink-0"
+                            />
+                            <span className="flex min-w-0 flex-col">
+                              <span className="truncate text-sm text-zinc-100">
+                                {selected.name}
+                              </span>
+                              <span className="truncate text-xs text-zinc-400">
+                                {selected.meta}
+                              </span>
+                            </span>
+                          </span>
+                        );
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>所有資料集</SelectLabel>
+                      {datasetFolders.map((folder) => {
+                        const disabled =
+                          !folder.isRegistered ||
+                          folder.health !== "ready" ||
+                          !folder.datasetId;
+                        return (
+                          <SelectItem
+                            key={folder.path}
+                            value={folder.datasetId ?? `folder:${folder.path}`}
+                            disabled={disabled}
+                          >
+                            <div className="flex items-center gap-3 py-0.5">
+                              <DatasetFolderPreview
+                                folder={folder}
+                                className="h-10 w-14 shrink-0"
+                              />
+                              <div className="flex min-w-0 flex-col gap-0.5">
+                                <span className="text-sm text-zinc-100">
+                                  {getDatasetDisplayName(folder, datasetNameById)}
+                                </span>
+                                <span className="text-xs text-zinc-400">
+                                  {formatDatasetFolderMeta(folder)}
+                                </span>
+                              </div>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </div>
 
-              {sourceModeState.showExistingDatasetSelect ? (
-                <>
-                  <div>
-                    <Label>選擇資料集</Label>
-                    <Select
-                      items={datasetSelectItems}
-                      value={selectedDatasetId || null}
-                      onValueChange={(value) => {
-                        setSelectedDatasetId(value ?? "");
-                      }}
-                    >
-                      <SelectTrigger className="mt-2 min-h-12 w-full items-start py-2 whitespace-normal data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start">
-                        <SelectValue placeholder="請選擇可用 dataset">
-                          {(value) => {
-                            if (!value) {
-                              return "請選擇可用 dataset";
-                            }
-                            const selected = datasetSelectValueMap.get(
-                              value as string,
-                            );
-                            if (!selected) {
-                              return String(value);
-                            }
-                            return (
-                              <span className="flex min-w-0 items-center gap-3 py-0.5 leading-tight">
-                                <DatasetFolderPreview
-                                  folder={selected.folder}
-                                  className="h-10 w-14 shrink-0"
-                                />
-                                <span className="flex min-w-0 flex-col">
-                                  <span className="truncate text-sm text-zinc-100">
-                                    {selected.name}
-                                  </span>
-                                  <span className="truncate text-xs text-zinc-400">
-                                    {selected.meta}
-                                  </span>
-                                </span>
-                              </span>
-                            );
-                          }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectLabel>所有資料夾</SelectLabel>
-                          {datasetFolders.map((folder) => {
-                            const disabled =
-                              !folder.isRegistered ||
-                              folder.health !== "ready" ||
-                              !folder.datasetId;
-                            return (
-                              <SelectItem
-                                key={folder.path}
-                                value={
-                                  folder.datasetId ?? `folder:${folder.path}`
-                                }
-                                disabled={disabled}
-                              >
-                                <div className="flex items-center gap-3 py-0.5">
-                                  <DatasetFolderPreview
-                                    folder={folder}
-                                    className="h-10 w-14 shrink-0"
-                                  />
-                                  <div className="flex min-w-0 flex-col gap-0.5">
-                                    <span className="text-sm text-zinc-100">
-                                      {folder.name}
-                                    </span>
-                                    <span className="text-xs text-zinc-400">
-                                      {formatDatasetFolderMeta(folder)}
-                                    </span>
-                                  </div>
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {datasetFolders.length === 0 ? (
-                    <p className="text-sm text-amber-200">
-                      目前沒有偵測到資料夾，請先上傳 ZIP 或確認 DATASETS_DIR。
-                    </p>
-                  ) : selectableFolders.length === 0 ? (
-                    <p className="text-sm text-amber-200">
-                      目前沒有可建立任務的
-                      dataset，請先排除失敗原因或等待寫入完成。
-                    </p>
-                  ) : null}
-                </>
-              ) : null}
+              <div className="rounded-[1rem] border border-cyan-300/18 bg-cyan-300/[0.06] p-4 text-sm leading-6 text-cyan-50">
+                新增資料集功能已移到資料集頁面。若目前沒有可用資料集，請先前往資料集頁面新增資料集，再回來建立任務。
+              </div>
 
-              {sourceModeState.showUploadSection ? (
-                <>
-                  <UploadDropzone
-                    file={uploadFile}
-                    dragging={draggingUpload}
-                    onPick={() => {
-                      const input = document.getElementById(
-                        "dataset-upload-input",
-                      ) as HTMLInputElement | null;
-                      input?.click();
-                    }}
-                    onDragState={setDraggingUpload}
-                    onFilesDropped={(files) =>
-                      applyUploadFile(files?.[0] ?? null)
-                    }
-                  />
-                  <input
-                    key={uploadInputKey}
-                    id="dataset-upload-input"
-                    type="file"
-                    accept=".zip"
-                    className="hidden"
-                    onChange={(e) =>
-                      applyUploadFile(e.target.files?.[0] ?? null)
-                    }
-                  />
-                  <div>
-                    <Label>資料夾名稱</Label>
-                    <Input
-                      className="mt-2"
-                      value={uploadDraft.name}
-                      onChange={(e) => updateUploadDraft({ name: e.target.value })}
-                      placeholder="選擇 ZIP 後會自動帶入檔名"
-                      disabled={
-                        !uploadFile ||
-                        uploadBusy ||
-                        uploadDraft.status === "uploaded"
-                      }
-                    />
-                    <p className="mt-2 text-xs leading-5 text-zinc-400">
-                      會用這個名稱建立 <code className="rounded bg-black/40 px-1 py-0.5">datasets/</code> 內的資料夾，預設會帶入 ZIP 檔名，送出前可先確認或修改。
-                    </p>
-                    {uploadFolderConflictName ? (
-                      <p className="mt-2 text-xs leading-5 text-amber-200">
-                        資料夾名稱已存在：
-                        <code className="ml-1 rounded bg-black/40 px-1 py-0.5">
-                          {uploadFolderConflictName}
-                        </code>
-                        ，請改用其他名稱。
-                      </p>
-                    ) : null}
-                  </div>
-                  <UploadStatusPanel draft={uploadDraft} nowMs={uploadNowMs} />
-                </>
+              {datasetFolders.length === 0 ? (
+                <p className="text-sm text-amber-200">
+                  目前沒有偵測到資料夾，請先前往資料集頁面新增資料集或確認 DATASETS_DIR。
+                </p>
+              ) : selectableFolders.length === 0 ? (
+                <p className="text-sm text-amber-200">
+                  目前沒有可建立任務的 dataset，請先排除資料集頁面的錯誤狀態或等待寫入完成。
+                </p>
               ) : null}
             </SourcePanel>
 
@@ -1358,22 +606,20 @@ export function CreateJobWizard({
           <div className="space-y-4">
             <ParameterPanel
               title="資料集與命名"
-              description="上傳前會先確認資料夾名稱，這裡則保留給目前 dataset 資訊與顯示名稱調整。"
+              description="這裡只顯示目前要訓練的資料集；若要新增、重新命名或刪除資料集，請到資料集頁面處理。"
             >
               <div>
                 <Label>目前資料集</Label>
                 <Input className="mt-2" value={activeDatasetLabel} disabled />
               </div>
-              <div>
-                <Label>資料集顯示名稱</Label>
-                <Input
-                  className="mt-2"
-                  value={uploadDraft.name}
-                  onChange={(e) => updateUploadDraft({ name: e.target.value })}
-                  placeholder="例如：garden-v2"
-                  disabled={dataSourceMode !== "upload"}
-                />
-              </div>
+              <Link
+                to="/datasets"
+                className={cn(
+                  "glass-panel inline-flex items-center justify-center rounded-lg border-0 bg-background px-2.5 py-2 text-sm font-medium transition-all hover:bg-muted hover:text-foreground dark:bg-input/30 dark:hover:bg-input/50",
+                )}
+              >
+                前往資料集頁面管理資料集
+              </Link>
             </ParameterPanel>
 
             <ParameterPanel
@@ -1944,24 +1190,6 @@ export function CreateJobWizard({
           </div>
         </div>
       )}
-
-      <FixedUploadDock draft={uploadDraft} nowMs={uploadNowMs} />
-      <UploadFailureDialog
-        open={uploadErrorDialogOpen}
-        message={uploadDraft.error ?? "上傳失敗，請確認 ZIP 內容與資料夾結構。"}
-        onClose={() => setUploadErrorDialogOpen(false)}
-        onRetry={() => {
-          setUploadErrorDialogOpen(false);
-          setStep(2);
-          void uploadZip();
-        }}
-        onReselect={() => {
-          setUploadErrorDialogOpen(false);
-          clearUploadDraft();
-          setStep(1);
-          setDataSourceMode("upload");
-        }}
-      />
     </div>
   );
 }

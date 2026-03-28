@@ -81,19 +81,11 @@ function getMatchedMask(
   return null;
 }
 
-function InfoCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-}) {
+function InfoCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="glass-panel rounded-xl border-0 bg-white/[0.03] px-4 py-2">
-      <p className="text-sm text-white/75 uppercase">{label}</p>
-      <p className={cn("text-md font-semibold", accent)}>{value}</p>
+      <p className="text-sm text-white/50 uppercase">{label}</p>
+      <p className={cn("text-md font-semibold text-white/75")}>{value}</p>
     </div>
   );
 }
@@ -112,7 +104,7 @@ function PreviewModeButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "glass-panel rounded-full border-0 px-3 py-1.5 text-sm transition",
+        "glass-panel rounded-xl border-0 px-3 py-1.5 text-sm transition",
         active
           ? "bg-cyan-400/20 text-cyan-100"
           : "bg-white/[0.03] text-zinc-400 hover:bg-white/[0.08] hover:text-zinc-200",
@@ -142,7 +134,7 @@ function InspectorDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/72 px-4 backdrop-blur-md">
-      <div className="glass-panel w-full max-w-lg rounded-[2rem] border-0 bg-zinc-950/92 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+      <div className="glass-panel w-full max-w-lg rounded-xl border-0 bg-zinc-950/92 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="mt-2 text-xl font-semibold text-zinc-50">{title}</h3>
@@ -153,7 +145,7 @@ function InspectorDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-zinc-500 transition hover:bg-white/10 hover:text-zinc-200"
+            className="shrink-0 rounded-full p-2 text-zinc-500 transition hover:bg-white/10 hover:text-zinc-200"
             aria-label="close dialog"
           >
             ×
@@ -184,7 +176,7 @@ function PreviewStage({
     return (
       <div
         className={cn(
-          "flex h-full items-center justify-center rounded-[1.75rem]",
+          "flex h-full items-center justify-center rounded-lg",
           checkerboardClass,
         )}
       >
@@ -464,27 +456,14 @@ export function DatasetEditPage() {
         <InfoCard
           label="資料夾大小"
           value={formatBytes(item.folderSizeBytes)}
-          accent="text-cyan-100"
         />
-        <InfoCard
-          label="影像張數"
-          value={`${item.imageCount ?? 0}`}
-          accent="text-amber-100"
-        />
-        <InfoCard
-          label="遮罩來源"
-          value={item.maskSource}
-          accent="text-fuchsia-100"
-        />
-        <InfoCard
-          label="建立時間"
-          value={formatDate(item.createdAt)}
-          accent="text-zinc-100"
-        />
+        <InfoCard label="影像張數" value={`${item.imageCount ?? 0}`} />
+        <InfoCard label="遮罩來源" value={item.maskSource} />
+        <InfoCard label="建立時間" value={formatDate(item.createdAt)} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-        <div className="glass-panel rounded-[2rem] border-0 p-5">
+        <div className="glass-panel rounded-xl border-0 p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-xl font-semibold text-zinc-50">圖片檢視器</h3>
 
@@ -507,7 +486,7 @@ export function DatasetEditPage() {
             </div>
           </div>
 
-          <div className="relative h-[32rem] overflow-hidden rounded-[2rem] border-0 bg-black/30">
+          <div className="relative h-[32rem] overflow-hidden rounded-xl border-0 bg-black/30">
             <PreviewStage
               datasetName={item.name}
               mode={mode}
@@ -539,7 +518,7 @@ export function DatasetEditPage() {
         </div>
 
         <div className="space-y-5">
-          <div className="glass-panel overflow-hidden rounded-[2rem] border-0">
+          <div className="glass-panel overflow-hidden rounded-xl border-0">
             <div
               ref={fileListRef}
               className="max-h-168 overflow-auto px-2 py-2 pr-3"
@@ -571,13 +550,13 @@ export function DatasetEditPage() {
                         type="button"
                         onClick={() => setSelectedPath(entry.relativePath)}
                         className={cn(
-                          "glass-panel grid w-full grid-cols-[4rem_1fr] items-center gap-3 rounded-[1.4rem] border-0 p-1 text-left transition",
+                          "glass-panel grid w-full grid-cols-[4rem_1fr] items-center gap-3 rounded-xl border-0 p-1 text-left transition",
                           isActive
                             ? "bg-cyan-400/10 shadow-[0_0_0_1px_rgba(34,211,238,0.18)]"
                             : "bg-white/[0.02] hover:bg-white/[0.06]",
                         )}
                       >
-                        <div className="glass-panel relative flex h-16 items-center justify-center overflow-hidden rounded-[1rem] border-0 bg-black/30">
+                        <div className="glass-panel relative flex h-16 items-center justify-center overflow-hidden rounded-xl border-0 bg-black/30">
                           {thumbSrc ? (
                             <img
                               src={thumbSrc}

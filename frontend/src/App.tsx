@@ -320,6 +320,7 @@ function App() {
               <DatasetsPage
                 datasets={datasets}
                 datasetFolders={datasetFolders}
+                onNotice={setNoticeText}
               />
             }
           />
@@ -331,12 +332,6 @@ function App() {
                 datasets={datasets}
                 datasetFolders={datasetFolders}
                 onCancel={() => navigate("/jobs")}
-                onDatasetCreated={(dataset) => {
-                  void dataset;
-                  void queryClient.invalidateQueries({
-                    queryKey: queryKeys.datasets.all,
-                  });
-                }}
                 onCreated={async () => {
                   await Promise.all([
                     queryClient.invalidateQueries({

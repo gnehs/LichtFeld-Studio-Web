@@ -39,15 +39,16 @@ describe("route pages", () => {
     const datasetFolders: DatasetFolderEntry[] = [];
     const markup = renderToStaticMarkup(
       withQueryClient(
-        <CreateJobPage
-          datasets={datasets}
-          datasetFolders={datasetFolders}
-          onCancel={vi.fn()}
-          onCreated={vi.fn(async () => {})}
-          onDatasetCreated={vi.fn()}
-          onNotice={vi.fn()}
-          onRefreshDatasets={vi.fn(async () => {})}
-        />,
+        <MemoryRouter>
+          <CreateJobPage
+            datasets={datasets}
+            datasetFolders={datasetFolders}
+            onCancel={vi.fn()}
+            onCreated={vi.fn(async () => {})}
+            onNotice={vi.fn()}
+            onRefreshDatasets={vi.fn(async () => {})}
+          />
+        </MemoryRouter>,
       )
     );
 
@@ -84,11 +85,16 @@ describe("route pages", () => {
 
   test("datasets page renders route marker", () => {
     const markup = renderToStaticMarkup(
-      <DatasetsPage datasets={[]} datasetFolders={[]} />,
+      withQueryClient(
+        <MemoryRouter>
+          <DatasetsPage datasets={[]} datasetFolders={[]} onNotice={vi.fn()} />
+        </MemoryRouter>,
+      ),
     );
 
     expect(markup).toContain('data-route="datasets"');
     expect(markup).toContain("資料集列表");
+    expect(markup).toContain("新增資料集");
   });
 
   test("datasets page shows preview image and folder size", () => {
@@ -118,9 +124,15 @@ describe("route pages", () => {
     ] as unknown as DatasetFolderEntry[];
 
     const markup = renderToStaticMarkup(
-      <MemoryRouter>
-        <DatasetsPage datasets={datasets} datasetFolders={datasetFolders} />
-      </MemoryRouter>,
+      withQueryClient(
+        <MemoryRouter>
+          <DatasetsPage
+            datasets={datasets}
+            datasetFolders={datasetFolders}
+            onNotice={vi.fn()}
+          />
+        </MemoryRouter>,
+      ),
     );
 
     expect(markup).toContain("1.0 MB");

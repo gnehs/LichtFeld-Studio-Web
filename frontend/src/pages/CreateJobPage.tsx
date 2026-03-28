@@ -7,7 +7,6 @@ export function CreateJobPage({
   datasetFolders,
   onCancel,
   onCreated,
-  onDatasetCreated,
   onNotice,
   onRefreshDatasets
 }: {
@@ -15,7 +14,6 @@ export function CreateJobPage({
   datasetFolders: DatasetFolderEntry[];
   onCancel: () => void;
   onCreated: (jobId: string) => Promise<void>;
-  onDatasetCreated: (dataset: DatasetRecord) => void;
   onNotice: (notice: Notice) => void;
   onRefreshDatasets: () => Promise<void>;
 }) {
@@ -26,7 +24,6 @@ export function CreateJobPage({
         datasetFolders={datasetFolders}
         onCancel={onCancel}
         onCreated={onCreated}
-        onDatasetCreated={onDatasetCreated}
         onNotice={onNotice}
         onRefreshDatasets={onRefreshDatasets}
       />

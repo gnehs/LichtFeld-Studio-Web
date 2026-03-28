@@ -1,12 +1,22 @@
 import { describe, expect, test } from "vitest";
 import {
   formatDatasetFolderMeta,
+  getDatasetNameByIdMap,
   getDatasetSelectItems,
 } from "@/features/create/create-job-dataset-select";
-import type { DatasetFolderEntry } from "@/lib/types";
+import type { DatasetFolderEntry, DatasetRecord } from "@/lib/types";
 
 describe("getDatasetSelectItems", () => {
   test("uses full dataset labels for select trigger", () => {
+    const datasets: DatasetRecord[] = [
+      {
+        id: "ds-123",
+        name: "garden-dataset",
+        type: "registered",
+        path: "/data/garden-folder",
+        createdAt: "2026-03-26T00:00:00.000Z",
+      },
+    ];
     const datasetFolders: DatasetFolderEntry[] = [
       {
         name: "garden-folder",
@@ -34,10 +44,10 @@ describe("getDatasetSelectItems", () => {
       },
     ];
 
-    expect(getDatasetSelectItems(datasetFolders)).toEqual([
+    expect(getDatasetSelectItems(datasetFolders, getDatasetNameByIdMap(datasets))).toEqual([
       {
         value: "ds-123",
-        label: "garden-folder - 128 張相片 - 包含遮罩",
+        label: "garden-dataset - 128 張相片 - 包含遮罩",
       },
     ]);
   });

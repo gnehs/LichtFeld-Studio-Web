@@ -1,4 +1,4 @@
-import type { DatasetFolderEntry } from "@/lib/types";
+import type { DatasetFolderEntry, DatasetRecord } from "@/lib/types";
 
 function localizeFolderReason(reason: string | null): string {
   if (!reason) return "未知原因";
@@ -24,8 +24,26 @@ export function formatDatasetFolderMeta(folder: DatasetFolderEntry): string {
   return `失敗：${localizeFolderReason(folder.reason)}`;
 }
 
-export function formatDatasetFolderLabel(folder: DatasetFolderEntry): string {
-  return `${folder.name} - ${formatDatasetFolderMeta(folder)}`;
+export function getDatasetNameByIdMap(datasets: DatasetRecord[]) {
+  return new Map(datasets.map((dataset) => [dataset.id, dataset.name]));
+}
+
+export function getDatasetDisplayName(
+  folder: DatasetFolderEntry,
+  datasetNameById: ReadonlyMap<string, string>,
+): string {
+  if (!folder.datasetId) {
+    return folder.name;
+  }
+
+  return datasetNameById.get(folder.datasetId) ?? folder.name;
+}
+
+export function formatDatasetFolderLabel(
+  folder: DatasetFolderEntry,
+  datasetNameById: ReadonlyMap<string, string>,
+): string {
+  return `${getDatasetDisplayName(folder, datasetNameById)} - ${formatDatasetFolderMeta(folder)}`;
 }
 
 export function getDatasetFolderPreviewSrc(folder: DatasetFolderEntry): string | null {
@@ -36,13 +54,16 @@ export function getDatasetFolderPreviewSrc(folder: DatasetFolderEntry): string |
   return `/api/datasets/folders/${encodeURIComponent(folder.name)}/preview?path=${encodeURIComponent(folder.previewImageRelativePath)}`;
 }
 
-export function getDatasetSelectItems(datasetFolders: DatasetFolderEntry[]) {
+export function getDatasetSelectItems(
+  datasetFolders: DatasetFolderEntry[],
+  datasetNameById: ReadonlyMap<string, string>,
+) {
   return datasetFolders.flatMap((folder) =>
     folder.datasetId
       ? [
           {
             value: folder.datasetId,
-            label: formatDatasetFolderLabel(folder),
+            label: formatDatasetFolderLabel(folder, datasetNameById),
           },
         ]
       : [],
