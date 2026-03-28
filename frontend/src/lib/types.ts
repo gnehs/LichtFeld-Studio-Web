@@ -14,6 +14,7 @@ export interface DatasetFolderEntry {
   health: "ready" | "uploading" | "stabilizing" | "invalid";
   reason: string | null;
   imageCount: number | null;
+  folderSizeBytes: number;
   hasMasks: boolean;
   hasAlphaImages: boolean;
   previewImageRelativePath?: string | null;

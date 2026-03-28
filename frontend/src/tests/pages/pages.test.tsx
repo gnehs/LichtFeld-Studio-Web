@@ -90,4 +90,42 @@ describe("route pages", () => {
     expect(markup).toContain('data-route="datasets"');
     expect(markup).toContain("資料集列表");
   });
+
+  test("datasets page shows preview image and folder size", () => {
+    const datasets: DatasetRecord[] = [
+      {
+        id: "ds-1",
+        name: "garden",
+        type: "registered",
+        path: "/data/datasets/garden",
+        createdAt: "2026-03-28T00:00:00.000Z",
+      },
+    ];
+    const datasetFolders = [
+      {
+        name: "garden",
+        path: "/data/datasets/garden",
+        datasetId: "ds-1",
+        isRegistered: true,
+        health: "ready",
+        reason: null,
+        imageCount: 24,
+        hasMasks: true,
+        hasAlphaImages: false,
+        previewImageRelativePath: "images/cam-a/0001.jpg",
+        folderSizeBytes: 1048576,
+      },
+    ] as unknown as DatasetFolderEntry[];
+
+    const markup = renderToStaticMarkup(
+      <MemoryRouter>
+        <DatasetsPage datasets={datasets} datasetFolders={datasetFolders} />
+      </MemoryRouter>,
+    );
+
+    expect(markup).toContain("1.0 MB");
+    expect(markup).toContain(
+      "/api/datasets/folders/garden/preview?path=images%2Fcam-a%2F0001.jpg",
+    );
+  });
 });

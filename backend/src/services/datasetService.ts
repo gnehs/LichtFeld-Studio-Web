@@ -196,6 +196,7 @@ export const datasetService = {
         health: inspected.status,
         reason: inspected.reason,
         imageCount: inspected.imageCount,
+        folderSizeBytes: getDirectorySizeBytes(datasetPath),
         hasMasks: inspected.hasMasks,
         hasAlphaImages: inspected.hasAlphaImages,
         previewImageRelativePath: inspected.previewImageRelativePath ?? null

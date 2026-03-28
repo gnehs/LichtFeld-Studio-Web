@@ -29,10 +29,12 @@ describe("dataset editor", () => {
       const { datasetService } = await import("../src/services/datasetService.js");
       const detail = datasetService.getDatasetDetail("ds-1");
       const files = datasetService.listDatasetFiles("ds-1");
+      const folders = datasetService.listDatasetFolders();
 
       expect(detail?.name).toBe("garden");
       expect(detail?.folderSizeBytes).toBeGreaterThan(0);
       expect(files?.items).toHaveLength(2);
+      expect((folders[0] as { folderSizeBytes?: number } | undefined)?.folderSizeBytes).toBeGreaterThan(0);
       expect(
         datasetService.resolveDatasetFilePath("ds-1", "images/cam-a/0001.jpg"),
       ).toBe(path.join(datasetPath, "images", "cam-a", "0001.jpg"));
