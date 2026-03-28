@@ -1,6 +1,14 @@
-import { type ReactNode, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ImageIcon, Layers3, Trash2, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +21,7 @@ import type { DatasetDetail, DatasetFileEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type PreviewMode = "raw" | "mask" | "overlay";
+const DATASET_FILE_LIST_INITIAL_HEIGHT = 672;
 
 function formatBytes(bytes: number) {
   if (bytes <= 0) return "0 B";
@@ -247,6 +256,7 @@ export function DatasetEditPage() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const fileListRef = useRef<HTMLDivElement | null>(null);
 
   const detailQuery = useQuery({
     queryKey: queryKeys.datasets.detail(id ?? ""),
@@ -293,6 +303,76 @@ export function DatasetEditPage() {
     id && selectedMaskEntry
       ? getDatasetFileSrc(id, selectedMaskEntry.relativePath)
       : null;
+
+  const selectedIndex = useMemo(
+    () =>
+      selectedEntry
+        ? files.findIndex(
+            (entry) => entry.relativePath === selectedEntry.relativePath,
+          )
+        : -1,
+    [files, selectedEntry],
+  );
+
+  const observeFileListRect = useCallback(
+    (
+      _instance: unknown,
+      callback: (rect: { width: number; height: number }) => void,
+    ) => {
+      const element = fileListRef.current;
+
+      if (!element) {
+        callback({ width: 0, height: DATASET_FILE_LIST_INITIAL_HEIGHT });
+        return;
+      }
+
+      const emitRect = () => {
+        const rect = element.getBoundingClientRect();
+
+        callback({
+          width: rect.width,
+          height: rect.height || DATASET_FILE_LIST_INITIAL_HEIGHT,
+        });
+      };
+
+      emitRect();
+
+      if (typeof ResizeObserver === "undefined") {
+        return;
+      }
+
+      const observer = new ResizeObserver(() => {
+        emitRect();
+      });
+
+      observer.observe(element);
+
+      return () => {
+        observer.disconnect();
+      };
+    },
+    [],
+  );
+
+  const fileVirtualizer = useVirtualizer({
+    count: files.length,
+    getScrollElement: () => fileListRef.current,
+    estimateSize: () => 88,
+    getItemKey: (index) => files[index]?.relativePath ?? index,
+    overscan: 6,
+    observeElementRect: observeFileListRect,
+    initialRect: {
+      width: 0,
+      height: DATASET_FILE_LIST_INITIAL_HEIGHT,
+    },
+  });
+
+  const virtualFileItems = fileVirtualizer.getVirtualItems();
+
+  useEffect(() => {
+    if (selectedIndex < 0) return;
+    fileVirtualizer.scrollToIndex(selectedIndex, { align: "auto" });
+  }, [fileVirtualizer, selectedIndex]);
 
   const renameMutation = useMutation({
     mutationFn: async (nextName: string) => {
@@ -460,56 +540,75 @@ export function DatasetEditPage() {
 
         <div className="space-y-5">
           <div className="glass-panel overflow-hidden rounded-[2rem] border-0">
-            <div className="grid max-h-168 gap-2 overflow-auto p-2 pr-3">
-              {files.map((entry) => {
-                const isActive =
-                  entry.relativePath === selectedEntry?.relativePath;
-                const thumbSrc = id
-                  ? getDatasetFileSrc(id, entry.relativePath)
-                  : null;
+            <div
+              ref={fileListRef}
+              className="max-h-168 overflow-auto px-2 py-2 pr-3"
+            >
+              <div
+                className="relative w-full"
+                style={{ height: `${fileVirtualizer.getTotalSize()}px` }}
+              >
+                {virtualFileItems.map((virtualItem) => {
+                  const entry = files[virtualItem.index];
+                  if (!entry) return null;
 
-                return (
-                  <button
-                    key={entry.relativePath}
-                    type="button"
-                    onClick={() => setSelectedPath(entry.relativePath)}
-                    className={cn(
-                      "glass-panel grid grid-cols-[4rem_1fr] items-center gap-3 rounded-[1.4rem] border-0 p-1 text-left transition",
-                      isActive
-                        ? "bg-cyan-400/10 shadow-[0_0_0_1px_rgba(34,211,238,0.18)]"
-                        : "bg-white/[0.02] hover:bg-white/[0.06]",
-                    )}
-                  >
-                    <div className="glass-panel relative flex h-16 items-center justify-center overflow-hidden rounded-[1rem] border-0 bg-black/30">
-                      {thumbSrc ? (
-                        <img
-                          src={thumbSrc}
-                          alt={`${entry.relativePath} thumbnail`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <Layers3 className="size-4 text-zinc-500" />
-                      )}
+                  const isActive =
+                    entry.relativePath === selectedEntry?.relativePath;
+                  const thumbSrc = id
+                    ? getDatasetFileSrc(id, entry.relativePath)
+                    : null;
+
+                  return (
+                    <div
+                      key={virtualItem.key}
+                      className="absolute top-0 left-0 w-full pb-2"
+                      style={{
+                        height: `${virtualItem.size}px`,
+                        transform: `translateY(${virtualItem.start}px)`,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPath(entry.relativePath)}
+                        className={cn(
+                          "glass-panel grid w-full grid-cols-[4rem_1fr] items-center gap-3 rounded-[1.4rem] border-0 p-1 text-left transition",
+                          isActive
+                            ? "bg-cyan-400/10 shadow-[0_0_0_1px_rgba(34,211,238,0.18)]"
+                            : "bg-white/[0.02] hover:bg-white/[0.06]",
+                        )}
+                      >
+                        <div className="glass-panel relative flex h-16 items-center justify-center overflow-hidden rounded-[1rem] border-0 bg-black/30">
+                          {thumbSrc ? (
+                            <img
+                              src={thumbSrc}
+                              alt={`${entry.relativePath} thumbnail`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Layers3 className="size-4 text-zinc-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-zinc-500">
+                              {entry.kind}
+                            </span>
+                            <span className="text-xs text-zinc-500">
+                              {formatBytes(entry.sizeBytes)}
+                            </span>
+                          </div>
+                          <p className="truncate text-sm font-medium text-zinc-100">
+                            {entry.relativePath}
+                          </p>
+                          <p className="text-xs text-zinc-500">
+                            stem: {getFileStem(entry.relativePath)}
+                          </p>
+                        </div>
+                      </button>
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-zinc-500">
-                          {entry.kind}
-                        </span>
-                        <span className="text-xs text-zinc-500">
-                          {formatBytes(entry.sizeBytes)}
-                        </span>
-                      </div>
-                      <p className="truncate text-sm font-medium text-zinc-100">
-                        {entry.relativePath}
-                      </p>
-                      <p className="text-xs text-zinc-500">
-                        stem: {getFileStem(entry.relativePath)}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
