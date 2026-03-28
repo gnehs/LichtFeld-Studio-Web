@@ -295,7 +295,7 @@ export function JobDetailPage({
         </div>
       </div>
 
-      <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+      <div className="glass-panel rounded-xl p-4">
         <h2 className="text-lg font-semibold text-zinc-50">訓練進度</h2>
         <div className="mt-3 space-y-2">
           <div className="h-2 w-full overflow-hidden rounded-full border border-white/8 bg-white/[0.05]">
@@ -320,7 +320,7 @@ export function JobDetailPage({
         </div>
       </div>
 
-      <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+      <div className="glass-panel rounded-xl p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-zinc-50">預覽</h2>
           <div className="flex items-center gap-2">
@@ -464,7 +464,7 @@ export function JobDetailPage({
         </div>
       </div>
 
-      <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+      <div className="glass-panel rounded-xl p-4">
         <h2 className="text-lg font-semibold text-zinc-50">任務詳細</h2>
         {jobQuery.isPending && !job ? (
           <p className="mt-2 text-sm text-zinc-400">載入中...</p>
@@ -500,7 +500,7 @@ export function JobDetailPage({
         )}
       </div>
 
-      <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+      <div className="glass-panel rounded-xl p-4">
         <h3 className="text-base font-semibold text-zinc-50">訓練參數</h3>
         {entries.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-500">此任務沒有可顯示的參數。</p>
@@ -530,7 +530,7 @@ export function JobDetailPage({
         )}
       </div>
 
-      <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+      <div className="glass-panel rounded-xl p-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-base font-semibold text-zinc-50">執行 Log</h3>
           <span className="text-xs text-zinc-500">
