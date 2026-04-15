@@ -18,19 +18,10 @@ import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { DatasetDetail, DatasetFileEntry } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 
 type PreviewMode = "raw" | "mask" | "overlay";
 const DATASET_FILE_LIST_INITIAL_HEIGHT = 672;
-
-function formatBytes(bytes: number) {
-  if (bytes <= 0) return "0 B";
-  if (bytes >= 1024 * 1024 * 1024)
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${bytes} B`;
-}
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -400,6 +391,22 @@ export function DatasetEditPage() {
     return <section className="py-10 text-center">載入中...</section>;
   }
 
+  if (detailQuery.isError) {
+    return (
+      <section className="py-10 text-center text-red-300">
+        讀取資料集失敗：{(detailQuery.error as Error).message}
+      </section>
+    );
+  }
+
+  if (filesQuery.isError) {
+    return (
+      <section className="py-10 text-center text-red-300">
+        讀取檔案列表失敗：{(filesQuery.error as Error).message}
+      </section>
+    );
+  }
+
   if (!item) {
     return <section className="py-10 text-center">找不到資料集</section>;
   }
@@ -619,9 +626,9 @@ export function DatasetEditPage() {
             <Button
               type="button"
               onClick={() =>
-                void renameMutation.mutateAsync(renameValue || item.name)
+                void renameMutation.mutateAsync(renameValue.trim())
               }
-              disabled={renameMutation.isPending}
+              disabled={renameMutation.isPending || !renameValue.trim()}
             >
               {renameMutation.isPending ? "儲存中..." : "套用新的資料夾名稱"}
             </Button>
