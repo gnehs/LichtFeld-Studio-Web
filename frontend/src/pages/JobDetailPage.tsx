@@ -68,8 +68,11 @@ async function collectCameraFrames(
   const collected: TimelapseFrame[] = [];
   const seenCursors = new Set<number>();
   let cursor: number | undefined;
+  const MAX_PAGES = 200;
+  let pages = 0;
 
-  while (true) {
+  while (pages < MAX_PAGES) {
+    pages++;
     const response = await api.getTimelapseFrames(id, camera, cursor);
     if (response.items.length === 0) break;
     collected.push(...response.items);
