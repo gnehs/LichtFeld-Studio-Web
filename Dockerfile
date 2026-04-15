@@ -92,6 +92,12 @@ RUN grep -q -- "-march=native" src/core/CMakeLists.txt \
     && mkdir -p /opt/lichtfeld/lib /opt/lichtfeld/bin \
     && find /opt/src/LichtFeld-Studio/build -type f -name 'liblfs_*.so*' -exec cp -an {} /opt/lichtfeld/lib/ \; \
     && find /opt/lichtfeld -type f -name 'liblfs_*.so*' -exec cp -an {} /opt/lichtfeld/lib/ \; \
+    && for vcpkg_dir in /opt/src/LichtFeld-Studio/build/vcpkg_installed /opt/vcpkg/installed; do \
+         [ -d "$vcpkg_dir" ] || continue; \
+         find "$vcpkg_dir" -not -path '*/debug/*' -maxdepth 3 \
+           \( -name '*.so' -o -name '*.so.*' \) \( -type f -o -type l \) \
+           -exec cp -an {} /opt/lichtfeld/lib/ \;; \
+       done \
     && for lib in /opt/lichtfeld/lib/liblfs_*.so.*; do \
          [ -e "$lib" ] || continue; \
          soname="${lib%%.so.*}.so"; \
