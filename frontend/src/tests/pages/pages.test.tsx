@@ -28,6 +28,8 @@ describe("route pages", () => {
         onStop={vi.fn(async () => {})}
         onDelete={vi.fn(async () => {})}
         onOpenDetail={vi.fn()}
+        onRetry={vi.fn(async () => {})}
+        onEdit={vi.fn()}
       />
     );
 

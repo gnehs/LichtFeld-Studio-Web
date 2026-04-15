@@ -49,6 +49,8 @@ function mountTaskList(jobs: TrainingJob[]) {
             onStop={vi.fn(async () => {})}
             onDelete={vi.fn(async () => {})}
             onOpenDetail={vi.fn()}
+            onRetry={vi.fn(async () => {})}
+            onEdit={vi.fn()}
           />,
         );
         await Promise.resolve();
