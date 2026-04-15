@@ -45,6 +45,47 @@
    - 用於帶有深色光暈效果的圓形圖示遮罩，會讓元素的底部漸層消失。
    - 適合用在裝飾性 Icon 的外層 div，增強科技感。
 
+## Dockerfile 依賴維護
+
+本節說明當 LichtFeld-Studio 升版後遇到 `error while loading shared libraries` 時的處理方式。
+
+### 根本原因
+
+`Dockerfile` 的 `lfs-build` 階段透過 cmake + vcpkg 建構 LichtFeld-Studio，但 `cmake --install` 只安裝 LichtFeld-Studio 自己的 target（`liblfs_*.so`），**不會**把 vcpkg 建構的第三方 `.so` 複製到安裝路徑。runtime image 又是乾淨的 `nvidia/cuda:*-runtime`，幾乎不含任何開發套件，因此大量 vcpkg 依賴在執行時找不到。
+
+### vcpkg manifest mode 的安裝路徑
+
+LichtFeld-Studio 使用 manifest mode（根目錄有 `vcpkg.json`），vcpkg 依賴**不在** `/opt/vcpkg/installed/`，而是在：
+
+```
+/opt/src/LichtFeld-Studio/build/vcpkg_installed/<triplet>/lib/
+```
+
+CMakeLists.txt 的 RPATH 設定也印證這點：
+
+```cmake
+set(_vcpkg_release_runtime_dir "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/lib")
+```
+
+### 正確的複製策略
+
+修改 `Dockerfile` 的 `lfs-build` 階段，在 `cmake --install` 之後用以下 for loop 一次複製所有 vcpkg `.so`（同時處理 regular files 與 symlinks，排除 debug 版本，`-maxdepth 3` 避免掃入 Python stdlib 子目錄）：
+
+```dockerfile
+&& for vcpkg_dir in /opt/src/LichtFeld-Studio/build/vcpkg_installed /opt/vcpkg/installed; do \
+     [ -d "$vcpkg_dir" ] || continue; \
+     find "$vcpkg_dir" -not -path '*/debug/*' -maxdepth 3 \
+       \( -name '*.so' -o -name '*.so.*' \) \( -type f -o -type l \) \
+       -exec cp -an {} /opt/lichtfeld/lib/ \;; \
+   done \
+```
+
+### 升版時的注意事項
+
+1. 升版後若出現 `cannot open shared object file`，**不要**只針對報錯的單一 `.so` 加 pattern，應確認上述 for loop 是否存在且路徑正確。
+2. 若 vcpkg 新增了大量子目錄深度超過 3 層的依賴（較少見），才需要調整 `-maxdepth`。
+3. vcpkg 依賴清單以 `vcpkg.json` 為準，可能包含：ffmpeg、SDL3、Python3、TBB、OpenImageIO、assimp、RmlUi、boost-regex、OpenSSL、libarchive、freetype、USD 等，均需透過上述策略一併帶入。
+
 ## 文件更新
 
 1. 調整部署、環境變數、API 或重大行為時，必須同步更新 `README.md`。
