@@ -242,7 +242,7 @@ export function CreateJobWizard({
   const [step, setStep] = useState<1 | 2>(1);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
   const [form, setForm] = useState<CreateWizardValues>(() => ({
-    ...getStrategyDefaults("mcmc"),
+    ...getStrategyDefaults("mrnf"),
     advancedJson: "",
   }));
   const [submitting, setSubmitting] = useState(false);
@@ -683,7 +683,7 @@ export function CreateJobWizard({
                 <div>
                   <Label>Strategy</Label>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {(["mcmc", "adc", "igs+", "lfs"] as const).map(
+                    {(["mrnf", "mcmc", "igs+"] as const).map(
                       (strategy) => (
                         <Button
                           key={strategy}
@@ -1119,8 +1119,8 @@ export function CreateJobWizard({
                 />
                 <ToggleChip
                   checked={form.gut}
-                  label="gut"
-                  description="啟用 3DGUT，適合失真相機模型；官方文件指出它不適用於 `adc` / `igs+`。"
+                   label="gut"
+                   description="啟用 3DGUT，適合失真相機模型；官方文件指出它不適用於 `igs+`。"
                   onChange={(checked) => updateForm("gut", checked)}
                 />
                 <ToggleChip

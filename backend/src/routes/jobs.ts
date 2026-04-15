@@ -20,7 +20,7 @@ const createJobSchema = z.object({
     init: z.string().optional(),
     importCameras: z.string().optional(),
     iterations: z.number().int().positive().optional(),
-    strategy: z.enum(["mcmc", "adc", "igs+", "lfs"]).optional(),
+    strategy: z.enum(["mrnf", "mcmc", "igs+"]).optional(),
     maxCap: z.number().int().positive().optional(),
     gut: z.boolean().optional(),
     eval: z.boolean().optional(),
