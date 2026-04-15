@@ -7,6 +7,13 @@ import {
 
 describe("create job strategy defaults", () => {
   test("returns upstream-inspired presets per strategy", () => {
+    expect(getStrategyDefaults("mrnf")).toMatchObject({
+      strategy: "mrnf",
+      maxCap: 5000000,
+      ppisp: true,
+      tileMode: 1,
+    });
+
     expect(getStrategyDefaults("mcmc")).toMatchObject({
       strategy: "mcmc",
       maxCap: 1000000,
@@ -14,21 +21,9 @@ describe("create job strategy defaults", () => {
       tileMode: 1,
     });
 
-    expect(getStrategyDefaults("adc")).toMatchObject({
-      strategy: "adc",
-      maxCap: 6000000,
-      ppisp: true,
-    });
-
     expect(getStrategyDefaults("igs+")).toMatchObject({
       strategy: "igs+",
       maxCap: 4000000,
-      ppisp: true,
-    });
-
-    expect(getStrategyDefaults("lfs")).toMatchObject({
-      strategy: "lfs",
-      maxCap: 5000000,
       ppisp: true,
     });
   });
@@ -46,9 +41,9 @@ describe("create job strategy defaults", () => {
       images: "custom-images",
     };
 
-    expect(applyVisibleStrategyDefaults(current, "adc")).toMatchObject({
-      strategy: "adc",
-      maxCap: 6000000,
+    expect(applyVisibleStrategyDefaults(current, "mrnf")).toMatchObject({
+      strategy: "mrnf",
+      maxCap: 5000000,
       images: "custom-images",
     });
   });

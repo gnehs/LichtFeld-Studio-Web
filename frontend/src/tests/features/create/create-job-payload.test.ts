@@ -4,7 +4,7 @@ import { getStrategyDefaults } from "@/features/create/create-job-defaults";
 
 interface CreateWizardValues {
   iterations: number;
-  strategy: "mcmc" | "adc" | "igs+" | "lfs";
+  strategy: "mrnf" | "mcmc" | "igs+";
   shDegree?: number;
   shDegreeInterval?: number;
   maxCap: number;
