@@ -17,6 +17,7 @@ describe("create job selection state", () => {
       activeDatasetLabel: "garden-dataset",
       canSubmit: true,
       blockingReason: null,
+      submitting: false,
     });
   });
 
@@ -32,15 +33,27 @@ describe("create job selection state", () => {
       activeDatasetLabel: "未選擇",
       canSubmit: false,
       blockingReason: "尚未選擇資料集",
+      submitting: false,
     });
   });
 
-  test("returns submitting state while creating a job", () => {
+  test("canSubmit is false while submitting even if dataset is selected", () => {
+    const result = getCreateJobSelectionState({
+      selectedDatasetId: "ds-123",
+      selectedDatasetName: "garden-dataset",
+      submitting: true,
+    });
+    expect(result.canSubmit).toBe(false);
+    expect(result.blockingReason).toBeNull();
+    expect(result.submitting).toBe(true);
+  });
+
+  test("blockingReason does not include submitting state", () => {
     expect(
-      getCreateJobBlockingReason({
-        selectedDatasetId: "ds-123",
-        submitting: true,
-      }),
-    ).toBe("任務建立中");
+      getCreateJobBlockingReason({ selectedDatasetId: "ds-123" }),
+    ).toBeNull();
+    expect(
+      getCreateJobBlockingReason({ selectedDatasetId: "" }),
+    ).toBe("尚未選擇資料集");
   });
 });

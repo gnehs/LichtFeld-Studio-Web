@@ -1,14 +1,8 @@
 export function getCreateJobBlockingReason({
   selectedDatasetId,
-  submitting,
 }: {
   selectedDatasetId: string;
-  submitting: boolean;
 }): string | null {
-  if (submitting) {
-    return "任務建立中";
-  }
-
   if (!selectedDatasetId) {
     return "尚未選擇資料集";
   }
@@ -25,15 +19,13 @@ export function getCreateJobSelectionState({
   selectedDatasetName: string | null;
   submitting: boolean;
 }) {
-  const blockingReason = getCreateJobBlockingReason({
-    selectedDatasetId,
-    submitting,
-  });
+  const blockingReason = getCreateJobBlockingReason({ selectedDatasetId });
 
   return {
     activeDatasetId: selectedDatasetId,
     activeDatasetLabel: selectedDatasetName || "未選擇",
-    canSubmit: !blockingReason,
+    canSubmit: !blockingReason && !submitting,
     blockingReason,
+    submitting,
   };
 }

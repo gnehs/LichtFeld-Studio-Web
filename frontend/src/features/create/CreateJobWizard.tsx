@@ -316,6 +316,12 @@ export function CreateJobWizard({
       [selectedDataset?.name, selectedDatasetId, submitting],
     );
 
+  const statusMessage = submitting
+    ? { text: "任務建立中，請稍候...", isBlocking: false }
+    : blockingReason
+      ? { text: `目前無法建立：${blockingReason}`, isBlocking: true }
+      : { text: "條件已齊備，可以建立任務。", isBlocking: false };
+
   useEffect(() => {
     if (selectableFolders.length === 0) {
       setSelectedDatasetId("");
@@ -1172,11 +1178,15 @@ export function CreateJobWizard({
                 </div>
               </div>
               <div
-                className={`rounded-[1rem] border px-3 py-3 text-sm ${blockingReason ? "border-amber-400/20 bg-amber-400/10 text-amber-100" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"}`}
+                className={`rounded-[1rem] border px-3 py-3 text-sm ${
+                  submitting
+                    ? "border-cyan-400/20 bg-cyan-400/10 text-cyan-100"
+                    : statusMessage.isBlocking
+                      ? "border-amber-400/20 bg-amber-400/10 text-amber-100"
+                      : "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
+                }`}
               >
-                {blockingReason
-                  ? `目前無法建立：${blockingReason}`
-                  : "條件已齊備，可以建立任務。"}
+                {statusMessage.text}
               </div>
               <div className="flex flex-col gap-2">
                 <Button variant="outline" onClick={() => setStep(1)}>
