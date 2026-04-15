@@ -11,7 +11,9 @@ export function JobsPage({
   onRefresh,
   onStop,
   onDelete,
-  onOpenDetail
+  onOpenDetail,
+  onRetry,
+  onEdit,
 }: {
   jobs: TrainingJob[];
   insights: Record<string, JobInsight>;
@@ -22,6 +24,8 @@ export function JobsPage({
   onStop: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onOpenDetail: (id: string) => void;
+  onRetry: (job: TrainingJob) => Promise<void>;
+  onEdit: (job: TrainingJob) => void;
 }) {
   return (
     <section data-route="jobs">
@@ -35,6 +39,8 @@ export function JobsPage({
         onStop={onStop}
         onDelete={onDelete}
         onOpenDetail={onOpenDetail}
+        onRetry={onRetry}
+        onEdit={onEdit}
       />
     </section>
   );

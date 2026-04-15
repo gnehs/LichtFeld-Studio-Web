@@ -18,7 +18,7 @@ import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { JobInsight, Notice } from "@/lib/app-types";
-import type { DatasetRecord, SystemMetrics, TrainingJob } from "@/lib/types";
+import type { DatasetRecord, SystemMetrics, TrainingJob, TrainingParamsForm } from "@/lib/types";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
@@ -203,6 +203,39 @@ function App() {
     },
   });
 
+  const retryJobMutation = useMutation({
+    mutationFn: (job: TrainingJob) => {
+      let params: TrainingParamsForm = {};
+      if (job.paramsJson) {
+        try {
+          const parsed = JSON.parse(job.paramsJson) as TrainingParamsForm;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            params = parsed;
+          }
+        } catch {
+          // ignore parse error, use empty params
+        }
+      }
+      return guardAuth(() =>
+        api.createJob({ datasetId: job.datasetId ?? undefined, params }),
+      );
+    },
+    onSuccess: async (result) => {
+      setNoticeText({
+        tone: "success",
+        text: `已重新建立任務 ${result.item.id}`,
+      });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
+      navigate("/jobs");
+    },
+    onError: (error) => {
+      setNoticeText({
+        tone: "error",
+        text: `重試任務失敗：${(error as Error).message}`,
+      });
+    },
+  });
+
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1_000);
     return () => clearInterval(timer);
@@ -308,6 +341,16 @@ function App() {
                   }
                 }}
                 onOpenDetail={(id) => navigate(`/jobs/${id}`)}
+                onRetry={async (job) => {
+                  try {
+                    await retryJobMutation.mutateAsync(job);
+                  } catch {
+                    // error toast handled in mutation onError
+                  }
+                }}
+                onEdit={(job) => {
+                  navigate("/create", { state: { prefillJob: job } });
+                }}
               />
             }
           />

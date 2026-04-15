@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, RefreshCw, Square, Trash2, ListChecks } from "lucide-react";
+import { Plus, RefreshCw, Square, Trash2, ListChecks, RotateCcw, Pencil } from "lucide-react";
 import type { JobInsight } from "@/lib/app-types";
 import type { JobStatus, TrainingJob, TrainingParamsForm } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -183,6 +183,8 @@ export function TaskList({
   onStop,
   onDelete,
   onOpenDetail,
+  onRetry,
+  onEdit,
 }: {
   jobs: TrainingJob[];
   insights: Record<string, JobInsight>;
@@ -193,6 +195,8 @@ export function TaskList({
   onStop: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onOpenDetail: (id: string) => void;
+  onRetry: (job: TrainingJob) => Promise<void>;
+  onEdit: (job: TrainingJob) => void;
 }) {
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("all");
 
@@ -370,6 +374,24 @@ export function TaskList({
                         >
                           <Square className="mr-1 h-3.5 w-3.5" /> 停止
                         </Button>
+                      ) : null}
+                      {isTerminalStatus(job.status) ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void onRetry(job)}
+                          >
+                            <RotateCcw className="mr-1 h-3.5 w-3.5" /> 重試
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onEdit(job)}
+                          >
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> 編輯
+                          </Button>
+                        </>
                       ) : null}
                       <Button size="sm" onClick={() => onOpenDetail(job.id)}>
                         查看詳細

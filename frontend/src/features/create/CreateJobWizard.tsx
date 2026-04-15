@@ -230,6 +230,8 @@ export function CreateJobWizard({
   onCreated,
   onNotice,
   onRefreshDatasets,
+  initialDatasetId,
+  initialValues,
 }: {
   datasets: DatasetRecord[];
   datasetFolders: DatasetFolderEntry[];
@@ -237,13 +239,16 @@ export function CreateJobWizard({
   onCreated: (jobId: string) => Promise<void>;
   onNotice: (notice: Notice) => void;
   onRefreshDatasets: () => Promise<void>;
+  initialDatasetId?: string;
+  initialValues?: Partial<CreateWizardValues>;
 }) {
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<1 | 2>(1);
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
+  const [step, setStep] = useState<1 | 2>(initialDatasetId ? 2 : 1);
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string>(initialDatasetId ?? "");
   const [form, setForm] = useState<CreateWizardValues>(() => ({
     ...getStrategyDefaults("mrnf"),
     advancedJson: "",
+    ...initialValues,
   }));
   const [submitting, setSubmitting] = useState(false);
 
@@ -331,9 +336,14 @@ export function CreateJobWizard({
       (folder) => folder.datasetId === selectedDatasetId,
     );
     if (!selectedDatasetId || !currentStillValid) {
-      setSelectedDatasetId(selectableFolders[0].datasetId ?? "");
+      // If an initialDatasetId was provided but not yet in the selectable list, keep it
+      if (initialDatasetId && selectableFolders.some((f) => f.datasetId === initialDatasetId)) {
+        setSelectedDatasetId(initialDatasetId);
+      } else if (!initialDatasetId || !currentStillValid) {
+        setSelectedDatasetId(selectableFolders[0].datasetId ?? "");
+      }
     }
-  }, [selectableFolders, selectedDatasetId]);
+  }, [selectableFolders, selectedDatasetId, initialDatasetId]);
 
   useEffect(() => {
     if (showMaskSettings) {

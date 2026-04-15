@@ -119,6 +119,7 @@ export interface TrainingJob {
   outputPath: string;
   stopReason: string | null;
   paramsJson?: string;
+  datasetId?: string | null;
 }
 
 export interface TimelapseFrame {
