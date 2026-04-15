@@ -19,7 +19,7 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 
 const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
   status: "idle",
@@ -32,15 +32,6 @@ const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
   totalBytes: 0,
   startedAt: null,
 };
-
-function formatBytes(bytes: number) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  if (bytes >= 1024 * 1024 * 1024)
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${Math.round(bytes)} B`;
-}
 
 function getDatasetPreviewSrc(folder: DatasetFolderEntry | null) {
   if (!folder?.previewImageRelativePath) return null;
@@ -416,11 +407,11 @@ function FixedUploadDock({
   const totalBytes = draft.totalBytes || draft.file.size;
   const uploadedBytes = getUploadTransferredBytes(draft);
   const speed =
-    draft.status === "uploaded"
-      ? null
-      : formatBytesPerSecond(
+    draft.status === "uploading"
+      ? formatBytesPerSecond(
           calculateUploadSpeed(draft.uploadedBytes, draft.startedAt, nowMs),
-        );
+        )
+      : null;
   const phaseLabel = formatUploadPhase(draft.status);
   const bytesLabel = `${formatBytes(uploadedBytes)} / ${formatBytes(totalBytes)}`;
 
@@ -464,10 +455,12 @@ function FixedUploadDock({
 export function DatasetsPage({
   datasets,
   datasetFolders,
+  isLoading,
   onNotice,
 }: {
   datasets: DatasetRecord[];
   datasetFolders: DatasetFolderEntry[];
+  isLoading?: boolean;
   onNotice?: (notice: Notice) => void;
 }) {
   const queryClient = useQueryClient();
@@ -580,7 +573,6 @@ export function DatasetsPage({
         onProgress: (progress) => {
           setUploadDraft((prev) =>
             mergeUploadDraft(prev, {
-              status: "uploading",
               progress: normalizeUploadProgress(progress),
               error: null,
             }),
@@ -789,7 +781,11 @@ export function DatasetsPage({
         </Panel>
       </div>
 
-      {datasets.length === 0 ? (
+      {isLoading ? (
+        <div className="glass-panel rounded-2xl border-0 p-6 text-sm text-zinc-400">
+          正在載入資料集...
+        </div>
+      ) : datasets.length === 0 ? (
         <div className="glass-panel rounded-2xl border-0 p-6 text-sm text-zinc-400">
           目前沒有資料集。你可以先從上方的「新增資料集」區塊上傳 ZIP。
         </div>

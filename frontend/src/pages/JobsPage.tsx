@@ -6,6 +6,7 @@ export function JobsPage({
   jobs,
   insights,
   nowMs,
+  isLoading,
   onCreate,
   onRefresh,
   onStop,
@@ -15,6 +16,7 @@ export function JobsPage({
   jobs: TrainingJob[];
   insights: Record<string, JobInsight>;
   nowMs: number;
+  isLoading?: boolean;
   onCreate: () => void;
   onRefresh: () => Promise<void>;
   onStop: (id: string) => Promise<void>;
@@ -27,6 +29,7 @@ export function JobsPage({
         jobs={jobs}
         insights={insights}
         nowMs={nowMs}
+        isLoading={isLoading}
         onCreate={onCreate}
         onRefresh={onRefresh}
         onStop={onStop}

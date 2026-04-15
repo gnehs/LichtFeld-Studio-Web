@@ -28,7 +28,7 @@ import { DatasetsPage } from "@/pages/DatasetsPage";
 import { AppHeader } from "@/components/app/AppHeader";
 
 function isUnauthorizedError(error: unknown): boolean {
-  return error instanceof Error && /unauthorized/i.test(error.message);
+  return error instanceof Error && error.message === "Unauthorized";
 }
 
 function DashboardShell({
@@ -278,6 +278,7 @@ function App() {
                 jobs={jobs}
                 insights={insights}
                 nowMs={nowMs}
+                isLoading={jobsQuery.isPending}
                 onCreate={() => navigate("/create")}
                 onRefresh={async () => {
                   await jobsQuery.refetch({ throwOnError: true });
@@ -320,6 +321,7 @@ function App() {
               <DatasetsPage
                 datasets={datasets}
                 datasetFolders={datasetFolders}
+                isLoading={datasetsQuery.isPending}
                 onNotice={setNoticeText}
               />
             }

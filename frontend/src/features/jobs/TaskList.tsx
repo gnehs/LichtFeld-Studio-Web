@@ -11,7 +11,7 @@ interface ParsedJobMetrics {
   etaMs: number | null;
 }
 
-type TaskFilter = "all" | "running" | "queued" | "completed" | "failed";
+type TaskFilter = "all" | "running" | "queued" | "completed" | "failed" | "stopped";
 
 const TASK_FILTERS: Array<{ key: TaskFilter; label: string }> = [
   { key: "all", label: "全部" },
@@ -19,11 +19,23 @@ const TASK_FILTERS: Array<{ key: TaskFilter; label: string }> = [
   { key: "queued", label: "佇列" },
   { key: "completed", label: "完成" },
   { key: "failed", label: "失敗" },
+  { key: "stopped", label: "已停止" },
 ];
 
 function isFailureStatus(status: JobStatus): boolean {
+  return status === "failed" || status === "stopped_low_disk";
+}
+
+function isStoppedStatus(status: JobStatus): boolean {
+  return status === "stopped";
+}
+
+function isTerminalStatus(status: JobStatus): boolean {
   return (
-    status === "failed" || status === "stopped" || status === "stopped_low_disk"
+    status === "completed" ||
+    status === "failed" ||
+    status === "stopped" ||
+    status === "stopped_low_disk"
   );
 }
 
@@ -49,6 +61,7 @@ function statusText(status: JobStatus): string {
 function matchesTaskFilter(status: JobStatus, filter: TaskFilter): boolean {
   if (filter === "all") return true;
   if (filter === "failed") return isFailureStatus(status);
+  if (filter === "stopped") return isStoppedStatus(status);
   return status === filter;
 }
 
@@ -164,6 +177,7 @@ export function TaskList({
   jobs,
   insights,
   nowMs,
+  isLoading,
   onCreate,
   onRefresh,
   onStop,
@@ -173,6 +187,7 @@ export function TaskList({
   jobs: TrainingJob[];
   insights: Record<string, JobInsight>;
   nowMs: number;
+  isLoading?: boolean;
   onCreate: () => void;
   onRefresh: () => Promise<void>;
   onStop: (id: string) => Promise<void>;
@@ -180,6 +195,14 @@ export function TaskList({
   onOpenDetail: (id: string) => void;
 }) {
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("all");
+
+  if (isLoading) {
+    return (
+      <div className="glass-panel rounded-[1.5rem] p-8 text-center backdrop-blur-xl">
+        <p className="text-sm text-zinc-400">正在載入任務...</p>
+      </div>
+    );
+  }
 
   if (jobs.length === 0) return <EmptyState onCreate={onCreate} />;
 
@@ -320,11 +343,11 @@ export function TaskList({
                     </div>
                     <div className="glass-panel rounded-xl bg-black/15 p-3">
                       <div className="text-xs text-zinc-500">
-                        {job.status === "completed" ? "狀態" : `預計剩餘時間`}
+                        {isTerminalStatus(job.status) ? "狀態" : "預計剩餘時間"}
                       </div>
                       <div className="text-base font-medium text-zinc-100">
-                        {job.status === "completed"
-                          ? "已完成"
+                        {isTerminalStatus(job.status)
+                          ? statusText(job.status)
                           : formatEta(metrics.etaMs)}
                       </div>
                     </div>
