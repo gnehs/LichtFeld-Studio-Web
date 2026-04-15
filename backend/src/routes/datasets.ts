@@ -237,7 +237,7 @@ datasetsRouter.patch("/:id", (req, res) => {
   }
 
   try {
-    const item = datasetService.rename(req.params.id, parsed.data.datasetName);
+    const item = datasetService.renameDataset(req.params.id, parsed.data.datasetName);
     return res.json({ item });
   } catch (error) {
     return res.status(400).json({ message: (error as Error).message });
