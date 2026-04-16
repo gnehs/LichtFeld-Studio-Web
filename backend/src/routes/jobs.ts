@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import path from "node:path";
 import archiver from "archiver";
 import { Router } from "express";
@@ -36,35 +37,39 @@ const createJobSchema = z.object({
 
 export const jobsRouter = Router();
 
-function findLatestModelPly(rootDir: string): string | null {
-  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
+async function findLatestModelPly(rootDir: string): Promise<string | null> {
+  let entries: fs.Dirent[];
+  try {
+    entries = await fsPromises.readdir(rootDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+
   let bestPath: string | null = null;
   let bestMtime = -1;
 
-  for (const entry of entries) {
+  await Promise.all(entries.map(async (entry) => {
     const fullPath = path.join(rootDir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "timelapse") continue;
-      const nested = findLatestModelPly(fullPath);
-      if (!nested) continue;
-      const stat = fs.statSync(nested);
-      const mtime = stat.mtimeMs;
-      if (mtime > bestMtime) {
-        bestMtime = mtime;
+      if (entry.name === "timelapse") return;
+      const nested = await findLatestModelPly(fullPath);
+      if (!nested) return;
+      const stat = await fsPromises.stat(nested);
+      if (stat.mtimeMs > bestMtime) {
+        bestMtime = stat.mtimeMs;
         bestPath = nested;
       }
-      continue;
+      return;
     }
 
-    if (!entry.isFile()) continue;
-    if (!entry.name.toLowerCase().endsWith(".ply")) continue;
-    const stat = fs.statSync(fullPath);
-    const mtime = stat.mtimeMs;
-    if (mtime > bestMtime) {
-      bestMtime = mtime;
+    if (!entry.isFile()) return;
+    if (!entry.name.toLowerCase().endsWith(".ply")) return;
+    const stat = await fsPromises.stat(fullPath);
+    if (stat.mtimeMs > bestMtime) {
+      bestMtime = stat.mtimeMs;
       bestPath = fullPath;
     }
-  }
+  }));
 
   return bestPath;
 }
@@ -147,7 +152,7 @@ jobsRouter.get("/:id/logs/stream", (req, res) => {
   registerSseClient(job.id, res);
 });
 
-jobsRouter.get("/:id/model/download", (req, res) => {
+jobsRouter.get("/:id/model/download", async (req, res) => {
   const job = repo.getJob(req.params.id);
   if (!job) {
     return res.status(404).json({ message: "Job not found" });
@@ -158,7 +163,7 @@ jobsRouter.get("/:id/model/download", (req, res) => {
     return res.status(404).json({ message: "Model output not found" });
   }
 
-  const modelPath = findLatestModelPly(outputRoot);
+  const modelPath = await findLatestModelPly(outputRoot);
   if (!modelPath) {
     return res.status(404).json({ message: "Model .ply not found" });
   }
@@ -225,7 +230,8 @@ jobsRouter.get("/:id/timelapse/download", (req, res) => {
     return res.status(404).json({ message: "No timelapse output" });
   }
 
-  const archive = archiver("zip", { zlib: { level: 9 } });
+  // Level 1 (fastest) is sufficient for already-compressed image formats (JPEG/PNG).
+  const archive = archiver("zip", { zlib: { level: 1 } });
   archive.on("error", (err) => {
     res.status(500).end(err.message);
   });

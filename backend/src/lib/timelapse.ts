@@ -23,8 +23,17 @@ function toCameraName(relativeDir: string): string {
   return relativeDir.split(path.sep).join("/");
 }
 
-function collectTimelapseFrames(root: string, currentDir: string, frames: ScannedTimelapse[]) {
-  const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+/**
+ * Async incremental scan: only reads files with iteration > sinceIteration.
+ * Falls back to full scan if sinceIteration is -1.
+ */
+async function collectTimelapseFramesAsync(
+  root: string,
+  currentDir: string,
+  frames: ScannedTimelapse[],
+  sinceIteration: number
+) {
+  const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
   const relativeDir = path.relative(root, currentDir);
   const cameraName = relativeDir ? toCameraName(relativeDir) : "";
 
@@ -32,7 +41,7 @@ function collectTimelapseFrames(root: string, currentDir: string, frames: Scanne
     const entryPath = path.join(currentDir, entry.name);
 
     if (entry.isDirectory()) {
-      collectTimelapseFrames(root, entryPath, frames);
+      await collectTimelapseFramesAsync(root, entryPath, frames, sinceIteration);
       continue;
     }
 
@@ -41,11 +50,11 @@ function collectTimelapseFrames(root: string, currentDir: string, frames: Scanne
     }
 
     const iteration = parseIterationFromFilename(entryPath);
-    if (iteration === null) {
+    if (iteration === null || iteration <= sinceIteration) {
       continue;
     }
 
-    const stat = fs.statSync(entryPath);
+    const stat = await fs.promises.stat(entryPath);
     frames.push({
       cameraName,
       iteration,
@@ -56,19 +65,28 @@ function collectTimelapseFrames(root: string, currentDir: string, frames: Scanne
   }
 }
 
-export function scanTimelapseDir(outputPath: string): ScannedTimelapse[] {
+/**
+ * Async incremental scan of the timelapse directory.
+ * @param outputPath  - Job output path containing a "timelapse/" subdirectory.
+ * @param sinceIteration - Only return frames with iteration > this value (-1 = full scan).
+ */
+export async function scanTimelapseDir(outputPath: string, sinceIteration = -1): Promise<ScannedTimelapse[]> {
   const root = path.join(outputPath, "timelapse");
-  if (!fs.existsSync(root)) {
+  try {
+    await fs.promises.access(root);
+  } catch {
     return [];
   }
 
-  const cameras = fs.readdirSync(root, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  const entries = await fs.promises.readdir(root, { withFileTypes: true });
+  const cameras = entries.filter((entry) => entry.isDirectory());
   const frames: ScannedTimelapse[] = [];
 
-  for (const cameraDir of cameras) {
-    const cameraPath = path.join(root, cameraDir.name);
-    collectTimelapseFrames(root, cameraPath, frames);
-  }
+  await Promise.all(
+    cameras.map((cameraDir) =>
+      collectTimelapseFramesAsync(root, path.join(root, cameraDir.name), frames, sinceIteration)
+    )
+  );
 
   return frames.sort((a, b) => b.iteration - a.iteration);
 }

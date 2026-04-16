@@ -29,6 +29,7 @@ class JobService {
   private processes = new Map<string, ChildProcessWithoutNullStreams>();
   private logs = new Map<string, string[]>();
   private timelapseIntervals = new Map<string, NodeJS.Timeout>();
+  private timelapseMaxIterations = new Map<string, number>(); // jobId -> max iteration seen so far
   private diskGuardIntervals = new Map<string, NodeJS.Timeout>();
   private stopReasons = new Map<string, string>();
 
@@ -308,9 +309,18 @@ class JobService {
   }
 
   private startTimelapsePolling(jobId: string, outputPath: string) {
-    const timer = setInterval(() => {
-      const scanned = scanTimelapseDir(outputPath);
+    this.timelapseMaxIterations.set(jobId, -1);
+
+    const poll = async () => {
+      const sinceIteration = this.timelapseMaxIterations.get(jobId) ?? -1;
+      let scanned: Awaited<ReturnType<typeof scanTimelapseDir>>;
+      try {
+        scanned = await scanTimelapseDir(outputPath, sinceIteration);
+      } catch {
+        return;
+      }
       let inserted = 0;
+      let newMax = sinceIteration;
 
       for (const frame of scanned) {
         const insertedFrame = repo.insertTimelapseFrame(toTimelapseFrame(jobId, frame));
@@ -323,6 +333,13 @@ class JobService {
             data: insertedFrame
           });
         }
+        if (frame.iteration > newMax) {
+          newMax = frame.iteration;
+        }
+      }
+
+      if (newMax > sinceIteration) {
+        this.timelapseMaxIterations.set(jobId, newMax);
       }
 
       emitJobEvent({
@@ -331,8 +348,9 @@ class JobService {
         ts: new Date().toISOString(),
         data: { inserted, scanned: scanned.length }
       });
-    }, 2000);
+    };
 
+    const timer = setInterval(() => { void poll(); }, 2000);
     this.timelapseIntervals.set(jobId, timer);
   }
 
@@ -342,6 +360,7 @@ class JobService {
       clearInterval(timer);
       this.timelapseIntervals.delete(jobId);
     }
+    this.timelapseMaxIterations.delete(jobId);
   }
 
   private startDiskGuard(jobId: string, targetPath: string) {
