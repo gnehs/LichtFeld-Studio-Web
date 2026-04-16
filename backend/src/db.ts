@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { config } from "./config.js";
-import type { DatasetRecord, JobRecord, JobStatus, TimelapseFrame } from "./types/models.js";
+import type { DatasetRecord, DatasetFolderCache, JobRecord, JobStatus, TimelapseFrame } from "./types/models.js";
 
 const db = new DatabaseSync(config.dbPath);
 db.exec("PRAGMA journal_mode = WAL;");
@@ -61,6 +61,33 @@ function migrate() {
   if (!jobColumns.some((column) => column.name === "params_json")) {
     db.exec("ALTER TABLE jobs ADD COLUMN params_json TEXT NOT NULL DEFAULT '{}';");
   }
+
+  const datasetColumns = db.prepare("PRAGMA table_info(datasets)").all() as Array<{ name: string }>;
+  const datasetColumnNames = new Set(datasetColumns.map((c) => c.name));
+  if (!datasetColumnNames.has("image_count")) {
+    db.exec("ALTER TABLE datasets ADD COLUMN image_count INTEGER;");
+  }
+  if (!datasetColumnNames.has("mask_count")) {
+    db.exec("ALTER TABLE datasets ADD COLUMN mask_count INTEGER;");
+  }
+  if (!datasetColumnNames.has("has_alpha_images")) {
+    db.exec("ALTER TABLE datasets ADD COLUMN has_alpha_images INTEGER;");
+  }
+  if (!datasetColumnNames.has("images_dir_mtime")) {
+    db.exec("ALTER TABLE datasets ADD COLUMN images_dir_mtime REAL;");
+  }
+  if (!datasetColumnNames.has("masks_dir_mtime")) {
+    db.exec("ALTER TABLE datasets ADD COLUMN masks_dir_mtime REAL;");
+  }
+  if (!datasetColumnNames.has("preview_image_relative_path")) {
+    db.exec("ALTER TABLE datasets ADD COLUMN preview_image_relative_path TEXT;");
+  }
+  if (!datasetColumnNames.has("folder_size_bytes")) {
+    db.exec("ALTER TABLE datasets ADD COLUMN folder_size_bytes INTEGER;");
+  }
+  if (!datasetColumnNames.has("folder_mtime")) {
+    db.exec("ALTER TABLE datasets ADD COLUMN folder_mtime REAL;");
+  }
 }
 
 migrate();
@@ -71,7 +98,15 @@ function mapDataset(row: any): DatasetRecord {
     name: row.name,
     type: row.type,
     path: row.path,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    imageCount: row.image_count ?? null,
+    maskCount: row.mask_count ?? null,
+    hasAlphaImages: row.has_alpha_images == null ? null : row.has_alpha_images !== 0,
+    imagesDirMtime: row.images_dir_mtime ?? null,
+    masksDirMtime: row.masks_dir_mtime ?? null,
+    previewImageRelativePath: row.preview_image_relative_path ?? null,
+    folderSizeBytes: row.folder_size_bytes ?? null,
+    folderMtime: row.folder_mtime ?? null,
   };
 }
 
@@ -139,33 +174,6 @@ export const repo = {
     return this.getDataset(id);
   },
 
-  listDatasetFileEntries(datasetPath: string) {
-    const entries: Array<{ relativePath: string; kind: "image" | "mask"; sizeBytes: number; previewable: boolean }> = [];
-    const visit = (root: string, kind: "image" | "mask") => {
-      if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return;
-      const walk = (current: string) => {
-        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-          const nextPath = path.join(current, entry.name);
-          if (entry.isDirectory()) {
-            walk(nextPath);
-            continue;
-          }
-          if (!entry.isFile()) continue;
-          entries.push({
-            relativePath: path.relative(datasetPath, nextPath).split(path.sep).join("/"),
-            kind,
-            sizeBytes: fs.statSync(nextPath).size,
-            previewable: kind === "image",
-          });
-        }
-      };
-      walk(root);
-    };
-    visit(path.join(datasetPath, "images"), "image");
-    visit(path.join(datasetPath, "masks"), "mask");
-    return entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath, undefined, { numeric: true, sensitivity: "base" }));
-  },
-
   deleteDataset(id: string) {
     db.prepare("DELETE FROM datasets WHERE id = ?").run(id);
   },
@@ -173,6 +181,31 @@ export const repo = {
   getDatasetByPath(datasetPath: string) {
     const row = db.prepare("SELECT * FROM datasets WHERE path = ?").get(datasetPath);
     return row ? mapDataset(row) : null;
+  },
+
+  updateDatasetFolderCache(datasetPath: string, cache: DatasetFolderCache) {
+    db.prepare(
+      `UPDATE datasets SET
+        image_count = @imageCount,
+        mask_count = @maskCount,
+        has_alpha_images = @hasAlphaImages,
+        images_dir_mtime = @imagesDirMtime,
+        masks_dir_mtime = @masksDirMtime,
+        preview_image_relative_path = @previewImageRelativePath,
+        folder_size_bytes = @folderSizeBytes,
+        folder_mtime = @folderMtime
+      WHERE path = @path`
+    ).run({
+      path: datasetPath,
+      imageCount: cache.imageCount,
+      maskCount: cache.maskCount,
+      hasAlphaImages: cache.hasAlphaImages ? 1 : 0,
+      imagesDirMtime: cache.imagesDirMtime,
+      masksDirMtime: cache.masksDirMtime,
+      previewImageRelativePath: cache.previewImageRelativePath,
+      folderSizeBytes: cache.folderSizeBytes,
+      folderMtime: cache.folderMtime,
+    });
   },
 
   createJob(job: JobRecord) {

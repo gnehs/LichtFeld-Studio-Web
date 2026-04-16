@@ -35,9 +35,36 @@ function getLatestDatasetWriteMs(datasetPath: string): number {
   return latest;
 }
 
-function countDatasetImages(datasetPath: string): number {
+export function countDatasetImages(datasetPath: string): number {
   const imagesDir = path.join(datasetPath, "images");
   return listDatasetImageRelativePaths(imagesDir).length;
+}
+
+export function countDatasetMasks(datasetPath: string): number {
+  for (const folderName of UPSTREAM_MASK_FOLDERS) {
+    const masksDir = path.join(datasetPath, folderName);
+    if (fs.existsSync(masksDir) && fs.statSync(masksDir).isDirectory()) {
+      return listDatasetImageRelativePaths(masksDir).length;
+    }
+  }
+  return 0;
+}
+
+export function getDatasetDirMtimes(datasetPath: string): { imagesDirMtime: number; masksDirMtime: number; folderMtime: number } {
+  const imagesDir = path.join(datasetPath, "images");
+  let imagesDirMtime = 0;
+  let masksDirMtime = 0;
+  let folderMtime = 0;
+  try { imagesDirMtime = fs.statSync(imagesDir).mtimeMs; } catch { /* missing */ }
+  try { folderMtime = fs.statSync(datasetPath).mtimeMs; } catch { /* missing */ }
+  for (const folderName of UPSTREAM_MASK_FOLDERS) {
+    const masksDir = path.join(datasetPath, folderName);
+    try {
+      const mtime = fs.statSync(masksDir).mtimeMs;
+      if (mtime > 0) { masksDirMtime = mtime; break; }
+    } catch { /* missing */ }
+  }
+  return { imagesDirMtime, masksDirMtime, folderMtime };
 }
 
 function pngHasAlpha(filePath: string): boolean {
@@ -92,20 +119,17 @@ function detectAlphaImages(datasetPath: string): boolean {
     return false;
   }
 
+  // Only check the first PNG image to avoid scanning all files on every request.
   const imagePaths = listDatasetImageRelativePaths(imagesDir);
-  for (const imageRelativePath of imagePaths) {
-    const imagePath = path.join(imagesDir, imageRelativePath);
-    const ext = path.extname(imageRelativePath).toLowerCase();
-    if (ext !== ".png") continue;
-    try {
-      if (pngHasAlpha(imagePath)) {
-        return true;
-      }
-    } catch {
-      // Ignore unreadable image metadata and keep scanning.
-    }
+  const firstPng = imagePaths.find((p) => path.extname(p).toLowerCase() === ".png");
+  if (!firstPng) {
+    return false;
   }
-  return false;
+  try {
+    return pngHasAlpha(path.join(imagesDir, firstPng));
+  } catch {
+    return false;
+  }
 }
 
 function detectSupportedMaskFolder(datasetPath: string): boolean {

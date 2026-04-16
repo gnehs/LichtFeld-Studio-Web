@@ -4,10 +4,13 @@ import { nanoid } from "nanoid";
 import { config } from "../config.js";
 import { repo } from "../db.js";
 import { extractZipToDirectory } from "../lib/zipExtract.js";
-import type { DatasetDetail, DatasetFileEntry, DatasetFolderEntry, DatasetRecord } from "../types/models.js";
+import type { DatasetDetail, DatasetFileEntry, DatasetFolderEntry, DatasetFolderCache, DatasetRecord } from "../types/models.js";
 import {
   evaluateDatasetForAutoRegister,
   inspectDatasetFolder,
+  countDatasetImages,
+  countDatasetMasks,
+  getDatasetDirMtimes,
   UPLOAD_IN_PROGRESS_MARKER,
   validateDatasetStructure
 } from "../lib/datasetAutoRegister.js";
@@ -71,15 +74,59 @@ function resolveUploadNames(params: {
   };
 }
 
-function classifyMaskSource(folderPath: string): DatasetDetail["maskSource"] {
-  const masksDir = path.join(folderPath, "masks");
-  const hasMasksDir = fs.existsSync(masksDir) && fs.statSync(masksDir).isDirectory();
-  const hasAlpha = inspectDatasetFolder(folderPath).hasAlphaImages;
-  if (hasMasksDir && hasAlpha) return "mixed";
-  if (hasMasksDir) return "separate_mask";
-  if (hasAlpha) return "alpha";
-  return "none";
+/**
+ * Returns cached folder stats for a dataset, re-scanning only when the
+ * images/, masks/ directory mtime, or folder mtime has changed since the last scan.
+ * Results are persisted in the DB so they survive server restarts.
+ *
+ * On cache hit: zero disk I/O beyond the three stat() calls in getDatasetDirMtimes.
+ * On cache miss: scans images/ for count + first-PNG alpha, masks/ for count,
+ *   and walks the folder tree once for folderSizeBytes.
+ */
+function resolveFolderCache(datasetPath: string, cached: DatasetRecord): DatasetFolderCache {
+  const { imagesDirMtime, masksDirMtime, folderMtime } = getDatasetDirMtimes(datasetPath);
+
+  const cacheValid =
+    cached.imageCount !== null &&
+    cached.maskCount !== null &&
+    cached.hasAlphaImages !== null &&
+    cached.folderSizeBytes !== null &&
+    cached.imagesDirMtime === imagesDirMtime &&
+    cached.masksDirMtime === masksDirMtime &&
+    cached.folderMtime === folderMtime;
+
+  if (cacheValid) {
+    return {
+      imageCount: cached.imageCount!,
+      maskCount: cached.maskCount!,
+      hasAlphaImages: cached.hasAlphaImages!,
+      imagesDirMtime,
+      masksDirMtime,
+      folderMtime,
+      previewImageRelativePath: cached.previewImageRelativePath ?? null,
+      folderSizeBytes: cached.folderSizeBytes!,
+    };
+  }
+
+  // Cache miss – scan the folder and persist the result.
+  const imageCount = countDatasetImages(datasetPath);
+  const maskCount = countDatasetMasks(datasetPath);
+  const hasAlphaImages = inspectDatasetFolder(datasetPath).hasAlphaImages;
+  const previewImageRelativePath = pickDatasetPreviewImageRelativePath(path.join(datasetPath, "images"));
+  const folderSizeBytes = getDirectorySizeBytes(datasetPath);
+  const freshCache: DatasetFolderCache = {
+    imageCount, maskCount, hasAlphaImages,
+    imagesDirMtime, masksDirMtime, folderMtime,
+    previewImageRelativePath, folderSizeBytes,
+  };
+  try {
+    repo.updateDatasetFolderCache(datasetPath, freshCache);
+  } catch {
+    // Non-fatal: cache update failure should not break the list endpoint.
+  }
+  return freshCache;
 }
+
 
 function listDatasetFiles(folderPath: string): DatasetFileEntry[] {
   const results: DatasetFileEntry[] = [];
@@ -158,7 +205,15 @@ export const datasetService = {
         name: entry.name,
         type: "registered",
         path: datasetPath,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        imageCount: null,
+        maskCount: null,
+        hasAlphaImages: null,
+        imagesDirMtime: null,
+        masksDirMtime: null,
+        previewImageRelativePath: null,
+        folderSizeBytes: null,
+        folderMtime: null,
       };
 
       try {
@@ -185,21 +240,49 @@ export const datasetService = {
 
       const datasetPath = normalizePath(path.join(config.datasetsDir, entry.name));
       const registered = registeredByPath.get(datasetPath);
-      const inspected = inspectDatasetFolder(datasetPath) as ReturnType<typeof inspectDatasetFolder> & {
-        previewImageRelativePath: string | null;
-      };
+
+      // For registered datasets, use DB-cached stats (re-scan only on mtime change).
+      // For unregistered folders, fall back to full inspect each time.
+      let imageCount: number | null;
+      let hasMasks: boolean;
+      let hasAlphaImages: boolean;
+      let previewImageRelativePath: string | null;
+      let health: DatasetFolderEntry["health"];
+      let reason: string | null;
+
+      // inspectDatasetFolder only checks marker + mtime + structure (cheap stat calls).
+      // Heavy work (image counting, alpha detection) is handled by resolveFolderCache via DB cache.
+      const inspected = inspectDatasetFolder(datasetPath);
+      let folderSizeBytes: number;
+      if (registered) {
+        const folderCache = resolveFolderCache(datasetPath, registered);
+        imageCount = folderCache.imageCount;
+        hasMasks = folderCache.maskCount > 0;
+        hasAlphaImages = folderCache.hasAlphaImages;
+        previewImageRelativePath = folderCache.previewImageRelativePath;
+        folderSizeBytes = folderCache.folderSizeBytes;
+      } else {
+        imageCount = inspected.imageCount;
+        hasMasks = inspected.hasMasks;
+        hasAlphaImages = inspected.hasAlphaImages;
+        previewImageRelativePath = inspected.previewImageRelativePath;
+        folderSizeBytes = getDirectorySizeBytes(datasetPath);
+      }
+      health = inspected.status;
+      reason = inspected.reason;
+
       folders.push({
         name: entry.name,
         path: datasetPath,
         datasetId: registered?.id ?? null,
         isRegistered: Boolean(registered),
-        health: inspected.status,
-        reason: inspected.reason,
-        imageCount: inspected.imageCount,
-        folderSizeBytes: getDirectorySizeBytes(datasetPath),
-        hasMasks: inspected.hasMasks,
-        hasAlphaImages: inspected.hasAlphaImages,
-        previewImageRelativePath: inspected.previewImageRelativePath ?? null
+        health,
+        reason,
+        imageCount,
+        folderSizeBytes,
+        hasMasks,
+        hasAlphaImages,
+        previewImageRelativePath,
       });
     }
 
@@ -210,19 +293,25 @@ export const datasetService = {
   getDatasetDetail(id: string) {
     const dataset = repo.getDataset(id);
     if (!dataset) return null;
-    const inspected = inspectDatasetFolder(dataset.path) as ReturnType<typeof inspectDatasetFolder> & {
-      previewImageRelativePath: string | null;
-    };
+    const inspected = inspectDatasetFolder(dataset.path);
+    const folderCache = resolveFolderCache(dataset.path, dataset);
+    const hasMasks = folderCache.maskCount > 0;
+    const maskSource: DatasetDetail["maskSource"] = (() => {
+      if (hasMasks && folderCache.hasAlphaImages) return "mixed";
+      if (hasMasks) return "separate_mask";
+      if (folderCache.hasAlphaImages) return "alpha";
+      return "none";
+    })();
     return {
       ...dataset,
-      folderSizeBytes: getDirectorySizeBytes(dataset.path),
-      imageCount: inspected.imageCount,
-      hasMasks: inspected.hasMasks,
-      hasAlphaImages: inspected.hasAlphaImages,
-      previewImageRelativePath: inspected.previewImageRelativePath ?? null,
+      folderSizeBytes: folderCache.folderSizeBytes,
+      imageCount: folderCache.imageCount,
+      hasMasks,
+      hasAlphaImages: folderCache.hasAlphaImages,
+      previewImageRelativePath: folderCache.previewImageRelativePath,
       health: inspected.status,
       reason: inspected.reason,
-      maskSource: classifyMaskSource(dataset.path),
+      maskSource,
     } satisfies DatasetDetail;
   },
 
@@ -321,7 +410,15 @@ export const datasetService = {
         name: displayName,
         type: "upload",
         path: extractDir,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        imageCount: null,
+        maskCount: null,
+        hasAlphaImages: null,
+        imagesDirMtime: null,
+        masksDirMtime: null,
+        previewImageRelativePath: null,
+        folderSizeBytes: null,
+        folderMtime: null,
       };
 
       return repo.createDataset(record);
@@ -373,7 +470,15 @@ export const datasetService = {
       name: params.datasetName,
       type: "registered",
       path: normalizedPath,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      imageCount: null,
+      maskCount: null,
+      hasAlphaImages: null,
+      imagesDirMtime: null,
+      masksDirMtime: null,
+      previewImageRelativePath: null,
+      folderSizeBytes: null,
+      folderMtime: null,
     };
 
     return repo.createDataset(record);

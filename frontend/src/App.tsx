@@ -110,6 +110,7 @@ function App() {
     queryKey: queryKeys.datasets.all,
     queryFn: () => guardAuth(() => api.listDatasets()),
     enabled: authed,
+    staleTime: 15_000,
   });
 
   const jobsQuery = useQuery({

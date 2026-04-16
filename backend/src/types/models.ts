@@ -12,6 +12,26 @@ export interface DatasetRecord {
   type: "upload" | "registered";
   path: string;
   createdAt: string;
+  // Cached folder stats (null = not yet cached)
+  imageCount: number | null;
+  maskCount: number | null;
+  hasAlphaImages: boolean | null;
+  imagesDirMtime: number | null;
+  masksDirMtime: number | null;
+  previewImageRelativePath: string | null;
+  folderSizeBytes: number | null;
+  folderMtime: number | null;
+}
+
+export interface DatasetFolderCache {
+  imageCount: number;
+  maskCount: number;
+  hasAlphaImages: boolean;
+  imagesDirMtime: number;
+  masksDirMtime: number;
+  previewImageRelativePath: string | null;
+  folderSizeBytes: number;
+  folderMtime: number;
 }
 
 export interface DatasetFolderEntry {
