@@ -31,7 +31,8 @@ describe("upload state helpers", () => {
       error: null,
       uploadedBytes: 120,
       totalBytes: 400,
-      startedAt: 1000
+      startedAt: 1000,
+      retryAt: null,
     };
 
     expect(mergeUploadDraft(draft, { name: "garden-v2" })).toEqual({

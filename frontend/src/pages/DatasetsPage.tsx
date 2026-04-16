@@ -8,10 +8,12 @@ import type { Notice } from "@/lib/app-types";
 import { queryKeys } from "@/lib/query-keys";
 import type { DatasetFolderEntry, DatasetRecord } from "@/lib/types";
 import {
+  calcRetrySecondsLeft,
   calculateUploadSpeed,
   formatBytesPerSecond,
   formatUploadPhase,
   isDraggedFileZip,
+  isUploadInFlight,
   mergeUploadDraft,
   normalizeUploadProgress,
   type PendingUploadDraft,
@@ -31,6 +33,7 @@ const EMPTY_UPLOAD_DRAFT: PendingUploadDraft = {
   uploadedBytes: 0,
   totalBytes: 0,
   startedAt: null,
+  retryAt: null,
 };
 
 function getDatasetPreviewSrc(folder: DatasetFolderEntry | null) {
@@ -265,16 +268,21 @@ function UploadStatusPanel({
         )
       : null;
   const phaseLabel = formatUploadPhase(draft.status);
+  const retrySecondsLeft = calcRetrySecondsLeft(draft.retryAt, nowMs);
   const detailText =
-    draft.status === "processing"
-      ? "伺服器正在解壓縮與驗證 ZIP，完成後會自動出現在資料集列表。"
-      : draft.status === "uploaded"
-        ? "資料集已完成上傳與驗證，接著可前往任務頁面建立新任務。"
-        : draft.status === "error"
-          ? draft.error ?? "上傳失敗，請重新選擇 ZIP。"
-          : speed && speed !== "—"
-            ? `目前傳輸速度約 ${speed}`
-            : "正在建立傳輸連線...";
+    draft.status === "reconnecting"
+      ? retrySecondsLeft != null && retrySecondsLeft > 0
+        ? `網路中斷，將於 ${retrySecondsLeft} 秒後重試...`
+        : "網路中斷，重新連線中..."
+      : draft.status === "processing"
+        ? "伺服器正在解壓縮與驗證 ZIP，完成後會自動出現在資料集列表。"
+        : draft.status === "uploaded"
+          ? "資料集已完成上傳與驗證，接著可前往任務頁面建立新任務。"
+          : draft.status === "error"
+            ? draft.error ?? "上傳失敗，請重新選擇 ZIP。"
+            : speed && speed !== "—"
+              ? `目前傳輸速度約 ${speed}`
+              : "正在建立傳輸連線...";
 
   return (
     <div
@@ -284,7 +292,9 @@ function UploadStatusPanel({
           ? "bg-red-950/40"
           : draft.status === "uploaded"
             ? "bg-emerald-500/[0.08]"
-            : "bg-black/25",
+            : draft.status === "reconnecting"
+              ? "bg-amber-950/30"
+              : "bg-black/25",
       )}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -296,12 +306,19 @@ function UploadStatusPanel({
             <p className="truncate text-sm font-semibold text-zinc-100">
               {draft.file.name}
             </p>
-            <span className="rounded-full bg-white/8 px-2 py-1 text-[10px] tracking-[0.18em] text-cyan-100 uppercase">
+            <span
+              className={cn(
+                "rounded-full px-2 py-1 text-[10px] tracking-[0.18em] uppercase",
+                draft.status === "reconnecting"
+                  ? "bg-amber-500/20 text-amber-200"
+                  : "bg-white/8 text-cyan-100",
+              )}
+            >
               {phaseLabel}
             </span>
           </div>
           <div className="mt-3">
-            <ProgressBar progress={progress} />
+            <ProgressBar progress={draft.status === "reconnecting" ? null : progress} />
           </div>
           <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-3">
             <div className="rounded-2xl bg-black/25 px-3 py-2">
@@ -330,7 +347,11 @@ function UploadStatusPanel({
           <p
             className={cn(
               "mt-3 text-xs leading-5",
-              draft.status === "error" ? "text-red-100" : "text-zinc-400",
+              draft.status === "error"
+                ? "text-red-100"
+                : draft.status === "reconnecting"
+                  ? "text-amber-200"
+                  : "text-zinc-400",
             )}
           >
             {detailText}
@@ -391,10 +412,9 @@ function FixedUploadDock({
 }) {
   if (
     !draft.file ||
-    (draft.status !== "uploading" &&
-      draft.status !== "processing" &&
-      draft.status !== "uploaded" &&
-      draft.status !== "error")
+    !isUploadInFlight(draft.status) &&
+    draft.status !== "uploaded" &&
+    draft.status !== "error"
   ) {
     return null;
   }
@@ -414,6 +434,7 @@ function FixedUploadDock({
       : null;
   const phaseLabel = formatUploadPhase(draft.status);
   const bytesLabel = `${formatBytes(uploadedBytes)} / ${formatBytes(totalBytes)}`;
+  const retrySecondsLeft = calcRetrySecondsLeft(draft.retryAt, nowMs);
 
   return createPortal(
     <div className="pointer-events-none fixed bottom-4 left-1/2 z-[140] w-[min(calc(100vw-1rem),24rem)] -translate-x-1/2">
@@ -422,7 +443,9 @@ function FixedUploadDock({
           "pointer-events-auto rounded-full border px-3 py-2.5 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-sm",
           draft.status === "error"
             ? "border-red-400/25 bg-red-950/85"
-            : "border-white/10 bg-black/50",
+            : draft.status === "reconnecting"
+              ? "border-amber-400/20 bg-amber-950/75"
+              : "border-white/10 bg-black/50",
         )}
       >
         <div className="flex items-center gap-3">
@@ -433,11 +456,18 @@ function FixedUploadDock({
             <p className="truncate text-sm font-semibold text-zinc-100">
               {draft.file.name}
             </p>
-            {draft.status !== "error" ? (
+            {draft.status !== "error" && draft.status !== "reconnecting" ? (
               <p className="text-xs text-zinc-400">{`${phaseLabel} · ${bytesLabel}`}</p>
             ) : null}
             {draft.status === "uploading" && speed && speed !== "—" ? (
               <p className="text-[11px] text-zinc-500">{speed}</p>
+            ) : null}
+            {draft.status === "reconnecting" ? (
+              <p className="text-[11px] text-amber-200">
+                {retrySecondsLeft != null && retrySecondsLeft > 0
+                  ? `網路中斷，${retrySecondsLeft}s 後重試`
+                  : "重新連線中..."}
+              </p>
             ) : null}
             {draft.status === "error" ? (
               <p className="text-[11px] text-red-100">
@@ -480,6 +510,8 @@ export function DatasetsPage({
       onProgress,
       onBytesProgress,
       onPhaseChange,
+      onReconnecting,
+      onReconnected,
     }: {
       file: File;
       datasetName?: string;
@@ -488,11 +520,15 @@ export function DatasetsPage({
       onPhaseChange: (
         phase: "preparing" | "uploading" | "processing" | "complete",
       ) => void;
+      onReconnecting?: (retryAt: number) => void;
+      onReconnected?: () => void;
     }) =>
       api.uploadDataset(file, datasetName, {
         onProgress,
         onBytesProgress,
         onPhaseChange,
+        onReconnecting,
+        onReconnected,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.datasets.all });
@@ -536,6 +572,7 @@ export function DatasetsPage({
       uploadedBytes: 0,
       totalBytes: file?.size ?? 0,
       startedAt: null,
+      retryAt: null,
     });
     setUploadInputKey((prev) => prev + 1);
   };
@@ -564,6 +601,7 @@ export function DatasetsPage({
       uploadedBytes: 0,
       totalBytes: uploadDraft.file.size,
       startedAt: Date.now(),
+      retryAt: null,
     });
 
     try {
@@ -585,6 +623,7 @@ export function DatasetsPage({
               uploadedBytes: loaded,
               totalBytes: total,
               error: null,
+              retryAt: null,
             }),
           );
         },
@@ -601,6 +640,23 @@ export function DatasetsPage({
                 prev.totalBytes || prev.file?.size || prev.uploadedBytes,
               totalBytes: prev.totalBytes || prev.file?.size || prev.uploadedBytes,
               error: null,
+              retryAt: null,
+            }),
+          );
+        },
+        onReconnecting: (retryAt) => {
+          setUploadDraft((prev) =>
+            mergeUploadDraft(prev, {
+              status: "reconnecting",
+              retryAt,
+            }),
+          );
+        },
+        onReconnected: () => {
+          setUploadDraft((prev) =>
+            mergeUploadDraft(prev, {
+              status: "uploading",
+              retryAt: null,
             }),
           );
         },

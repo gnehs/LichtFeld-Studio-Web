@@ -1,4 +1,4 @@
-export type UploadStatus = "idle" | "uploading" | "processing" | "uploaded" | "error";
+export type UploadStatus = "idle" | "uploading" | "reconnecting" | "processing" | "uploaded" | "error";
 
 export interface PendingUploadDraft {
   status: UploadStatus;
@@ -10,6 +10,8 @@ export interface PendingUploadDraft {
   uploadedBytes: number;
   totalBytes: number;
   startedAt: number | null;
+  /** reconnecting 時，預計下次重試的時間戳（ms） */
+  retryAt: number | null;
 }
 
 export function normalizeUploadProgress(value: number): number {
@@ -20,11 +22,15 @@ export function normalizeUploadProgress(value: number): number {
 }
 
 export function shouldAllowStepTwoWhileUploading(draft: Pick<PendingUploadDraft, "status" | "file">): boolean {
-  return Boolean(draft.file) && (draft.status === "uploading" || draft.status === "processing" || draft.status === "uploaded");
+  return Boolean(draft.file) && (draft.status === "uploading" || draft.status === "reconnecting" || draft.status === "processing" || draft.status === "uploaded");
 }
 
 export function shouldAutoStartUpload(draft: Pick<PendingUploadDraft, "status" | "file" | "datasetId">): boolean {
   return Boolean(draft.file) && draft.status === "idle" && !draft.datasetId;
+}
+
+export function isUploadInFlight(status: UploadStatus): boolean {
+  return status === "uploading" || status === "reconnecting" || status === "processing";
 }
 
 export function mergeUploadDraft(draft: PendingUploadDraft, patch: Partial<PendingUploadDraft>): PendingUploadDraft {
@@ -36,10 +42,18 @@ export function mergeUploadDraft(draft: PendingUploadDraft, patch: Partial<Pendi
 
 export function formatUploadPhase(status: UploadStatus): string {
   if (status === "uploading") return "背景上傳中";
+  if (status === "reconnecting") return "重新連線中";
   if (status === "processing") return "伺服器驗證中";
   if (status === "uploaded") return "可建立任務";
   if (status === "error") return "需要重新上傳";
   return "等待上傳";
+}
+
+/** 計算距離下次重試的剩餘秒數（無條件進位），用於 UI 顯示 */
+export function calcRetrySecondsLeft(retryAt: number | null, nowMs: number): number | null {
+  if (!retryAt) return null;
+  const diff = retryAt - nowMs;
+  return diff > 0 ? Math.ceil(diff / 1000) : 0;
 }
 
 export function isDraggedFileZip(file: File | null): boolean {

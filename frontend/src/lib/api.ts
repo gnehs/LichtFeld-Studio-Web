@@ -6,10 +6,18 @@ const TUS_UPLOAD_CHUNK_SIZE = 64 * 1024 * 1024;
 const TUS_RESUMABLE_VERSION = "1.0.0";
 const TUS_UPLOAD_STORAGE_PREFIX = "lfs:tus-upload:";
 
+/** 網路中斷後最長等待重試的毫秒數 */
+const TUS_RETRY_BUDGET_MS = 30_000;
+/** 每次重試間隔的初始值（ms），每次失敗後加倍，最長 10s */
+const TUS_RETRY_BASE_DELAY_MS = 1_000;
+const TUS_RETRY_MAX_DELAY_MS = 10_000;
+
 interface UploadDatasetOptions {
   onProgress?: (progress: number) => void;
   onBytesProgress?: (loaded: number, total: number) => void;
   onPhaseChange?: (phase: UploadDatasetPhase) => void;
+  onReconnecting?: (retryAt: number) => void;
+  onReconnected?: () => void;
 }
 
 async function parseRequestError(response: Response): Promise<string> {
@@ -137,6 +145,65 @@ function getTusUploadCompletePath(uploadUrl: string): string {
   return `${normalizedUrl}/complete`;
 }
 
+/** 判斷是否為可重試的網路/暫時性錯誤（非 HTTP 業務邏輯錯誤） */
+function isRetryableError(error: unknown): boolean {
+  if (error instanceof TypeError) {
+    // fetch 網路失敗：TypeError: Failed to fetch / NetworkError
+    return true;
+  }
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    // 後端回傳 5xx 暫時性錯誤
+    if (msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("504")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 帶有 retry budget 的 PATCH 執行器。
+ * 在 TUS_RETRY_BUDGET_MS 內遭遇可重試錯誤時，會以 exponential backoff 持續重試。
+ * 每次等待期間回呼 onReconnecting（傳入預計重試的時間戳）。
+ */
+async function patchTusUploadWithRetry(
+  uploadUrl: string,
+  offset: number,
+  chunk: Blob,
+  options?: Pick<UploadDatasetOptions, "onReconnecting" | "onReconnected">
+): Promise<number> {
+  const budgetDeadline = Date.now() + TUS_RETRY_BUDGET_MS;
+  let delay = TUS_RETRY_BASE_DELAY_MS;
+  let isFirstAttempt = true;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      const nextOffset = await patchTusUpload(uploadUrl, offset, chunk);
+      if (!isFirstAttempt) {
+        options?.onReconnected?.();
+      }
+      return nextOffset;
+    } catch (error) {
+      if (!isRetryableError(error)) {
+        throw error;
+      }
+
+      const now = Date.now();
+      const retryAt = now + delay;
+      if (retryAt > budgetDeadline) {
+        // 超出重試預算，直接拋出
+        throw error;
+      }
+
+      options?.onReconnecting?.(retryAt);
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      delay = Math.min(delay * 2, TUS_RETRY_MAX_DELAY_MS);
+      isFirstAttempt = false;
+    }
+  }
+}
+
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     credentials: "include",
@@ -191,7 +258,10 @@ export const api = {
     while (offset < file.size) {
       options?.onPhaseChange?.("uploading");
       const chunk = file.slice(offset, offset + TUS_UPLOAD_CHUNK_SIZE);
-      const nextOffset = await patchTusUpload(uploadUrl, offset, chunk);
+      const nextOffset = await patchTusUploadWithRetry(uploadUrl, offset, chunk, {
+        onReconnecting: options?.onReconnecting,
+        onReconnected: options?.onReconnected
+      });
       if (nextOffset <= offset) {
         throw new Error("Upload did not make progress");
       }
