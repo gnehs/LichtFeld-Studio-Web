@@ -132,6 +132,26 @@ export interface TimelapseFrame {
   createdAt: string;
 }
 
+export type ModelExportFormat = "sog" | "ply" | "spz" | "html";
+
+export type SplatSnapshotStatus = "missing" | "ready" | "converting" | "error";
+
+export interface SplatSnapshotSource {
+  type: "html" | "ply" | "resume" | "sog" | "spz";
+  filename: string;
+  mtimeMs: number;
+  sizeBytes: number;
+  iteration: number | null;
+}
+
+export interface SplatSnapshot {
+  available: boolean;
+  status: SplatSnapshotStatus;
+  message: string | null;
+  viewerUrl?: string | null;
+  source?: SplatSnapshotSource;
+}
+
 export interface DiskGuardStatus {
   freeGb: number;
   thresholdGb: number;

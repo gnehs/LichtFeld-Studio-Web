@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  Box,
   Download,
   Pause,
   Play,
+  RefreshCw,
   SkipBack,
   SkipForward,
 } from "lucide-react";
@@ -14,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Notice } from "@/lib/app-types";
-import type { JobStatus, TimelapseFrame, TrainingJob } from "@/lib/types";
+import type { JobStatus, ModelExportFormat, TimelapseFrame, TrainingJob } from "@/lib/types";
 import { computeProgress, sortFramesAscending } from "@/pages/job-detail-utils";
 
 function statusBadgeVariant(
@@ -61,6 +63,18 @@ function formatValue(value: unknown): string {
   }
 }
 
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+  return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
 async function collectCameraFrames(
   id: string,
   camera: string,
@@ -96,6 +110,7 @@ export function JobDetailPage({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLive, setIsLive] = useState(true);
   const [playbackMs, setPlaybackMs] = useState(500);
+  const [downloadFormat, setDownloadFormat] = useState<ModelExportFormat>("sog");
   const [logLines, setLogLines] = useState<string[]>([]);
   const [logConnected, setLogConnected] = useState(false);
 
@@ -136,6 +151,17 @@ export function JobDetailPage({
     refetchInterval: isLive ? 3_000 : false,
   });
 
+  const splatQuery = useQuery({
+    queryKey: queryKeys.jobs.splatLatest(id ?? ""),
+    queryFn: async () => {
+      if (!id) throw new Error("missing job id");
+      return api.getSplatLatest(id);
+    },
+    enabled: Boolean(id),
+    placeholderData: (previousData) => previousData,
+    refetchInterval: isLive ? 5_000 : false,
+  });
+
   const framesQuery = useQuery({
     queryKey: queryKeys.jobs.timelapseFrames(id ?? "", selectedCamera),
     queryFn: async () => {
@@ -152,6 +178,7 @@ export function JobDetailPage({
   const cameras = timelapseOverviewQuery.data?.cameras ?? [];
   const latestIteration = timelapseOverviewQuery.data?.latestIteration ?? null;
   const frames = framesQuery.data ?? [];
+  const splatSnapshot = splatQuery.data ?? null;
 
   const params = useMemo(() => parseJobParams(job), [job]);
   const entries = useMemo(
@@ -165,6 +192,8 @@ export function JobDetailPage({
   );
   const progressPercent =
     progress.ratio === null ? 0 : Math.round(progress.ratio * 1000) / 10;
+  const canDownloadModel =
+    job?.status === "completed" || splatSnapshot?.status === "ready";
 
   useEffect(() => {
     if (!timelapseOverviewQuery.error) return;
@@ -185,6 +214,14 @@ export function JobDetailPage({
       text: `讀取相機影格失敗：${(framesQuery.error as Error).message}`,
     });
   }, [framesQuery.error, framesQuery.errorUpdatedAt, onNotice]);
+
+  useEffect(() => {
+    if (!splatQuery.error) return;
+    onNotice({
+      tone: "error",
+      text: `讀取 Splat 預覽失敗：${(splatQuery.error as Error).message}`,
+    });
+  }, [splatQuery.error, splatQuery.errorUpdatedAt, onNotice]);
 
   useEffect(() => {
     if (!jobQuery.error) return;
@@ -282,17 +319,29 @@ export function JobDetailPage({
         <Link className={buttonVariants({ variant: "outline" })} to="/jobs">
           <ArrowLeft className="size-4" /> 返回任務列表
         </Link>
-        <div className="flex items-center gap-2">
-          {job?.status === "completed" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="h-9 rounded-xl border border-white/12 bg-black/20 px-3 text-sm text-zinc-100"
+            value={downloadFormat}
+            onChange={(event) =>
+              setDownloadFormat(event.target.value as ModelExportFormat)
+            }
+          >
+            <option value="sog">SOG</option>
+            <option value="ply">PLY</option>
+            <option value="spz">SPZ</option>
+            <option value="html">HTML</option>
+          </select>
+          {canDownloadModel ? (
             <a
               className={buttonVariants({ variant: "default" })}
-              href={`/api/jobs/${id}/model/download`}
+              href={`/api/jobs/${id}/model/download?format=${downloadFormat}`}
             >
-              <Download className="size-4" /> 下載模型
+              <Download className="size-4" /> 下載 {downloadFormat.toUpperCase()}
             </a>
           ) : (
             <Button variant="default" disabled>
-              <Download className="size-4" /> 下載模型
+              <Download className="size-4" /> 下載 {downloadFormat.toUpperCase()}
             </Button>
           )}
         </div>
@@ -320,6 +369,57 @@ export function JobDetailPage({
                 : ""}
             </span>
           </div>
+        </div>
+      </div>
+
+      <div className="glass-panel rounded-xl p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-50">
+              <Box className="size-5 text-cyan-200" /> Splat 預覽
+            </h2>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => void splatQuery.refetch({ throwOnError: false })}
+            disabled={splatQuery.isFetching}
+          >
+            <RefreshCw className={`size-4 ${splatQuery.isFetching ? "animate-spin" : ""}`} />
+            重新整理
+          </Button>
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/50">
+          {splatSnapshot?.status === "ready" && splatSnapshot.viewerUrl ? (
+            <iframe
+              key={splatSnapshot.viewerUrl}
+              className="h-[520px] w-full bg-black"
+              src={splatSnapshot.viewerUrl}
+              title={`splat-viewer-${id}`}
+            />
+          ) : (
+            <div className="flex h-[360px] items-center justify-center px-6 text-center text-sm text-zinc-400">
+              {splatSnapshot?.status === "converting"
+                ? "正在準備瀏覽器預覽，完成後會自動載入。"
+                : splatSnapshot?.status === "error"
+                  ? splatSnapshot.message ?? "Splat 預覽轉換失敗。"
+                  : "尚未找到可預覽的 splat、checkpoint 或 HTML viewer。"}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
+          <span>狀態：{splatSnapshot?.status ?? "載入中"}</span>
+          {splatSnapshot?.source ? (
+            <>
+              <span>來源：{splatSnapshot.source.filename}</span>
+              <span>格式：{splatSnapshot.source.type}</span>
+              <span>大小：{formatBytes(splatSnapshot.source.sizeBytes)}</span>
+              {splatSnapshot.source.iteration !== null ? (
+                <span>iteration {splatSnapshot.source.iteration}</span>
+              ) : null}
+            </>
+          ) : null}
         </div>
       </div>
 

@@ -10,6 +10,7 @@ export const queryKeys = {
   jobs: {
     all: ["jobs"] as const,
     detail: (id: string) => ["jobs", id] as const,
+    splatLatest: (id: string) => ["jobs", id, "splat", "latest"] as const,
     timelapseLatest: (id: string) => ["jobs", id, "timelapse", "latest"] as const,
     timelapseOverview: (id: string) => ["jobs", id, "timelapse", "overview"] as const,
     timelapseFrames: (id: string, camera: string) => ["jobs", id, "timelapse", "frames", camera] as const,
