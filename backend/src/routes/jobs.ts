@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import fsPromises from "node:fs/promises";
 import path from "node:path";
 import archiver from "archiver";
 import { Router } from "express";
@@ -9,6 +8,7 @@ import { registerSseClient } from "../sse.js";
 import { jobService } from "../services/jobService.js";
 import { config } from "../config.js";
 import { removeJobLogFile, removeJobOutputDir } from "../lib/outputCleanup.js";
+import { DEFAULT_SPLAT_EXPORT_FORMAT, ensureViewerPathAllowed, getSplatExportArtifact, getSplatSnapshot, parseSplatExportFormat } from "../lib/splatArtifacts.js";
 
 const createJobSchema = z.object({
   datasetId: z.string().optional(),
@@ -36,43 +36,6 @@ const createJobSchema = z.object({
 });
 
 export const jobsRouter = Router();
-
-async function findLatestModelPly(rootDir: string): Promise<string | null> {
-  let entries: fs.Dirent[];
-  try {
-    entries = await fsPromises.readdir(rootDir, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-
-  let bestPath: string | null = null;
-  let bestMtime = -1;
-
-  await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(rootDir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name === "timelapse") return;
-      const nested = await findLatestModelPly(fullPath);
-      if (!nested) return;
-      const stat = await fsPromises.stat(nested);
-      if (stat.mtimeMs > bestMtime) {
-        bestMtime = stat.mtimeMs;
-        bestPath = nested;
-      }
-      return;
-    }
-
-    if (!entry.isFile()) return;
-    if (!entry.name.toLowerCase().endsWith(".ply")) return;
-    const stat = await fsPromises.stat(fullPath);
-    if (stat.mtimeMs > bestMtime) {
-      bestMtime = stat.mtimeMs;
-      bestPath = fullPath;
-    }
-  }));
-
-  return bestPath;
-}
 
 jobsRouter.get("/", (_req, res) => {
   res.json({ items: jobService.listJobs() });
@@ -158,19 +121,87 @@ jobsRouter.get("/:id/model/download", async (req, res) => {
     return res.status(404).json({ message: "Job not found" });
   }
 
+  const format = parseSplatExportFormat(req.query.format);
+  if (!format) {
+    return res.status(400).json({ message: "Unsupported model format. Use one of: sog, ply, spz, html" });
+  }
+
   const outputRoot = path.resolve(job.outputPath);
   if (!fs.existsSync(outputRoot)) {
     return res.status(404).json({ message: "Model output not found" });
   }
 
-  const modelPath = await findLatestModelPly(outputRoot);
-  if (!modelPath) {
-    return res.status(404).json({ message: "Model .ply not found" });
+  let artifact: Awaited<ReturnType<typeof getSplatExportArtifact>>;
+  try {
+    artifact = await getSplatExportArtifact(outputRoot, format);
+  } catch (error) {
+    return res.status(500).json({ message: `Failed to prepare ${format.toUpperCase()} export: ${(error as Error).message}` });
   }
 
-  const downloadName = path.basename(modelPath);
+  if (!artifact) {
+    return res.status(404).json({ message: "Model output not found" });
+  }
+
+  const resolvedModelPath = path.resolve(artifact.path);
+  if (!ensureViewerPathAllowed(resolvedModelPath, outputRoot) || !fs.existsSync(resolvedModelPath)) {
+    return res.status(404).json({ message: "Model export not found" });
+  }
+
+  const downloadName = resolvedModelPath.includes(`${path.sep}.web-preview${path.sep}`)
+    ? `${job.id}-model.${artifact.format}`
+    : path.basename(resolvedModelPath);
+  res.setHeader("X-LFS-Default-Format", DEFAULT_SPLAT_EXPORT_FORMAT);
   res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
-  return res.sendFile(modelPath);
+  return res.sendFile(resolvedModelPath);
+});
+
+jobsRouter.get("/:id/splat/latest", async (req, res) => {
+  const job = repo.getJob(req.params.id);
+  if (!job) {
+    return res.status(404).json({ message: "Job not found" });
+  }
+
+  const snapshot = await getSplatSnapshot(job.outputPath);
+  if (!snapshot.available) {
+    return res.json(snapshot);
+  }
+
+  return res.json({
+    available: true,
+    status: snapshot.status,
+    message: snapshot.message,
+    viewerUrl: snapshot.viewerPath ? `/api/jobs/${job.id}/splat/viewer?mtime=${Math.round(snapshot.source.mtimeMs)}` : null,
+    source: {
+      type: snapshot.source.type,
+      filename: path.basename(snapshot.source.path),
+      mtimeMs: snapshot.source.mtimeMs,
+      sizeBytes: snapshot.source.sizeBytes,
+      iteration: snapshot.source.iteration
+    }
+  });
+});
+
+jobsRouter.get("/:id/splat/viewer", async (req, res) => {
+  const job = repo.getJob(req.params.id);
+  if (!job) {
+    return res.status(404).json({ message: "Job not found" });
+  }
+
+  const snapshot = await getSplatSnapshot(job.outputPath);
+  if (!snapshot.available) {
+    return res.status(404).json({ message: snapshot.message });
+  }
+  if (snapshot.status !== "ready" || !snapshot.viewerPath) {
+    return res.status(409).json({ message: snapshot.message ?? "Splat viewer is not ready" });
+  }
+
+  const resolvedViewerPath = path.resolve(snapshot.viewerPath);
+  if (!ensureViewerPathAllowed(resolvedViewerPath, path.resolve(job.outputPath)) || !fs.existsSync(resolvedViewerPath)) {
+    return res.status(404).json({ message: "Splat viewer not found" });
+  }
+
+  res.setHeader("Cache-Control", "no-cache");
+  return res.sendFile(resolvedViewerPath);
 });
 
 jobsRouter.get("/:id/timelapse/cameras", (req, res) => {
