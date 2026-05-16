@@ -10,7 +10,7 @@ describe("timelapse parser", () => {
     expect(parseIterationFromFilename("/tmp/not-a-frame.txt")).toBeNull();
   });
 
-  it("scans timelapse folder structure", () => {
+  it("scans timelapse folder structure", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "lfs-timelapse-"));
     const outputPath = root;
     const cameraDir = path.join(root, "timelapse", "IMG_6672");
@@ -18,13 +18,13 @@ describe("timelapse parser", () => {
     fs.writeFileSync(path.join(cameraDir, "000100.jpg"), "a");
     fs.writeFileSync(path.join(cameraDir, "000200.jpg"), "b");
 
-    const frames = scanTimelapseDir(outputPath);
+    const frames = await scanTimelapseDir(outputPath);
     expect(frames.length).toBe(2);
     expect(frames[0].cameraName).toBe("IMG_6672");
     expect(frames[0].iteration).toBe(200);
   });
 
-  it("scans nested timelapse camera folders", () => {
+  it("scans nested timelapse camera folders", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "lfs-timelapse-nested-"));
     const outputPath = root;
     const cameraDir = path.join(root, "timelapse", "nx", "0001");
@@ -32,7 +32,7 @@ describe("timelapse parser", () => {
     fs.writeFileSync(path.join(cameraDir, "000500.jpg"), "a");
     fs.writeFileSync(path.join(cameraDir, "000600.jpg"), "b");
 
-    const frames = scanTimelapseDir(outputPath);
+    const frames = await scanTimelapseDir(outputPath);
 
     expect(frames.length).toBe(2);
     expect(frames[0].cameraName).toBe("nx/0001");
