@@ -15,7 +15,7 @@ RUN pnpm --filter @lichtfeld/frontend build && pnpm --filter @lichtfeld/backend 
 
 FROM nvidia/cuda:12.8.0-devel-ubuntu24.04 AS lfs-build
 ARG LFS_REPO=https://github.com/MrNeRF/LichtFeld-Studio.git
-ARG LFS_REF=0.5.1
+ARG LFS_REF=0.5.2
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
@@ -30,6 +30,7 @@ RUN set -eux; \
           ca-certificates \
           curl \
           git \
+          libgtk-3-dev \
           libgl1-mesa-dev \
           libglu1-mesa-dev \
           libopengl-dev \
@@ -122,11 +123,14 @@ RUN set -eux; \
           libglu1-mesa \
           libglvnd0 \
           libgomp1 \
+          libgtk-3-0t64 \
           libice6 \
           libnss3 \
           libopengl0 \
           libsm6 \
           libx11-6 \
+          libx11-xcb1 \
+          libxcb1 \
           libxcursor1 \
           libxdamage1 \
           libxext6 \

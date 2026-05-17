@@ -85,6 +85,8 @@ set(_vcpkg_release_runtime_dir "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARG
 1. 升版後若出現 `cannot open shared object file`，**不要**只針對報錯的單一 `.so` 加 pattern，應確認上述 for loop 是否存在且路徑正確。
 2. 若 vcpkg 新增了大量子目錄深度超過 3 層的依賴（較少見），才需要調整 `-maxdepth`。
 3. vcpkg 依賴清單以 `vcpkg.json` 為準，可能包含：ffmpeg、SDL3、Python3、TBB、OpenImageIO、assimp、RmlUi、boost-regex、OpenSSL、libarchive、freetype、USD 等，均需透過上述策略一併帶入。
+4. LichtFeld-Studio `0.5.2` 起會在 Linux build 檢查 GUI backend 與 `nativefiledialog-extended` 的 GTK backend。`lfs-build` 階段需有 `libgtk-3-dev` 與 X11 開發檔；runtime 階段需保留 GTK3 runtime（Ubuntu 24.04 為 `libgtk-3-0t64`），否則 build 可能在 CMake configure 失敗，或執行時找不到 `libgtk-3.so.0`。
+5. LichtFeld-Studio `master` 目前已切向 Vulkan viewer，vcpkg 會帶入 Vulkan loader/volk/glslang/shader-slang；runtime image 仍需保留 X11/XCB runtime（例如 `libx11-xcb1`、`libxcb1`），避免 Vulkan loader 或 SDL X11 backend 在啟動時缺 shared library。
 
 ## 文件更新
 
