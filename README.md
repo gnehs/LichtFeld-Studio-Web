@@ -81,7 +81,7 @@ docker compose up -d --build
 
 - Docker 配置預設使用 `gpus: all`
 - 主機需先安裝 NVIDIA Driver 與 NVIDIA Container Toolkit
-- Docker build 預設建構 LichtFeld-Studio `0.5.2`，可用 `LFS_REF` 覆寫
+- Docker build 預設建構 LichtFeld-Studio `v0.5.3`，可用 `LFS_REF` 覆寫
 - 容器內預設 `LFS_BIN_PATH=/opt/lichtfeld/bin/LichtFeld-Studio`
 
 ## 環境變數
@@ -97,7 +97,7 @@ docker compose up -d --build
 - `SESSION_CLEANUP_INTERVAL_MS`: 主動清理過期 session 的週期，預設 `3600000`（1 小時）
 - `DATASET_ALLOWED_ROOTS`: 允許註冊的 dataset 路徑白名單，預設為 datasets 目錄
 - `LFS_BIN_PATH`: LichtFeld-Studio 執行檔路徑；Docker 預設已設定
-- `LFS_REF`: Docker build 使用的 LichtFeld-Studio git ref，預設 `0.5.2`
+- `LFS_REF`: Docker build 使用的 LichtFeld-Studio git ref，預設 `v0.5.3`
 
 其他像 `DATA_ROOT`、`DATASETS_DIR`、`OUTPUTS_DIR`、`DB_PATH`、`LOGS_DIR` 都有預設值，通常不需要調整。
 

@@ -15,7 +15,7 @@ RUN pnpm --filter @lichtfeld/frontend build && pnpm --filter @lichtfeld/backend 
 
 FROM nvidia/cuda:12.8.0-devel-ubuntu24.04 AS lfs-build
 ARG LFS_REPO=https://github.com/MrNeRF/LichtFeld-Studio.git
-ARG LFS_REF=0.5.2
+ARG LFS_REF=v0.5.3
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
