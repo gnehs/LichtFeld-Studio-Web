@@ -42,6 +42,7 @@ import {
   getDatasetFolderPreviewSrc,
   getDatasetNameByIdMap,
   getDatasetSelectItems,
+  isDatasetFolderSelectable,
 } from "./create-job-dataset-select";
 import { getCreateJobSelectionState } from "./create-job-selection-state";
 import { cn } from "@/lib/utils";
@@ -265,13 +266,7 @@ export function CreateJobWizard({
   });
 
   const selectableFolders = useMemo(
-    () =>
-      datasetFolders.filter(
-        (folder) =>
-          folder.isRegistered &&
-          folder.health === "ready" &&
-          Boolean(folder.datasetId),
-      ),
+    () => datasetFolders.filter(isDatasetFolderSelectable),
     [datasetFolders],
   );
   const datasetNameById = useMemo(() => getDatasetNameByIdMap(datasets), [datasets]);
@@ -559,10 +554,7 @@ export function CreateJobWizard({
                     <SelectGroup>
                       <SelectLabel>所有資料集</SelectLabel>
                       {datasetFolders.map((folder) => {
-                        const disabled =
-                          !folder.isRegistered ||
-                          folder.health !== "ready" ||
-                          !folder.datasetId;
+                        const disabled = !isDatasetFolderSelectable(folder);
                         return (
                           <SelectItem
                             key={folder.path}
@@ -601,7 +593,7 @@ export function CreateJobWizard({
                 </p>
               ) : selectableFolders.length === 0 ? (
                 <p className="text-sm text-amber-200">
-                  目前沒有可建立任務的 dataset，請先排除資料集頁面的錯誤狀態或等待寫入完成。
+                  目前沒有已註冊、可建立任務的 dataset。
                 </p>
               ) : null}
             </SourcePanel>

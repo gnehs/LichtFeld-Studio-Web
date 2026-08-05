@@ -163,4 +163,41 @@ describe("CreateJobWizard source mode UI", () => {
     expect(trigger?.className).toContain("data-[size=default]:h-auto");
     expect(trigger?.className).toContain("min-h-12");
   });
+
+  test("auto-selects a registered dataset while it is stabilizing", async () => {
+    const mounted = mountWizard({
+      datasets: [
+        {
+          id: "ds-stabilizing",
+          name: "0805-as-202608051146",
+          type: "registered",
+          path: "/data/0805-as-202608051146",
+          createdAt: "2026-08-05T03:46:00.000Z",
+        },
+      ],
+      datasetFolders: [
+        {
+          name: "0805-as-202608051146",
+          path: "/data/0805-as-202608051146",
+          datasetId: "ds-stabilizing",
+          isRegistered: true,
+          health: "stabilizing",
+          reason: "dataset is still being written",
+          imageCount: 128,
+          folderSizeBytes: 1024,
+          hasMasks: false,
+          hasAlphaImages: false,
+          previewImageRelativePath: null,
+        },
+      ] as DatasetFolderEntry[],
+    });
+    container = mounted.container;
+    root = mounted.root;
+
+    await mounted.render();
+
+    const value = container.querySelector('[data-slot="select-value"]');
+    expect(value?.textContent).toContain("0805-as-202608051146");
+    expect(container.textContent).not.toContain("目前沒有已註冊、可建立任務的 dataset");
+  });
 });

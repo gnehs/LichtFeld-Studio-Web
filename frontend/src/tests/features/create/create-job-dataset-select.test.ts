@@ -3,6 +3,7 @@ import {
   formatDatasetFolderMeta,
   getDatasetNameByIdMap,
   getDatasetSelectItems,
+  isDatasetFolderSelectable,
 } from "@/features/create/create-job-dataset-select";
 import type { DatasetFolderEntry, DatasetRecord } from "@/lib/types";
 
@@ -67,5 +68,42 @@ describe("getDatasetSelectItems", () => {
         hasAlphaImages: false,
       }),
     ).toBe("128 張相片 - 包含遮罩");
+  });
+
+  test.each(["ready", "uploading", "stabilizing", "invalid"] as const)(
+    "allows registered datasets to be selected with %s health",
+    (health) => {
+      expect(
+        isDatasetFolderSelectable({
+          name: "0805-as-202608051146",
+          path: "/data/0805-as-202608051146",
+          datasetId: "ds-stabilizing",
+          isRegistered: true,
+          health,
+          reason: "dataset is still being written",
+          imageCount: 128,
+          folderSizeBytes: 1024,
+          hasMasks: false,
+          hasAlphaImages: false,
+        }),
+      ).toBe(true);
+    },
+  );
+
+  test("keeps folders without a registered dataset disabled", () => {
+    expect(
+      isDatasetFolderSelectable({
+        name: "unregistered-folder",
+        path: "/data/unregistered-folder",
+        datasetId: null,
+        isRegistered: false,
+        health: "ready",
+        reason: null,
+        imageCount: 128,
+        folderSizeBytes: 1024,
+        hasMasks: false,
+        hasAlphaImages: false,
+      }),
+    ).toBe(false);
   });
 });

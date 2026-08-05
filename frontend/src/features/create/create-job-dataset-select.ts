@@ -54,6 +54,10 @@ export function getDatasetFolderPreviewSrc(folder: DatasetFolderEntry): string |
   return `/api/datasets/folders/${encodeURIComponent(folder.name)}/preview?path=${encodeURIComponent(folder.previewImageRelativePath)}`;
 }
 
+export function isDatasetFolderSelectable(folder: DatasetFolderEntry): boolean {
+  return folder.isRegistered && Boolean(folder.datasetId);
+}
+
 export function getDatasetSelectItems(
   datasetFolders: DatasetFolderEntry[],
   datasetNameById: ReadonlyMap<string, string>,
