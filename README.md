@@ -97,7 +97,7 @@ docker compose up -d --build
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install modal
+python -m pip install -r modal/requirements.txt
 modal setup
 ```
 
@@ -151,13 +151,15 @@ MODAL_CONTROL_TOKEN=<value-used-in-lichtfeld-modal-control>
 MODAL_CALLBACK_TOKEN=<value-used-in-lichtfeld-modal-callback>
 ```
 
-Modal Web wrapper 會在同一個容器啟動 volume helper，並自動注入 `MODAL_VOLUME_HELPER_URL=http://127.0.0.1:3001`。helper 的 `/data/commit` 會在 dispatch 前提交 Volume；`/data/reload` 會在 terminal callback 前重新載入。這個 loopback URL 不應對外公開；若是自訂 wrapper 才需要覆寫它。
+Modal Web wrapper 會在同一個容器啟動 volume helper，並自動注入 `MODAL_VOLUME_HELPER_URL=http://127.0.0.1:3001`。helper 的 `/data/commit` 會在 dispatch 前提交 Volume；`/data/reload` 會在 terminal callback 與即時 frame 首次讀取失敗時重新載入。這個 loopback URL 不應對外公開；若是自訂 wrapper 才需要覆寫它。
 
 ### Autoscaling、限制與費用
 
 - `web_server` 與 `control_server` 都使用 `min_containers=0`、`scaledown_window=2`：沒有請求時 CPU container 會縮到零，新的請求需要承擔 cold start 延遲（[autoscaling](https://modal.com/docs/guide/scale)）。
 - 瀏覽器開著 job log 的 SSE 連線時仍屬於活躍請求，`web_server` 不會在連線期間縮到零；關閉頁面或連線結束後，才會進入上述 idle 縮容窗口。
+- GPU worker 發現新的 timelapse frame 時會先 commit shared Volume；web container 第一次讀不到該 frame 時會 reload Volume 後重試，讓訓練中的即時預覽不必等到任務結束。
 - GPU `gpu_trainer` 僅在有訓練呼叫時啟動，預設使用 A10；單次 Function execution 最長 24 小時（可用 `MODAL_TRAINER_TIMEOUT` 調低，但不能超過上限，見 [timeouts](https://modal.com/docs/guide/timeouts)）。超過 24 小時的工作需自行 checkpoint、重試或拆成多次呼叫。
+- `gpu_trainer` 啟動 LichtFeld-Studio 前，會把 `--data-path` 指向的完整資料集複製到容器本機 `/tmp/lichtfeld-datasets`，降低 Modal Volume 大量小檔案存取的延遲；`--output-path` 仍指向 `/data/outputs`，完成、失敗或取消後都會清除該次本機暫存。複製需要容器暫存磁碟同時容納一份完整資料集；Modal 預設 ephemeral disk 配額為 512 GiB，超過時需調高 Function 的 `ephemeral_disk`（[CPU、記憶體與磁碟設定](https://modal.com/docs/guide/resources)）。
 - scale-to-zero 只代表 compute container 不常駐；Persistent Volumes 的儲存、映像建置/儲存與網路流量仍可能產生費用。Volume 刪除資料後，依 Modal 文件仍可能在最多約四天內計入儲存處理費（[Volumes pricing](https://modal.com/docs/guide/volumes)）。
 
 若要完全在本機執行，將 `TRAINING_EXECUTOR` 設回 `local`，並照 Docker 段落執行 `docker compose up -d --build`；不需要建立或保留 Modal 資源。
@@ -180,6 +182,7 @@ Modal Web wrapper 會在同一個容器啟動 volume helper，並自動注入 `M
 - `TRAINING_EXECUTOR`: `local`（預設）或 `modal`
 - `MODAL_VOLUME_HELPER_URL`: 自訂 Modal wrapper 的 volume helper URL；標準 wrapper 會自動注入 loopback URL
 - `MODAL_GPU`、`MODAL_TRAINER_TIMEOUT`: Modal trainer 的 GPU 型號與單次執行 timeout（預設 A10、86400 秒）
+- `MODAL_STAGING_WORKERS`: Modal trainer 從 Volume 複製資料集到本機 SSD 時的平行 worker 數（預設 32，最大 64）
 - `MODAL_GPU_IMAGE`: 選填的 GPU registry image；設定後會略過 `modal/Dockerfile.gpu`，因此該映像必須自行包含 Python、`modal/requirements.txt` 套件、OpenMesh shared libraries，並重新以 `ldd` 驗證。未設定時會使用本專案已驗證的 Dockerfile 建置流程。
 
 其他像 `DATA_ROOT`、`DATASETS_DIR`、`OUTPUTS_DIR`、`DB_PATH`、`LOGS_DIR` 都有預設值，通常不需要調整。

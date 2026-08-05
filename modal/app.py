@@ -9,21 +9,25 @@ truth for jobs; this module only dispatches work and forwards worker events.
 from __future__ import annotations
 
 import codecs
+import errno
 import hashlib
 import hmac
 import json
 import os
 import queue
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
@@ -411,6 +415,161 @@ def _arg_value(args: Iterable[str], flag: str) -> str | None:
     return values[-1] if values else None
 
 
+def _replace_arg_value(args: Iterable[str], flag: str, replacement: str) -> list[str]:
+    """Replace every value for a validated two-token CLI flag."""
+
+    values = list(args)
+    replaced = False
+    for index, value in enumerate(values):
+        if value != flag:
+            continue
+        if index + 1 >= len(values) or not values[index + 1]:
+            raise ValueError(f"{flag} requires a path")
+        values[index + 1] = replacement
+        replaced = True
+    if not replaced:
+        raise ValueError(f"{flag} is required")
+    return values
+
+
+@dataclass(frozen=True)
+class StagedDataset:
+    source_path: Path
+    data_path: Path
+    scratch_path: Path
+    file_count: int
+    size_bytes: int
+    elapsed_seconds: float
+
+
+def _stage_dataset_locally(
+    source_path: Path,
+    progress: Callable[[int, int, float], None] | None = None,
+    *,
+    dataset_root: Path | None = None,
+) -> StagedDataset:
+    """Copy one dataset from the shared Volume to the container-local SSD."""
+
+    source_path = source_path.resolve(strict=True)
+    allowed_root = (dataset_root or Path(DATA_MOUNT) / "datasets").resolve(strict=False)
+    try:
+        relative_source = source_path.relative_to(allowed_root)
+    except ValueError as exc:
+        raise ValueError(f"Dataset path must stay under {allowed_root}") from exc
+    if not relative_source.parts:
+        raise ValueError(f"Dataset path must identify one dataset below {allowed_root}")
+    if not source_path.is_dir():
+        raise ValueError(f"Dataset path must be a directory: {source_path}")
+
+    scratch_parent = Path("/tmp/lichtfeld-datasets")
+    scratch_parent.mkdir(parents=True, exist_ok=True)
+    scratch_path = Path(tempfile.mkdtemp(prefix="job-", dir=scratch_parent))
+    data_path = scratch_path / "dataset"
+    started_at = time.monotonic()
+    last_progress_at = started_at
+    file_count = 0
+    size_bytes = 0
+    progress_lock = threading.Lock()
+
+    def copy_file(source: str, destination: str) -> str:
+        nonlocal file_count, size_bytes, last_progress_at
+        try:
+            copied = shutil.copyfile(source, destination)
+        except OSError as exc:
+            if exc.errno == errno.ENOSPC:
+                raise RuntimeError(
+                    "Container-local disk is too small to stage the dataset; "
+                    "increase gpu_trainer ephemeral_disk"
+                ) from exc
+            raise
+        try:
+            copied_size = Path(destination).stat().st_size
+        except OSError:
+            copied_size = 0
+        progress_snapshot: tuple[int, int, float] | None = None
+        with progress_lock:
+            file_count += 1
+            size_bytes += copied_size
+            now = time.monotonic()
+            if progress is not None and now - last_progress_at >= 10:
+                progress_snapshot = (file_count, size_bytes, now - started_at)
+                last_progress_at = now
+        if progress is not None and progress_snapshot is not None:
+            progress(*progress_snapshot)
+        return copied
+
+    try:
+        copy_jobs: list[tuple[str, str]] = []
+        for current_root, directory_names, file_names in os.walk(source_path, followlinks=False):
+            current_path = Path(current_root)
+            relative_path = current_path.relative_to(source_path)
+            destination_dir = data_path / relative_path
+            destination_dir.mkdir(parents=True, exist_ok=True)
+
+            for directory_name in list(directory_names):
+                source_dir = current_path / directory_name
+                destination = destination_dir / directory_name
+                if source_dir.is_symlink():
+                    raise ValueError(f"Dataset staging does not support symlinks: {source_dir}")
+                destination.mkdir(exist_ok=True)
+
+            for file_name in file_names:
+                source_file = current_path / file_name
+                destination = destination_dir / file_name
+                if source_file.is_symlink():
+                    raise ValueError(f"Dataset staging does not support symlinks: {source_file}")
+                elif source_file.is_file():
+                    copy_jobs.append((str(source_file), str(destination)))
+                else:
+                    raise ValueError(f"Dataset contains an unsupported file type: {source_file}")
+
+        workers = _positive_int("MODAL_STAGING_WORKERS", 32, maximum=64)
+        executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="dataset-stage")
+        futures = []
+        try:
+            futures = [executor.submit(copy_file, source, destination) for source, destination in copy_jobs]
+            for future in as_completed(futures):
+                future.result()
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=True, cancel_futures=True)
+            raise
+        else:
+            executor.shutdown(wait=True)
+    except OSError as exc:
+        shutil.rmtree(scratch_path, ignore_errors=True)
+        if exc.errno == errno.ENOSPC:
+            raise RuntimeError(
+                "Container-local disk is too small to stage the dataset; "
+                "increase gpu_trainer ephemeral_disk"
+            ) from exc
+        raise
+    except BaseException:
+        # Modal cancellation may interrupt Python with KeyboardInterrupt while
+        # copytree is still running, before gpu_trainer receives the result.
+        shutil.rmtree(scratch_path, ignore_errors=True)
+        raise
+
+    return StagedDataset(
+        source_path=source_path,
+        data_path=data_path,
+        scratch_path=scratch_path,
+        file_count=file_count,
+        size_bytes=size_bytes,
+        elapsed_seconds=time.monotonic() - started_at,
+    )
+
+
+def _format_bytes(value: int) -> str:
+    amount = float(value)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if amount < 1024 or unit == "TiB":
+            return f"{amount:.1f} {unit}"
+        amount /= 1024
+    return f"{amount:.1f} TiB"
+
+
 _FRAME_RE = re.compile(r"(?P<iteration>\d+)\.(?:jpg|jpeg|png)$", re.IGNORECASE)
 _FRAME_SUFFIXES = {".jpg", ".jpeg", ".png"}
 _SPLAT_SOURCE_SUFFIXES = {".ply", ".resume", ".sog", ".spz"}
@@ -466,6 +625,28 @@ def _scan_timelapse(output_path: Path, seen: set[tuple[str, int, str]]) -> list[
             )
         )
     return sorted(frames, key=lambda item: (item.camera_name, item.iteration, item.file_path))
+
+
+def _scan_and_commit_timelapse(
+    output_path: Path,
+    seen: set[tuple[str, int, str]],
+    commit: Callable[[], None],
+) -> list[TimelapseFrame]:
+    """Persist newly discovered frames before exposing their paths to the API."""
+
+    frames = _scan_timelapse(output_path, seen)
+    if not frames:
+        return []
+
+    try:
+        commit()
+    except BaseException:
+        # A failed commit must not permanently suppress these frames. Let the
+        # next scan retry both persistence and publication.
+        for frame in frames:
+            seen.discard((frame.camera_name, frame.iteration, frame.file_path))
+        raise
+    return frames
 
 
 def _find_latest_splat_source(output_path: Path) -> Path | None:
@@ -672,6 +853,7 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
     error_message: str | None = None
     preview_warnings: list[str] = []
     volume_loaded = False
+    staged_dataset: StagedDataset | None = None
     event_queue: queue.Queue[tuple[str, str] | _StreamDone] = queue.Queue()
     done_streams: set[str] = set()
     batches: dict[str, list[str]] = {"stdout": [], "stderr": []}
@@ -699,7 +881,13 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
         if now - last_scan < scan_interval:
             return
         last_scan = now
-        frames = _scan_timelapse(output_path, seen_frames)
+        try:
+            frames = _scan_and_commit_timelapse(output_path, seen_frames, data_volume.commit)
+        except Exception as exc:
+            message = f"timelapse Volume commit failed: {exc}"
+            callback_errors.append(message)
+            print(message, flush=True)
+            return
         for frame in frames:
             _safe_callback(
                 callback_base_url,
@@ -736,8 +924,52 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
         # even when Modal does not create a fresh GPU container.
         data_volume.reload()
         volume_loaded = True
+
+        data_arg = _arg_value(args, "--data-path")
+        process_args = list(args)
+        if data_arg is not None:
+            staging_started_line = f"Staging dataset from {data_arg} to container-local SSD..."
+            print(staging_started_line, flush=True)
+            _safe_callback(
+                callback_base_url,
+                job_id,
+                "log",
+                {"stream": "stdout", "lines": [staging_started_line]},
+                callback_errors,
+            )
+
+            def report_staging_progress(file_count: int, size_bytes: int, elapsed_seconds: float) -> None:
+                progress_line = (
+                    f"Dataset staging: {file_count} files, {_format_bytes(size_bytes)} "
+                    f"copied in {elapsed_seconds:.0f}s"
+                )
+                print(progress_line, flush=True)
+                _safe_callback(
+                    callback_base_url,
+                    job_id,
+                    "log",
+                    {"stream": "stdout", "lines": [progress_line]},
+                    callback_errors,
+                )
+
+            staged_dataset = _stage_dataset_locally(Path(data_arg), report_staging_progress)
+            process_args = _replace_arg_value(args, "--data-path", str(staged_dataset.data_path))
+            staging_completed_line = (
+                f"Dataset staged locally: {staged_dataset.file_count} files, "
+                f"{_format_bytes(staged_dataset.size_bytes)} in "
+                f"{staged_dataset.elapsed_seconds:.1f}s"
+            )
+            print(staging_completed_line, flush=True)
+            _safe_callback(
+                callback_base_url,
+                job_id,
+                "log",
+                {"stream": "stdout", "lines": [staging_completed_line]},
+                callback_errors,
+            )
+
         process = subprocess.Popen(
-            [binary, *args],
+            [binary, *process_args],
             cwd=DATA_MOUNT,
             env={**os.environ, "LOG_LEVEL": os.getenv("LOG_LEVEL", "info")},
             stdout=subprocess.PIPE,
@@ -809,6 +1041,14 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
         if process is not None:
             _terminate_process(process, "runner_error")
     finally:
+        if staged_dataset is not None:
+            try:
+                shutil.rmtree(staged_dataset.scratch_path)
+            except OSError as exc:
+                cleanup_warning = f"local dataset cleanup failed: {exc}"
+                callback_errors.append(cleanup_warning)
+                print(cleanup_warning, flush=True)
+
         # The shared Volume must be committed before the API receives a
         # terminal event; the API reloads it when processing that event.
         if volume_loaded:

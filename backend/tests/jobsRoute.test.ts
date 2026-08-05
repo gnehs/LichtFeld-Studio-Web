@@ -205,6 +205,73 @@ describe("jobs delete route", () => {
   });
 });
 
+describe("jobs timelapse frame route", () => {
+  it("reloads a Modal Volume and retries a frame that is not in the web container snapshot yet", async () => {
+    vi.resetModules();
+
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lfs-jobs-route-timelapse-"));
+    const outputsDir = path.join(root, "outputs");
+    const logsDir = path.join(root, "logs");
+    const dbPath = path.join(root, "db", "app.db");
+    process.env.DATA_ROOT = root;
+    process.env.OUTPUTS_DIR = outputsDir;
+    process.env.LOGS_DIR = logsDir;
+    process.env.DB_PATH = dbPath;
+    process.env.SESSION_SECRET = "test-session-secret";
+    process.env.ADMIN_PASSWORD_HASH = "$2a$10$8QfQh49Fzi6zpbW6A2fBXeJvlaQt1zArQXd1LSeXfhBF3nf6/DrxW";
+
+    const { jobsRouter } = await import("../src/routes/jobs.js");
+    const { repo } = await import("../src/db.js");
+    const { jobService } = await import("../src/services/jobService.js");
+
+    const layer = jobsRouter.stack.find((entry) => {
+      const route = entry.route as { path?: string; methods?: Record<string, boolean> } | undefined;
+      return route?.path === "/:id/timelapse/frame" && route.methods?.get;
+    });
+    const handler = layer?.route?.stack?.[0]?.handle;
+    if (!handler) throw new Error("Timelapse frame handler not found");
+
+    const outputPath = path.join(outputsDir, "job-timelapse-1");
+    const framePath = path.join(outputPath, "timelapse", "cam-01", "0001.png");
+    repo.createJob({
+      id: "job-timelapse-1",
+      datasetId: null,
+      status: "running",
+      outputPath,
+      argsJson: "[]",
+      paramsJson: "{}",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      pid: null,
+      exitCode: null,
+      errorMessage: null,
+      stopReason: null,
+      executor: "modal"
+    });
+
+    const reload = vi
+      .spyOn(jobService, "reloadRemoteVolume")
+      .mockRejectedValueOnce(new Error("volume busy"))
+      .mockImplementationOnce(async () => {
+        fs.mkdirSync(path.dirname(framePath), { recursive: true });
+        fs.writeFileSync(framePath, "frame");
+      });
+
+    const response = makeResponse();
+    await handler(
+      { params: { id: "job-timelapse-1" }, query: { path: framePath } } as any,
+      response as any,
+      vi.fn()
+    );
+
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(response.statusCode).toBe(200);
+    expect(response.filePath).toBe(framePath);
+  });
+});
+
 describe("jobs splat route", () => {
   it("reports the newest HTML splat viewer snapshot", async () => {
     vi.resetModules();

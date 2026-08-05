@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import archiver from "archiver";
 import { Router } from "express";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { registerSseClient } from "../sse.js";
 import { jobService } from "../services/jobService.js";
 import { config } from "../config.js";
 import { removeJobLogFile, removeJobOutputDir } from "../lib/outputCleanup.js";
+import { logger } from "../lib/logger.js";
 import { DEFAULT_SPLAT_EXPORT_FORMAT, ensureViewerPathAllowed, getSplatExportArtifact, getSplatSnapshot, parseSplatExportFormat } from "../lib/splatArtifacts.js";
 
 const createJobSchema = z.object({
@@ -289,7 +291,7 @@ jobsRouter.get("/:id/timelapse/download", (req, res) => {
   archive.finalize();
 });
 
-jobsRouter.get("/:id/timelapse/frame", (req, res) => {
+jobsRouter.get("/:id/timelapse/frame", async (req, res) => {
   const job = repo.getJob(req.params.id);
   if (!job) {
     return res.status(404).json({ message: "Job not found" });
@@ -302,7 +304,36 @@ jobsRouter.get("/:id/timelapse/frame", (req, res) => {
 
   const resolved = path.resolve(filePath);
   const allowRoot = path.resolve(path.join(job.outputPath, "timelapse"));
-  if ((resolved !== allowRoot && !resolved.startsWith(allowRoot + path.sep)) || !fs.existsSync(resolved)) {
+  if (resolved !== allowRoot && !resolved.startsWith(allowRoot + path.sep)) {
+    return res.status(404).json({ message: "Frame not found" });
+  }
+
+  if (!fs.existsSync(resolved) && job.executor === "modal") {
+    let reloadError: unknown;
+    for (let attempt = 0; attempt < 3 && !fs.existsSync(resolved); attempt += 1) {
+      try {
+        // Modal containers keep a snapshot of mounted Volumes. A live frame can
+        // be committed by the GPU worker after this web container was started.
+        await jobService.reloadRemoteVolume();
+        reloadError = undefined;
+      } catch (error) {
+        reloadError = error;
+      }
+      if (!fs.existsSync(resolved) && attempt < 2) {
+        // reload() can briefly fail with "volume busy" while another response
+        // still has a file open. Keep this request alive and retry.
+        await delay(100 * (attempt + 1));
+      }
+    }
+    if (reloadError && !fs.existsSync(resolved)) {
+      logger.warn("Modal volume reload failed while serving timelapse frame", {
+        job_id: job.id,
+        ...logger.errFields(reloadError)
+      });
+    }
+  }
+
+  if (!fs.existsSync(resolved)) {
     return res.status(404).json({ message: "Frame not found" });
   }
 
