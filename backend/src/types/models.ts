@@ -93,7 +93,6 @@ export interface TrainingParamsForm {
   maxCap?: number;
   minOpacity?: number;
   stepsScaler?: number;
-  tileMode?: 1 | 2 | 4;
   random?: boolean;
   initNumPts?: number;
   initExtent?: number;
@@ -123,11 +122,9 @@ export interface TrainingParamsForm {
   useEdgeMap?: boolean;
   eval?: boolean;
   saveEvalImages?: boolean;
-  saveDepth?: boolean;
   headless?: boolean;
   train?: boolean;
   noSplash?: boolean;
-  noInterop?: boolean;
   debugPython?: boolean;
   debugPythonPort?: number;
   logLevel?: string;

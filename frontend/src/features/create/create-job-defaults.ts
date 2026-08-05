@@ -15,7 +15,6 @@ export interface CreateJobStrategyDefaults {
   maxCap: number;
   minOpacity: number;
   stepsScaler: number;
-  tileMode: 1 | 2 | 4;
   random: boolean;
   initNumPts: number;
   initExtent: number;
@@ -27,7 +26,6 @@ export interface CreateJobStrategyDefaults {
   noFsCache: boolean;
   eval: boolean;
   saveEvalImages: boolean;
-  saveDepth: boolean;
   gut: boolean;
   undistort: boolean;
   maskMode: CreateJobMaskMode;
@@ -54,7 +52,6 @@ const COMMON_DEFAULTS: Omit<CreateJobStrategyDefaults, "strategy" | "maxCap"> = 
   shDegreeInterval: 1000,
   minOpacity: 0.005,
   stepsScaler: 1,
-  tileMode: 1,
   random: false,
   initNumPts: 100000,
   initExtent: 3,
@@ -66,7 +63,6 @@ const COMMON_DEFAULTS: Omit<CreateJobStrategyDefaults, "strategy" | "maxCap"> = 
   noFsCache: false,
   eval: false,
   saveEvalImages: true,
-  saveDepth: false,
   gut: false,
   undistort: false,
   maskMode: "none",

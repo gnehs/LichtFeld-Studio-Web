@@ -78,6 +78,15 @@ describe("jobService disk status", () => {
       },
     });
 
+    childRef!.stdout.emit(
+      "data",
+      Buffer.from("Training 100/1000 | Loss: 0.5\rTraining 200/1000 | Loss: 0.4\r"),
+    );
+    expect(jobService.getLogLines(job.id)).toEqual([
+      "Training 100/1000 | Loss: 0.5",
+      "Training 200/1000 | Loss: 0.4",
+    ]);
+
     childRef!.emit("error", new Error("libmissing.so not found"));
     childRef!.emit("close", 127);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -190,8 +199,8 @@ describe("jobService disk status", () => {
       stopReason: null,
     });
 
-    fs.writeFileSync(path.join(logsDir, "job-log-file.log"), "first line\nsecond line\n");
-    expect(jobService.getLogLines("job-log-file")).toEqual(["first line", "second line"]);
+    fs.writeFileSync(path.join(logsDir, "job-log-file.log"), "first line\rsecond line\nthird line\r\n");
+    expect(jobService.getLogLines("job-log-file")).toEqual(["first line", "second line", "third line"]);
 
     repo.createJob({
       id: "job-error-only",

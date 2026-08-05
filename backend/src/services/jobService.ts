@@ -66,7 +66,7 @@ class JobService {
     if (fs.existsSync(persistedLogPath)) {
       const persisted = fs
         .readFileSync(persistedLogPath, "utf-8")
-        .split(/\r?\n/)
+        .split(/[\r\n]+/)
         .map((line) => line.trimEnd())
         .filter(Boolean);
       if (persisted.length > 0) {
@@ -392,7 +392,10 @@ class JobService {
   }
 
   private appendLog(jobId: string, chunk: string) {
-    const lines = chunk.split(/\r?\n/).filter(Boolean);
+    // LichtFeld's headless progress bar redraws with CR only. Treat both CR
+    // and LF as record delimiters so local Docker jobs stream progress just
+    // like Modal jobs do.
+    const lines = chunk.split(/[\r\n]+/).filter(Boolean);
     const buffer = this.logs.get(jobId) ?? [];
     buffer.push(...lines);
     if (buffer.length > LOG_LIMIT) {

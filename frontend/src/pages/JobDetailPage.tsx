@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Box,
@@ -17,7 +17,11 @@ import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Notice } from "@/lib/app-types";
 import type { JobStatus, ModelExportFormat, TimelapseFrame, TrainingJob } from "@/lib/types";
-import { computeProgress, sortFramesAscending } from "@/pages/job-detail-utils";
+import {
+  computeProgress,
+  parseLichtFeldProgressLog,
+  sortFramesAscending,
+} from "@/pages/job-detail-utils";
 
 function statusBadgeVariant(
   status: JobStatus,
@@ -75,6 +79,46 @@ function formatBytes(value: number): string {
   return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+const JOB_STATUSES: readonly JobStatus[] = [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "stopped",
+  "stopped_low_disk",
+];
+
+function isJobStatus(value: unknown): value is JobStatus {
+  return typeof value === "string" && JOB_STATUSES.includes(value as JobStatus);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseSsePayload(event: Event): { data?: unknown } | null {
+  try {
+    const raw = (event as MessageEvent<string>).data;
+    const parsed: unknown = JSON.parse(raw);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isTimelapseFrame(value: unknown): value is TimelapseFrame {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "number" &&
+    typeof value.jobId === "string" &&
+    typeof value.cameraName === "string" &&
+    typeof value.iteration === "number" &&
+    typeof value.filePath === "string" &&
+    typeof value.sizeBytes === "number" &&
+    typeof value.createdAt === "string"
+  );
+}
+
 async function collectCameraFrames(
   id: string,
   camera: string,
@@ -105,6 +149,7 @@ export function JobDetailPage({
   onNotice: (next: Notice) => void;
 }) {
   const { id } = useParams();
+  const queryClient = useQueryClient();
   const [selectedCamera, setSelectedCamera] = useState("");
   const [frameIndex, setFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -113,6 +158,8 @@ export function JobDetailPage({
   const [downloadFormat, setDownloadFormat] = useState<ModelExportFormat>("sog");
   const [logLines, setLogLines] = useState<string[]>([]);
   const [logConnected, setLogConnected] = useState(false);
+  const [liveIteration, setLiveIteration] = useState<number | null>(null);
+  const [liveTargetIterations, setLiveTargetIterations] = useState<number | null>(null);
 
   const jobQuery = useQuery({
     queryKey: queryKeys.jobs.detail(id ?? ""),
@@ -123,7 +170,7 @@ export function JobDetailPage({
     },
     enabled: Boolean(id),
     placeholderData: (previousData) => previousData,
-    refetchInterval: isLive ? 3_000 : false,
+    refetchInterval: 3_000,
   });
 
   const timelapseOverviewQuery = useQuery({
@@ -148,7 +195,7 @@ export function JobDetailPage({
     },
     enabled: Boolean(id),
     placeholderData: (previousData) => previousData,
-    refetchInterval: isLive ? 3_000 : false,
+    refetchInterval: 3_000,
   });
 
   const splatQuery = useQuery({
@@ -176,7 +223,13 @@ export function JobDetailPage({
 
   const job = jobQuery.data ?? null;
   const cameras = timelapseOverviewQuery.data?.cameras ?? [];
-  const latestIteration = timelapseOverviewQuery.data?.latestIteration ?? null;
+  const timelapseLatestIteration = timelapseOverviewQuery.data?.latestIteration ?? null;
+  const latestIteration =
+    timelapseLatestIteration === null
+      ? liveIteration
+      : liveIteration === null
+        ? timelapseLatestIteration
+        : Math.max(timelapseLatestIteration, liveIteration);
   const frames = framesQuery.data ?? [];
   const splatSnapshot = splatQuery.data ?? null;
 
@@ -187,8 +240,8 @@ export function JobDetailPage({
   );
   const selectedFrame = frames[frameIndex] ?? null;
   const progress = useMemo(
-    () => computeProgress(job, latestIteration),
-    [job, latestIteration],
+    () => computeProgress(job, latestIteration, liveTargetIterations),
+    [job, latestIteration, liveTargetIterations],
   );
   const progressPercent =
     progress.ratio === null ? 0 : Math.round(progress.ratio * 1000) / 10;
@@ -267,25 +320,109 @@ export function JobDetailPage({
 
     setLogLines([]);
     setLogConnected(false);
+    setLiveIteration(null);
+    setLiveTargetIterations(null);
     const source = new EventSource(`/api/jobs/${id}/logs/stream`, {
       withCredentials: true,
     });
 
-    const onLog = (event: MessageEvent<string>) => {
-      try {
-        const payload = JSON.parse(event.data) as {
-          data?: { lines?: string[] };
-        };
-        const lines = payload.data?.lines ?? [];
-        if (lines.length === 0) return;
-        setLogLines((prev) => {
-          const merged = [...prev, ...lines];
-          if (merged.length <= 2000) return merged;
-          return merged.slice(merged.length - 2000);
-        });
-      } catch {
-        return;
+    const onLog = (event: Event) => {
+      const payload = parseSsePayload(event);
+      const data = isRecord(payload?.data) ? payload.data : null;
+      const lines = Array.isArray(data?.lines)
+        ? data.lines.filter((line): line is string => typeof line === "string")
+        : [];
+      const replace = data?.replace === true;
+
+      if (lines.length > 0) {
+        const parsedProgress = parseLichtFeldProgressLog(lines);
+        const parsedIteration = parsedProgress.latestIteration;
+        const parsedTotal = parsedProgress.targetIterations;
+        if (parsedIteration !== null) {
+          setLiveIteration((previous) =>
+            previous === null
+              ? parsedIteration
+              : Math.max(previous, parsedIteration),
+          );
+        }
+        if (parsedTotal !== null) {
+          setLiveTargetIterations((previous) =>
+            previous === null
+              ? parsedTotal
+              : Math.max(previous, parsedTotal),
+          );
+        }
       }
+
+      if (lines.length === 0) return;
+      setLogLines((previous) => {
+        if (replace) return lines.slice(-2000);
+        const merged = [...previous, ...lines];
+        if (merged.length <= 2000) return merged;
+        return merged.slice(merged.length - 2000);
+      });
+    };
+
+    const onStatus = (event: Event) => {
+      const payload = parseSsePayload(event);
+      const data = isRecord(payload?.data) ? payload.data : null;
+      const status = data?.status;
+      if (isJobStatus(status)) {
+        queryClient.setQueryData<TrainingJob>(
+          queryKeys.jobs.detail(id),
+          (previous) => {
+            if (!previous) return previous;
+            const patch: Partial<TrainingJob> = { status };
+            for (const field of ["startedAt", "finishedAt", "stopReason"] as const) {
+              const value = data?.[field];
+              if (typeof value === "string" || value === null) {
+                patch[field] = value;
+              }
+            }
+            return { ...previous, ...patch };
+          },
+        );
+      }
+
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.splatLatest(id) });
+    };
+
+    const invalidateTimelapse = () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.jobs.timelapseOverview(id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["jobs", id, "timelapse", "frames"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.jobs.timelapseLatest(id),
+      });
+    };
+
+    const onFrameCreated = (event: Event) => {
+      const payload = parseSsePayload(event);
+      if (isTimelapseFrame(payload?.data)) {
+        const frame = payload.data;
+        const frameQueries = queryClient.getQueriesData<TimelapseFrame[]>({
+          queryKey: ["jobs", id, "timelapse", "frames"],
+        });
+        for (const [queryKey, previous] of frameQueries) {
+          const camera = queryKey[4];
+          if (typeof camera !== "string" || camera !== frame.cameraName || !previous) {
+            continue;
+          }
+          if (previous.some((item) => item.id === frame.id)) continue;
+          queryClient.setQueryData<TimelapseFrame[]>(queryKey, (current) =>
+            current ? sortFramesAscending([...current, frame]) : current,
+          );
+        }
+      }
+      invalidateTimelapse();
+    };
+
+    const onScanCompleted = () => {
+      invalidateTimelapse();
     };
 
     source.addEventListener("open", () => {
@@ -294,13 +431,16 @@ export function JobDetailPage({
     source.addEventListener("error", () => {
       setLogConnected(false);
     });
-    source.addEventListener("log", onLog as EventListener);
+    source.addEventListener("log", onLog);
+    source.addEventListener("job.status", onStatus);
+    source.addEventListener("timelapse.frame.created", onFrameCreated);
+    source.addEventListener("timelapse.scan.completed", onScanCompleted);
 
     return () => {
       source.close();
       setLogConnected(false);
     };
-  }, [id]);
+  }, [id, queryClient]);
 
   if (!id) {
     return (

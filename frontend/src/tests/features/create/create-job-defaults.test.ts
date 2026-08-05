@@ -22,14 +22,14 @@ describe("create job strategy defaults", () => {
       strategy: "mrnf",
       maxCap: 5000000,
       ppisp: true,
-      tileMode: 1,
+      saveEvalImages: true,
     });
 
     expect(getStrategyDefaults("mcmc")).toMatchObject({
       strategy: "mcmc",
       maxCap: 1000000,
       ppisp: true,
-      tileMode: 1,
+      saveEvalImages: true,
     });
 
     expect(getStrategyDefaults("igs+")).toMatchObject({
@@ -37,6 +37,9 @@ describe("create job strategy defaults", () => {
       maxCap: 4000000,
       ppisp: true,
     });
+
+    expect(getStrategyDefaults("mcmc")).not.toHaveProperty("tileMode");
+    expect(getStrategyDefaults("mcmc")).not.toHaveProperty("saveDepth");
   });
 
   test("shows mask settings when dataset has masks or alpha images", () => {

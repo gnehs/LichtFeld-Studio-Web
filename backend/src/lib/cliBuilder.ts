@@ -6,6 +6,12 @@ function pushFlag(args: string[], flag: string, enabled?: boolean) {
   }
 }
 
+function pushFlagWhenFalse(args: string[], flag: string, enabled?: boolean) {
+  if (enabled === false) {
+    args.push(flag);
+  }
+}
+
 function pushValue(args: string[], flag: string, value?: string | number) {
   if (value === undefined || value === null || value === "") {
     return;
@@ -41,7 +47,6 @@ export function buildLfsArgs(form: TrainingParamsForm): string[] {
   pushValue(args, "--max-cap", form.maxCap);
   pushValue(args, "--min-opacity", form.minOpacity);
   pushValue(args, "--steps-scaler", form.stepsScaler);
-  pushValue(args, "--tile-mode", form.tileMode);
 
   pushFlag(args, "--random", form.random);
   pushValue(args, "--init-num-pts", form.initNumPts);
@@ -70,12 +75,11 @@ export function buildLfsArgs(form: TrainingParamsForm): string[] {
   pushFlag(args, "--ppisp-controller", form.ppispController);
   pushFlag(args, "--ppisp-freeze", form.ppispFreeze);
   pushValue(args, "--ppisp-sidecar", form.ppispSidecar);
-  pushFlag(args, "--bg-modulation", form.bgModulation);
+  pushValue(args, "--bg-mode", form.bgModulation ? "modulation" : undefined);
   pushFlag(args, "--gut", form.gut);
 
   pushFlag(args, "--eval", form.eval);
-  pushFlag(args, "--save-eval-images", form.saveEvalImages);
-  pushFlag(args, "--save-depth", form.saveDepth);
+  pushFlagWhenFalse(args, "--no-save-eval-images", form.saveEvalImages);
 
   const timelapseImages = form.timelapse?.images ?? [];
   const hasTimelapseImages = timelapseImages.length > 0;
@@ -87,7 +91,6 @@ export function buildLfsArgs(form: TrainingParamsForm): string[] {
   }
 
   pushFlag(args, "--no-splash", form.noSplash);
-  pushFlag(args, "--no-interop", form.noInterop);
   pushFlag(args, "--debug-python", form.debugPython);
   pushValue(args, "--debug-python-port", form.debugPythonPort);
 

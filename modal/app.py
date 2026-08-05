@@ -8,6 +8,7 @@ truth for jobs; this module only dispatches work and forwards worker events.
 
 from __future__ import annotations
 
+import codecs
 import hashlib
 import hmac
 import json
@@ -15,6 +16,7 @@ import os
 import queue
 import re
 import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -545,12 +547,81 @@ class _StreamDone:
         self.stream_name = stream_name
 
 
+def _iter_records(chunks: Iterable[str]) -> Iterable[str]:
+    """Split decoded chunks on CR/LF, including delimiters at chunk edges.
+
+    A carriage return is emitted immediately so progress indicators can reach
+    the callback while the process is still running.  If the next chunk starts
+    with a line feed, it is consumed as the second half of CRLF rather than
+    producing an empty callback record.
+    """
+
+    record_parts: list[str] = []
+    pending_cr = False
+    for chunk in chunks:
+        if not chunk:
+            continue
+
+        offset = 0
+        while offset < len(chunk):
+            if pending_cr:
+                if chunk[offset] == "\n":
+                    offset += 1
+                pending_cr = False
+                if offset >= len(chunk):
+                    break
+
+            carriage_return = chunk.find("\r", offset)
+            line_feed = chunk.find("\n", offset)
+            delimiters = [position for position in (carriage_return, line_feed) if position >= 0]
+            if not delimiters:
+                record_parts.append(chunk[offset:])
+                break
+
+            delimiter_index = min(delimiters)
+            record_parts.append(chunk[offset:delimiter_index])
+            delimiter = chunk[delimiter_index]
+            offset = delimiter_index + 1
+            if delimiter == "\r":
+                pending_cr = True
+            yield "".join(record_parts)
+            record_parts.clear()
+
+    if record_parts:
+        yield "".join(record_parts)
+
+
 def _reader(stream_name: str, stream: Any, events: queue.Queue[tuple[str, str] | _StreamDone]) -> None:
-    try:
-        for line in iter(stream.readline, b""):
-            decoded = line.decode("utf-8", errors="replace").rstrip("\r\n")
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    output = sys.stdout if stream_name == "stdout" else sys.stderr
+
+    def decoded_chunks(file_descriptor: int) -> Iterable[str]:
+        while True:
+            chunk = os.read(file_descriptor, 64 * 1024)
+            if not chunk:
+                break
+            decoded = decoder.decode(chunk, final=False)
             if decoded:
-                events.put((stream_name, decoded))
+                yield decoded
+        decoded = decoder.decode(b"", final=True)
+        if decoded:
+            yield decoded
+
+    try:
+        for record in _iter_records(decoded_chunks(stream.fileno())):
+            if not record:
+                continue
+            try:
+                # Modal's log collector commonly groups output by newline.
+                # Normalize every parsed record to one line so CR-only progress
+                # updates remain visible while preserving ANSI escape content.
+                output.write(record + "\n")
+                output.flush()
+            except (OSError, ValueError):
+                # A closed/invalid container log stream must not prevent the
+                # callback reader from forwarding the subprocess output.
+                pass
+            events.put((stream_name, record))
     finally:
         events.put(_StreamDone(stream_name))
 

@@ -10,7 +10,6 @@ interface CreateWizardValues {
   maxCap: number;
   minOpacity?: number;
   stepsScaler?: number;
-  tileMode?: 1 | 2 | 4;
   random?: boolean;
   initNumPts?: number;
   initExtent?: number;
@@ -22,7 +21,6 @@ interface CreateWizardValues {
   noFsCache?: boolean;
   eval: boolean;
   saveEvalImages: boolean;
-  saveDepth?: boolean;
   gut: boolean;
   undistort: boolean;
   maskMode?: "none" | "segment" | "ignore" | "alpha_consistent";
@@ -61,7 +59,6 @@ function buildPayloadParams(form: CreateWizardValues): TrainingParamsForm {
     maxCap: form.maxCap,
     minOpacity: form.minOpacity,
     stepsScaler: form.stepsScaler,
-    tileMode: form.tileMode,
     random: form.random,
     initNumPts: form.initNumPts,
     initExtent: form.initExtent,
@@ -73,7 +70,6 @@ function buildPayloadParams(form: CreateWizardValues): TrainingParamsForm {
     noFsCache: form.noFsCache,
     eval: form.eval,
     saveEvalImages: form.saveEvalImages,
-    saveDepth: form.saveDepth,
     gut: form.gut,
     undistort: form.undistort,
     maskMode: form.maskMode,
@@ -106,7 +102,6 @@ describe("create job payload mapping", () => {
       maxCap: 500000,
       minOpacity: 0,
       stepsScaler: 1,
-      tileMode: 4,
       random: false,
       initNumPts: 0,
       initExtent: 0,
@@ -118,7 +113,6 @@ describe("create job payload mapping", () => {
       noFsCache: false,
       eval: false,
       saveEvalImages: false,
-      saveDepth: false,
       gut: false,
       undistort: false,
       maskMode: "none",
@@ -141,7 +135,6 @@ describe("create job payload mapping", () => {
         shDegreeInterval: 800,
         minOpacity: 0.015,
         stepsScaler: 1.5,
-        tileMode: 4,
         random: true,
         initNumPts: 250000,
         initExtent: 12,
@@ -164,9 +157,7 @@ describe("create job payload mapping", () => {
         ppispFreeze: true,
         ppispSidecar: "/data/ppisp/sidecar.json",
         bgModulation: true,
-        saveDepth: true,
         noSplash: true,
-        noInterop: true,
         debugPython: true,
         debugPythonPort: 9010,
         verbose: true,
@@ -205,7 +196,6 @@ describe("create job payload mapping", () => {
       maxCap: 1000000,
       minOpacity: 0.005,
       stepsScaler: 1,
-      tileMode: 1,
       random: false,
       initNumPts: 100000,
       initExtent: 3,
@@ -215,7 +205,6 @@ describe("create job payload mapping", () => {
       noFsCache: false,
       eval: false,
       saveEvalImages: true,
-      saveDepth: false,
       gut: false,
       undistort: false,
       maskMode: "none",
@@ -231,6 +220,10 @@ describe("create job payload mapping", () => {
       ppispFreeze: false,
       bgModulation: false,
     });
+
+    expect(payload).not.toHaveProperty("tileMode");
+    expect(payload).not.toHaveProperty("saveDepth");
+    expect(payload).not.toHaveProperty("noInterop");
 
     expect(payload.testEvery).toBe(8);
     expect(payload.images).toBe("images");

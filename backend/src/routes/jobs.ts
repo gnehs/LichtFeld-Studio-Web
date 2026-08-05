@@ -113,7 +113,7 @@ jobsRouter.get("/:id/logs/stream", (req, res) => {
   const history = jobService.getLogLines(job.id);
   if (history.length > 0) {
     res.write(
-      `event: log\ndata: ${JSON.stringify({ type: "log", jobId: job.id, ts: new Date().toISOString(), data: { lines: history } })}\n\n`
+      `event: log\ndata: ${JSON.stringify({ type: "log", jobId: job.id, ts: new Date().toISOString(), data: { lines: history, replace: true } })}\n\n`
     );
   }
 

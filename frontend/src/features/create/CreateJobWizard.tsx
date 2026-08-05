@@ -420,7 +420,6 @@ export function CreateJobWizard({
         maxCap: form.maxCap,
         minOpacity: form.minOpacity,
         stepsScaler: form.stepsScaler,
-        tileMode: form.tileMode,
         random: form.random,
         initNumPts: form.initNumPts || undefined,
         initExtent: form.initExtent || undefined,
@@ -432,7 +431,6 @@ export function CreateJobWizard({
         noFsCache: form.noFsCache,
         eval: form.eval,
         saveEvalImages: form.saveEvalImages,
-        saveDepth: form.saveDepth,
         gut: form.gut,
         undistort: form.undistort,
         maskMode: showMaskSettings ? form.maskMode : undefined,
@@ -798,28 +796,6 @@ export function CreateJobWizard({
                   </FieldHint>
                 </div>
                 <div>
-                  <Label>Tile Mode</Label>
-                  <Select
-                    value={String(form.tileMode)}
-                    onValueChange={(val) =>
-                      updateForm("tileMode", Number(val) as 1 | 2 | 4)
-                    }
-                  >
-                    <SelectTrigger className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1</SelectItem>
-                      <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="4">4</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FieldHint>
-                    大圖分塊渲染模式；較大的 tile
-                    常有助於穩定處理高解析影像，但也會影響效能與記憶體行為。
-                  </FieldHint>
-                </div>
-                <div>
                   <Label>Init Num Pts</Label>
                   <Input
                     className="mt-2"
@@ -1111,8 +1087,8 @@ export function CreateJobWizard({
                 />
                 <ToggleChip
                   checked={form.bgModulation}
-                  label="bg-modulation"
-                  description="學習獨立背景顏色，對背景變化明顯的資料集較有幫助。"
+                  label="bg-mode modulation"
+                  description="將官方 `--bg-mode` 設為 `modulation`，學習獨立背景調變。"
                   onChange={(checked) => updateForm("bgModulation", checked)}
                 />
               </div>
@@ -1131,15 +1107,9 @@ export function CreateJobWizard({
                 />
                 <ToggleChip
                   checked={form.saveEvalImages}
-                  label="save-eval-images"
-                  description="額外輸出評估影像或深度結果，會增加磁碟使用量。"
+                  label="save eval images"
+                  description="預設會儲存評估比較影像；關閉時傳送官方 `--no-save-eval-images`。"
                   onChange={(checked) => updateForm("saveEvalImages", checked)}
-                />
-                <ToggleChip
-                  checked={form.saveDepth}
-                  label="save-depth"
-                  description="額外輸出評估影像或深度結果，會增加磁碟使用量。"
-                  onChange={(checked) => updateForm("saveDepth", checked)}
                 />
                 <ToggleChip
                   checked={form.gut}
