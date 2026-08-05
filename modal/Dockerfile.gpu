@@ -1,19 +1,7 @@
-FROM node:22-bookworm AS web-build
-RUN corepack enable
-WORKDIR /app
-
-COPY package.json pnpm-workspace.yaml .npmrc ./
-COPY backend/package.json ./backend/package.json
-COPY frontend/package.json ./frontend/package.json
-RUN pnpm install --frozen-lockfile=false
-
-COPY scripts ./scripts
-COPY .env.example ./.env.example
-COPY backend ./backend
-COPY frontend ./frontend
-RUN pnpm --filter @lichtfeld/frontend build && pnpm --filter @lichtfeld/backend build
-
+# GPU-only trainer image.  It intentionally does not contain Node or the web
+# build; the web function uses Dockerfile.web and stays CPU-only.
 FROM nvidia/cuda:12.8.0-devel-ubuntu24.04 AS lfs-build
+
 ARG LFS_REPO=https://github.com/MrNeRF/LichtFeld-Studio.git
 ARG LFS_REF=v0.5.3
 
@@ -57,7 +45,6 @@ RUN set -eux; \
         echo "apt install failed after ${attempt} attempts"; \
         exit 1; \
       fi; \
-      echo "apt install failed on attempt ${attempt}, retrying..."; \
       sleep $((attempt * 5)); \
     done; \
     rm -rf /var/lib/apt/lists/*
@@ -84,10 +71,10 @@ WORKDIR /opt/src/LichtFeld-Studio
 RUN grep -q -- "-march=native" src/core/CMakeLists.txt \
     && sed -i 's/-O3 -DNDEBUG -march=native/-O3 -DNDEBUG/' src/core/CMakeLists.txt \
     && cmake -B build \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_PYTHON_STUBS=OFF \
-    -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_PYTHON_STUBS=OFF \
+      -G Ninja \
+      -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     && cmake --build build -- -j"$(nproc)" \
     && cmake --install build --prefix /opt/lichtfeld \
     && mkdir -p /opt/lichtfeld/lib /opt/lichtfeld/bin \
@@ -129,6 +116,7 @@ RUN set -eux; \
     done
 
 FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
     for attempt in 1 2 3 4 5; do \
@@ -136,7 +124,6 @@ RUN set -eux; \
       if apt-get update -o Acquire::Retries=5 -o Acquire::By-Hash=yes \
         && apt-get install -y --no-install-recommends \
           ca-certificates \
-          curl \
           libasound2t64 \
           libdbus-1-3 \
           libdrm2 \
@@ -166,6 +153,8 @@ RUN set -eux; \
           libxtst6 \
           libxxf86vm1 \
           libglx0 \
+          python3 \
+          python3-pip \
           unzip \
           zip; then \
         break; \
@@ -174,36 +163,25 @@ RUN set -eux; \
         echo "runtime apt install failed after ${attempt} attempts"; \
         exit 1; \
       fi; \
-      echo "runtime apt install failed on attempt ${attempt}, retrying..."; \
       sleep $((attempt * 5)); \
     done; \
+    ln -sf /usr/bin/python3 /usr/local/bin/python; \
+    ln -sf /usr/bin/pip3 /usr/local/bin/pip; \
     rm -rf /var/lib/apt/lists/*
 
-RUN set -eux; \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
-    for attempt in 1 2 3 4 5; do \
-      rm -rf /var/lib/apt/lists/*; \
-      if apt-get update -o Acquire::Retries=5 -o Acquire::By-Hash=yes \
-        && apt-get install -y --no-install-recommends nodejs; then \
-        break; \
-      fi; \
-      if [ "$attempt" -eq 5 ]; then \
-        echo "nodejs apt install failed after ${attempt} attempts"; \
-        exit 1; \
-      fi; \
-      echo "nodejs apt install failed on attempt ${attempt}, retrying..."; \
-      sleep $((attempt * 5)); \
-    done; \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
 COPY --from=lfs-build /opt/lichtfeld /opt/lichtfeld
-COPY --from=web-build /app /app
+COPY modal/requirements.txt /tmp/modal-requirements.txt
+RUN python3 -m pip install --break-system-packages --no-cache-dir \
+    -r /tmp/modal-requirements.txt \
+    && rm -f /tmp/modal-requirements.txt
 
 ENV LFS_BIN_PATH=/opt/lichtfeld/bin/LichtFeld-Studio
 ENV LD_LIBRARY_PATH=/opt/lichtfeld/lib:/opt/lichtfeld/lib64:/opt/lichtfeld/bin
+ENV PYTHONUNBUFFERED=1
 
-RUN printf "/opt/lichtfeld/lib\n/opt/lichtfeld/lib64\n/opt/lichtfeld/bin\n" > /etc/ld.so.conf.d/lichtfeld.conf && ldconfig
+RUN printf "/opt/lichtfeld/lib\n/opt/lichtfeld/lib64\n/opt/lichtfeld/bin\n" \
+    > /etc/ld.so.conf.d/lichtfeld.conf \
+    && ldconfig
 
 RUN set -eux; \
     ldd_output=/tmp/lichtfeld-ldd.txt; \
@@ -229,6 +207,3 @@ RUN set -eux; \
       fi; \
     fi; \
     rm -f "$ldd_output"
-
-EXPOSE 3000
-CMD ["node", "scripts/docker-entrypoint.mjs"]

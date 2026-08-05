@@ -6,6 +6,8 @@ export type JobStatus =
   | "stopped"
   | "stopped_low_disk";
 
+export type TrainingExecutor = "local" | "modal";
+
 export interface DatasetRecord {
   id: string;
   name: string;
@@ -152,6 +154,10 @@ export interface JobRecord {
   exitCode: number | null;
   errorMessage: string | null;
   stopReason: string | null;
+  /** Executor selected for this job. Older records default to local. */
+  executor?: TrainingExecutor;
+  /** Modal FunctionCall object ID when the modal executor is used. */
+  remoteCallId?: string | null;
 }
 
 export interface TimelapseFrame {

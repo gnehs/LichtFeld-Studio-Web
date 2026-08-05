@@ -72,7 +72,7 @@ describe("jobService disk status", () => {
     }));
 
     const { jobService } = await import("../src/services/jobService.js");
-    const job = jobService.createJob({
+    const job = await jobService.createJob({
       params: {
         dataPath: datasetPath,
       },
@@ -136,7 +136,7 @@ describe("jobService disk status", () => {
     }));
 
     const { jobService } = await import("../src/services/jobService.js");
-    const job = jobService.createJob({
+    const job = await jobService.createJob({
       params: {
         dataPath: datasetPath,
       },

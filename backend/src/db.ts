@@ -31,7 +31,9 @@ function migrate() {
       pid INTEGER,
       exit_code INTEGER,
       error_message TEXT,
-      stop_reason TEXT
+      stop_reason TEXT,
+      executor TEXT NOT NULL DEFAULT 'local',
+      remote_call_id TEXT
     );
 
     CREATE TABLE IF NOT EXISTS timelapse_frames (
@@ -60,6 +62,12 @@ function migrate() {
   const jobColumns = db.prepare("PRAGMA table_info(jobs)").all() as Array<{ name: string }>;
   if (!jobColumns.some((column) => column.name === "params_json")) {
     db.exec("ALTER TABLE jobs ADD COLUMN params_json TEXT NOT NULL DEFAULT '{}';");
+  }
+  if (!jobColumns.some((column) => column.name === "executor")) {
+    db.exec("ALTER TABLE jobs ADD COLUMN executor TEXT NOT NULL DEFAULT 'local';");
+  }
+  if (!jobColumns.some((column) => column.name === "remote_call_id")) {
+    db.exec("ALTER TABLE jobs ADD COLUMN remote_call_id TEXT;");
   }
 
   const datasetColumns = db.prepare("PRAGMA table_info(datasets)").all() as Array<{ name: string }>;
@@ -125,7 +133,9 @@ function mapJob(row: any): JobRecord {
     pid: row.pid,
     exitCode: row.exit_code,
     errorMessage: row.error_message,
-    stopReason: row.stop_reason
+    stopReason: row.stop_reason,
+    executor: row.executor === "modal" ? "modal" : "local",
+    remoteCallId: row.remote_call_id ?? null
   };
 }
 
@@ -210,8 +220,8 @@ export const repo = {
 
   createJob(job: JobRecord) {
     db.prepare(
-      `INSERT INTO jobs (id, dataset_id, status, output_path, args_json, params_json, created_at, updated_at, started_at, finished_at, pid, exit_code, error_message, stop_reason)
-       VALUES (@id, @datasetId, @status, @outputPath, @argsJson, @paramsJson, @createdAt, @updatedAt, @startedAt, @finishedAt, @pid, @exitCode, @errorMessage, @stopReason)`
+      `INSERT INTO jobs (id, dataset_id, status, output_path, args_json, params_json, created_at, updated_at, started_at, finished_at, pid, exit_code, error_message, stop_reason, executor, remote_call_id)
+       VALUES (@id, @datasetId, @status, @outputPath, @argsJson, @paramsJson, @createdAt, @updatedAt, @startedAt, @finishedAt, @pid, @exitCode, @errorMessage, @stopReason, @executor, @remoteCallId)`
     ).run({
       id: job.id,
       datasetId: job.datasetId,
@@ -226,7 +236,9 @@ export const repo = {
       pid: job.pid,
       exitCode: job.exitCode,
       errorMessage: job.errorMessage,
-      stopReason: job.stopReason
+      stopReason: job.stopReason,
+      executor: job.executor ?? "local",
+      remoteCallId: job.remoteCallId ?? null
     });
     return job;
   },
@@ -242,7 +254,9 @@ export const repo = {
         pid = COALESCE(@pid, pid),
         exit_code = COALESCE(@exitCode, exit_code),
         error_message = COALESCE(@errorMessage, error_message),
-        stop_reason = COALESCE(@stopReason, stop_reason)
+        stop_reason = COALESCE(@stopReason, stop_reason),
+        executor = COALESCE(@executor, executor),
+        remote_call_id = COALESCE(@remoteCallId, remote_call_id)
       WHERE id = @id`
     ).run({
       id,
@@ -253,7 +267,9 @@ export const repo = {
       pid: patch.pid ?? null,
       exitCode: patch.exitCode ?? null,
       errorMessage: patch.errorMessage ?? null,
-      stopReason: patch.stopReason ?? null
+      stopReason: patch.stopReason ?? null,
+      executor: patch.executor ?? null,
+      remoteCallId: patch.remoteCallId ?? null
     });
     return this.getJob(id);
   },

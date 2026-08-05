@@ -235,4 +235,16 @@ describe("create job payload mapping", () => {
     expect(payload.testEvery).toBe(8);
     expect(payload.images).toBe("images");
   });
+
+  test("preserves the supported upper bounds in the payload", () => {
+    const payload = buildPayloadParams({
+      ...getStrategyDefaults("mcmc"),
+      iterations: 1_000_000,
+      maxCap: 1_000_000_000,
+      advancedJson: "",
+    });
+
+    expect(payload.iterations).toBe(1_000_000);
+    expect(payload.maxCap).toBe(1_000_000_000);
+  });
 });

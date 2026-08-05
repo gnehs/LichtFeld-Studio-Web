@@ -9,6 +9,11 @@ import { buildAutoTimelapse } from "../lib/autoTimelapse.js";
 import { buildLfsArgs } from "../lib/cliBuilder.js";
 import { scanTimelapseDir, toTimelapseFrame } from "../lib/timelapse.js";
 import { emitJobEvent } from "../sse.js";
+import {
+  cancelModalJob,
+  dispatchModalJob,
+  reloadModalDataVolume
+} from "./modalExecutor.js";
 import type { DiskGuardStatus, JobRecord, JobStatus, TrainingParamsForm } from "../types/models.js";
 
 export interface CreateJobInput {
@@ -22,6 +27,16 @@ const checkDiskSpace = checkDiskSpaceModule.default as unknown as (directoryPath
   free: number;
   size: number;
 }>;
+
+function isPathWithinRoot(targetPath: string, rootPath: string): boolean {
+  const normalizedTarget = path.resolve(targetPath);
+  const normalizedRoot = path.resolve(rootPath);
+  return normalizedTarget === normalizedRoot || normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`);
+}
+
+function isModalConfigPathAllowed(targetPath: string): boolean {
+  return [config.outputsDir, ...config.allowedDatasetRoots].some((rootPath) => isPathWithinRoot(targetPath, rootPath));
+}
 
 class JobService {
   private queue: string[] = [];
@@ -72,15 +87,21 @@ class JobService {
     this.logs.delete(jobId);
   }
 
-  createJob(input: CreateJobInput) {
+  async createJob(input: CreateJobInput): Promise<JobRecord> {
+    const jobId = nanoid();
     const dataset = input.datasetId ? repo.getDataset(input.datasetId) : null;
+    const isModalExecutor = config.trainingExecutor === "modal";
     const params: TrainingParamsForm = { ...input.params };
 
     if (!params.dataPath && dataset) {
       params.dataPath = dataset.path;
     }
 
-    if (!params.outputPath) {
+    if (isModalExecutor) {
+      // Retry payloads may contain an old output directory. Modal jobs always
+      // get a fresh, shared-volume path derived from their newly allocated ID.
+      params.outputPath = path.join(config.outputsDir, `job-${jobId}`);
+    } else if (!params.outputPath) {
       params.outputPath = path.join(config.outputsDir, `job-${Date.now()}`);
     }
 
@@ -90,19 +111,34 @@ class JobService {
       existingImages: params.timelapse?.images
     });
 
-    fs.mkdirSync(params.outputPath, { recursive: true });
+    let configPathToWrite: string | null = null;
+    if (isModalExecutor) {
+      if (params.configJson !== undefined) {
+        // Ignore a stale configPath from a retry when fresh JSON is supplied.
+        configPathToWrite = path.join(params.outputPath, "web-config.json");
+        params.configPath = configPathToWrite;
+      } else if (params.configPath) {
+        const resolvedConfigPath = path.resolve(params.configPath);
+        if (!isModalConfigPathAllowed(resolvedConfigPath)) {
+          throw new Error("configPath must be inside DATASET_ALLOWED_ROOTS or OUTPUTS_DIR");
+        }
+        params.configPath = resolvedConfigPath;
+      }
+    } else if (params.configJson && !params.configPath) {
+      configPathToWrite = path.join(params.outputPath, "web-config.json");
+      params.configPath = configPathToWrite;
+    }
 
-    if (params.configJson && !params.configPath) {
-      const configPath = path.join(params.outputPath, "web-config.json");
-      fs.writeFileSync(configPath, params.configJson, "utf-8");
-      params.configPath = configPath;
+    fs.mkdirSync(params.outputPath, { recursive: true });
+    if (configPathToWrite) {
+      fs.writeFileSync(configPathToWrite, params.configJson ?? "", "utf-8");
     }
 
     const args = buildLfsArgs(params);
 
     const now = new Date().toISOString();
     const job: JobRecord = {
-      id: nanoid(),
+      id: jobId,
       datasetId: dataset?.id ?? null,
       status: "queued",
       outputPath: params.outputPath,
@@ -115,14 +151,48 @@ class JobService {
       pid: null,
       exitCode: null,
       errorMessage: null,
-      stopReason: null
+      stopReason: null,
+      executor: config.trainingExecutor,
+      remoteCallId: null
     };
 
     repo.createJob(job);
+
+    if (config.trainingExecutor === "modal") {
+      this.emitStatus(job.id, "queued", { executor: "modal" });
+      return this.startModalJob(job);
+    }
+
     this.queue.push(job.id);
-    this.emitStatus(job.id, "queued", { queueLength: this.queue.length });
+    this.emitStatus(job.id, "queued", { executor: "local", queueLength: this.queue.length });
     this.maybeStartNext();
     return repo.getJob(job.id)!;
+  }
+
+  private async startModalJob(job: JobRecord): Promise<JobRecord> {
+    try {
+      const { callId } = await dispatchModalJob(job);
+      // A trainer can emit its first callback before the control plane returns
+      // the FunctionCall ID. Preserve that callback's status while persisting
+      // the ID instead of regressing a running/terminal job back to queued.
+      const current = repo.getJob(job.id);
+      const status = current?.status ?? job.status;
+      const updated = repo.updateJobStatus(job.id, status, {
+        executor: "modal",
+        remoteCallId: callId
+      });
+      this.emitStatus(job.id, status, { executor: "modal", remoteCallId: callId });
+      return updated ?? current ?? job;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const updated = repo.updateJobStatus(job.id, "failed", {
+        executor: "modal",
+        finishedAt: new Date().toISOString(),
+        errorMessage
+      });
+      this.emitStatus(job.id, "failed", { executor: "modal", errorMessage });
+      throw error;
+    }
   }
 
   async getDiskStatus(targetPath = config.outputsDir): Promise<DiskGuardStatus> {
@@ -136,7 +206,12 @@ class JobService {
     };
   }
 
-  stopJob(jobId: string, reason = "stopped") {
+  async stopJob(jobId: string, reason = "stopped"): Promise<boolean> {
+    const existingJob = repo.getJob(jobId);
+    if (existingJob?.executor === "modal") {
+      return this.stopModalJob(jobId, reason);
+    }
+
     const proc = this.processes.get(jobId);
     this.stopReasons.set(jobId, reason);
 
@@ -166,6 +241,31 @@ class JobService {
       }
     }, 7000);
 
+    return true;
+  }
+
+  private async stopModalJob(jobId: string, reason = "stopped"): Promise<boolean> {
+    const job = repo.getJob(jobId);
+    if (!job) {
+      return false;
+    }
+
+    const terminalStatuses: JobStatus[] = ["completed", "failed", "stopped", "stopped_low_disk"];
+    if (terminalStatuses.includes(job.status)) {
+      return false;
+    }
+
+    if (job.remoteCallId) {
+      await cancelModalJob(job);
+    }
+
+    const status: JobStatus = reason === "stopped_low_disk" ? "stopped_low_disk" : "stopped";
+    repo.updateJobStatus(jobId, status, {
+      executor: "modal",
+      finishedAt: new Date().toISOString(),
+      stopReason: reason
+    });
+    this.emitStatus(jobId, status, { executor: "modal", stopReason: reason });
     return true;
   }
 
@@ -306,6 +406,125 @@ class JobService {
       ts: new Date().toISOString(),
       data: { lines }
     });
+  }
+
+  /** Persist and broadcast log lines received from the remote Modal worker. */
+  appendRemoteLog(jobId: string, lines: string[]) {
+    const normalized = lines.map((line) => String(line)).filter((line) => line.length > 0);
+    if (normalized.length === 0) {
+      return;
+    }
+
+    const logPath = path.join(config.logsDir, `${jobId}.log`);
+    fs.appendFileSync(logPath, `${normalized.join("\n")}\n`, "utf-8");
+    this.appendLog(jobId, `${normalized.join("\n")}\n`);
+  }
+
+  /** Apply a status event emitted by the remote Modal worker. */
+  recordRemoteStatus(jobId: string, status: JobStatus, data: Record<string, unknown> = {}) {
+    const current = repo.getJob(jobId);
+    if (!current) {
+      return null;
+    }
+
+    const terminalStatuses: JobStatus[] = ["completed", "failed", "stopped", "stopped_low_disk"];
+    if (terminalStatuses.includes(current.status) && current.status !== status) {
+      return current;
+    }
+
+    const patch: Partial<JobRecord> = { executor: "modal" };
+    if (typeof data.callId === "string" && data.callId.length > 0) {
+      patch.remoteCallId = data.callId;
+    }
+
+    if (status === "running") {
+      patch.startedAt = typeof data.startedAt === "string" ? data.startedAt : new Date().toISOString();
+    }
+
+    if (terminalStatuses.includes(status)) {
+      patch.finishedAt = typeof data.finishedAt === "string" ? data.finishedAt : new Date().toISOString();
+      if (typeof data.exitCode === "number" || data.exitCode === null) {
+        patch.exitCode = data.exitCode;
+      }
+      if (typeof data.errorMessage === "string" || data.errorMessage === null) {
+        patch.errorMessage = data.errorMessage;
+      }
+      if (typeof data.stopReason === "string" || data.stopReason === null) {
+        patch.stopReason = data.stopReason;
+      }
+    }
+
+    const updated = repo.updateJobStatus(jobId, status, patch);
+    if (status === "stopped_low_disk") {
+      emitJobEvent({
+        type: "job.stopped.low_disk",
+        jobId,
+        ts: new Date().toISOString(),
+        data: {
+          thresholdGb: config.timelapseMinFreeGb,
+          message: "Disk free space below threshold, job stopped."
+        }
+      });
+    }
+    this.emitStatus(jobId, status, { executor: "modal", ...data });
+    return updated;
+  }
+
+  /** Insert and broadcast a timelapse frame emitted by the remote worker. */
+  recordRemoteTimelapseFrame(jobId: string, data: unknown) {
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid timelapse frame payload");
+    }
+
+    const frame = data as {
+      cameraName?: unknown;
+      iteration?: unknown;
+      filePath?: unknown;
+      sizeBytes?: unknown;
+      createdAt?: unknown;
+    };
+    if (
+      typeof frame.cameraName !== "string" ||
+      typeof frame.iteration !== "number" ||
+      !Number.isInteger(frame.iteration) ||
+      typeof frame.filePath !== "string" ||
+      typeof frame.sizeBytes !== "number" ||
+      !Number.isFinite(frame.sizeBytes) ||
+      typeof frame.createdAt !== "string"
+    ) {
+      throw new Error("Invalid timelapse frame payload");
+    }
+
+    const inserted = repo.insertTimelapseFrame({
+      jobId,
+      cameraName: frame.cameraName,
+      iteration: frame.iteration,
+      filePath: frame.filePath,
+      sizeBytes: Number(frame.sizeBytes),
+      createdAt: frame.createdAt
+    });
+    if (inserted) {
+      emitJobEvent({
+        type: "timelapse.frame.created",
+        jobId,
+        ts: new Date().toISOString(),
+        data: inserted
+      });
+    }
+    return inserted;
+  }
+
+  emitRemoteTimelapseScan(jobId: string, data: unknown) {
+    emitJobEvent({
+      type: "timelapse.scan.completed",
+      jobId,
+      ts: new Date().toISOString(),
+      data
+    });
+  }
+
+  async reloadRemoteVolume(): Promise<void> {
+    await reloadModalDataVolume();
   }
 
   private startTimelapsePolling(jobId: string, outputPath: string) {

@@ -61,6 +61,38 @@ ensureDir(path.dirname(dbPath));
 
 const allowedRootsRaw = process.env.DATASET_ALLOWED_ROOTS ?? datasetsDir;
 
+export type TrainingExecutor = "local" | "modal";
+
+function normalizeBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, "");
+}
+
+const trainingExecutorRaw = (process.env.TRAINING_EXECUTOR ?? "local").trim().toLowerCase();
+if (trainingExecutorRaw !== "local" && trainingExecutorRaw !== "modal") {
+  throw new Error(`Invalid TRAINING_EXECUTOR: ${trainingExecutorRaw}`);
+}
+
+const trainingExecutor = trainingExecutorRaw as TrainingExecutor;
+const modalControlUrl = process.env.MODAL_CONTROL_URL ? normalizeBaseUrl(process.env.MODAL_CONTROL_URL) : "";
+const publicBaseUrl = process.env.PUBLIC_BASE_URL ? normalizeBaseUrl(process.env.PUBLIC_BASE_URL) : "";
+const modalControlToken = process.env.MODAL_CONTROL_TOKEN?.trim() ?? "";
+const modalCallbackToken = process.env.MODAL_CALLBACK_TOKEN?.trim() ?? "";
+
+if (trainingExecutor === "modal") {
+  if (!publicBaseUrl) {
+    throw new Error("Missing env: PUBLIC_BASE_URL (required when TRAINING_EXECUTOR=modal)");
+  }
+  if (!modalControlUrl) {
+    throw new Error("Missing env: MODAL_CONTROL_URL (required when TRAINING_EXECUTOR=modal)");
+  }
+  if (!modalControlToken) {
+    throw new Error("Missing env: MODAL_CONTROL_TOKEN (required when TRAINING_EXECUTOR=modal)");
+  }
+  if (!modalCallbackToken) {
+    throw new Error("Missing env: MODAL_CALLBACK_TOKEN (required when TRAINING_EXECUTOR=modal)");
+  }
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   nodeEnv: process.env.NODE_ENV ?? "development",
@@ -75,5 +107,13 @@ export const config = {
   outputsDir,
   logsDir,
   dbPath,
-  allowedDatasetRoots: allowedRootsRaw.split(",").map((s) => path.resolve(s.trim())).filter(Boolean)
+  allowedDatasetRoots: allowedRootsRaw.split(",").map((s) => path.resolve(s.trim())).filter(Boolean),
+  trainingExecutor,
+  publicBaseUrl,
+  modalControlUrl,
+  modalControlToken,
+  modalCallbackToken,
+  modalVolumeHelperUrl: process.env.MODAL_VOLUME_HELPER_URL
+    ? normalizeBaseUrl(process.env.MODAL_VOLUME_HELPER_URL)
+    : ""
 };

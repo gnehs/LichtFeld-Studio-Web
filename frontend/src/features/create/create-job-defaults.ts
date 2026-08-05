@@ -2,6 +2,11 @@ export type CreateJobStrategy = "mrnf" | "mcmc" | "igs+";
 
 export type CreateJobMaskMode = "none" | "segment" | "ignore" | "alpha_consistent";
 
+export const CREATE_JOB_ITERATIONS_MIN = 1;
+export const CREATE_JOB_ITERATIONS_MAX = 1_000_000;
+export const CREATE_JOB_MAX_CAP_MIN = 100_000;
+export const CREATE_JOB_MAX_CAP_MAX = 1_000_000_000;
+
 export interface CreateJobStrategyDefaults {
   iterations: number;
   strategy: CreateJobStrategy;

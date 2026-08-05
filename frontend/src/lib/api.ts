@@ -2,15 +2,17 @@ import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, SplatSnapshot,
 
 export type UploadDatasetPhase = "preparing" | "uploading" | "processing" | "complete";
 
-const TUS_UPLOAD_CHUNK_SIZE = 64 * 1024 * 1024;
+const TUS_UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024;
 const TUS_RESUMABLE_VERSION = "1.0.0";
 const TUS_UPLOAD_STORAGE_PREFIX = "lfs:tus-upload:";
 
-/** 網路中斷後最長等待重試的毫秒數 */
+/** 網路中斷後累計等待重試的最長毫秒數（不含 PATCH 本身耗時） */
 const TUS_RETRY_BUDGET_MS = 30_000;
 /** 每次重試間隔的初始值（ms），每次失敗後加倍，最長 10s */
 const TUS_RETRY_BASE_DELAY_MS = 1_000;
 const TUS_RETRY_MAX_DELAY_MS = 10_000;
+/** 單一 PATCH chunk 允許的最長傳輸時間（ms） */
+const TUS_PATCH_TIMEOUT_MS = 120_000;
 
 interface UploadDatasetOptions {
   onProgress?: (progress: number) => void;
@@ -20,9 +22,33 @@ interface UploadDatasetOptions {
   onReconnected?: () => void;
 }
 
+class HttpResponseError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "HttpResponseError";
+    this.status = status;
+  }
+}
+
+class TusPatchTimeoutError extends Error {
+  constructor() {
+    super(`PATCH request timed out after ${TUS_PATCH_TIMEOUT_MS}ms`);
+    this.name = "TusPatchTimeoutError";
+  }
+}
+
 async function parseRequestError(response: Response): Promise<string> {
-  const body = await response.json().catch(() => ({}));
-  return body.message ?? response.statusText;
+  const body = await response.json().catch(() => undefined);
+  if (typeof body === "object" && body !== null && "message" in body && typeof body.message === "string") {
+    return body.message;
+  }
+  return response.statusText;
+}
+
+async function createHttpResponseError(response: Response): Promise<HttpResponseError> {
+  return new HttpResponseError(response.status, await parseRequestError(response));
 }
 
 function getUploadStorage(): Pick<Storage, "getItem" | "setItem" | "removeItem"> | null {
@@ -67,6 +93,16 @@ function getUploadOffset(headers: Headers): number | null {
   return Number.isSafeInteger(offset) && offset >= 0 ? offset : null;
 }
 
+function getUploadLength(headers: Headers): number | null {
+  const rawLength = headers.get("Upload-Length") ?? headers.get("upload-length");
+  if (!rawLength) {
+    return null;
+  }
+
+  const length = Number(rawLength);
+  return Number.isSafeInteger(length) && length >= 0 ? length : null;
+}
+
 async function createTusUpload(file: File, datasetName?: string): Promise<{ uploadUrl: string; offset: number }> {
   const response = await fetch("/api/datasets/upload/tus", {
     method: "POST",
@@ -79,7 +115,7 @@ async function createTusUpload(file: File, datasetName?: string): Promise<{ uplo
   });
 
   if (!response.ok) {
-    throw new Error(await parseRequestError(response));
+    throw await createHttpResponseError(response);
   }
 
   const uploadUrl = response.headers.get("Location") ?? response.headers.get("location");
@@ -87,13 +123,19 @@ async function createTusUpload(file: File, datasetName?: string): Promise<{ uplo
     throw new Error("Upload creation succeeded but response is missing upload URL");
   }
 
+  const rawOffset = response.headers.get("Upload-Offset") ?? response.headers.get("upload-offset");
+  const offset = rawOffset === null ? 0 : getUploadOffset(response.headers);
+  if (offset === null) {
+    throw new Error("Upload creation returned an invalid Upload-Offset");
+  }
+
   return {
     uploadUrl,
-    offset: getUploadOffset(response.headers) ?? 0
+    offset
   };
 }
 
-async function headTusUpload(uploadUrl: string): Promise<{ exists: boolean; offset: number }> {
+async function headTusUpload(uploadUrl: string, expectedLength: number): Promise<{ exists: boolean; offset: number }> {
   const response = await fetch(uploadUrl, {
     method: "HEAD",
     credentials: "include",
@@ -107,37 +149,83 @@ async function headTusUpload(uploadUrl: string): Promise<{ exists: boolean; offs
   }
 
   if (!response.ok) {
-    throw new Error(await parseRequestError(response));
+    throw await createHttpResponseError(response);
+  }
+
+  const offset = getUploadOffset(response.headers);
+  const uploadLength = getUploadLength(response.headers);
+  if (offset === null) {
+    throw new Error("Resumable upload response is missing a valid Upload-Offset");
+  }
+  if (uploadLength === null) {
+    throw new Error("Resumable upload response is missing a valid Upload-Length");
+  }
+  if (uploadLength !== expectedLength) {
+    throw new Error(`Upload-Length ${uploadLength} does not match file size ${expectedLength}`);
+  }
+  if (offset > expectedLength) {
+    throw new Error("Upload-Offset exceeds file size");
   }
 
   return {
     exists: true,
-    offset: getUploadOffset(response.headers) ?? 0
+    offset
   };
 }
 
 async function patchTusUpload(uploadUrl: string, offset: number, chunk: Blob): Promise<number> {
-  const response = await fetch(uploadUrl, {
-    method: "PATCH",
-    credentials: "include",
-    headers: {
-      "Tus-Resumable": TUS_RESUMABLE_VERSION,
-      "Upload-Offset": String(offset),
-      "Content-Type": "application/offset+octet-stream"
-    },
-    body: chunk
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new TusPatchTimeoutError());
+    }, TUS_PATCH_TIMEOUT_MS);
   });
 
-  const nextOffset = getUploadOffset(response.headers);
-  if (response.status === 409 && nextOffset !== null) {
-    return nextOffset;
-  }
+  try {
+    const response = await Promise.race([
+      fetch(uploadUrl, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Tus-Resumable": TUS_RESUMABLE_VERSION,
+          "Upload-Offset": String(offset),
+          "Content-Type": "application/offset+octet-stream"
+        },
+        body: chunk,
+        signal: controller.signal
+      }),
+      timeoutPromise
+    ]);
 
-  if (!response.ok) {
-    throw new Error(await parseRequestError(response));
-  }
+    const nextOffset = getUploadOffset(response.headers);
+    if (response.status === 409) {
+      if (nextOffset === null || nextOffset <= offset || nextOffset > offset + chunk.size) {
+        throw new Error("Upload conflict returned an invalid Upload-Offset");
+      }
+      return nextOffset;
+    }
 
-  return nextOffset ?? offset + chunk.size;
+    if (!response.ok) {
+      throw await createHttpResponseError(response);
+    }
+
+    if (nextOffset !== null && (nextOffset <= offset || nextOffset > offset + chunk.size)) {
+      throw new Error("Upload response returned an invalid Upload-Offset");
+    }
+
+    return nextOffset ?? offset + chunk.size;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw error instanceof TusPatchTimeoutError ? error : new TusPatchTimeoutError();
+    }
+    throw error;
+  } finally {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 function getTusUploadCompletePath(uploadUrl: string): string {
@@ -147,23 +235,23 @@ function getTusUploadCompletePath(uploadUrl: string): string {
 
 /** 判斷是否為可重試的網路/暫時性錯誤（非 HTTP 業務邏輯錯誤） */
 function isRetryableError(error: unknown): boolean {
+  if (error instanceof TusPatchTimeoutError) {
+    return true;
+  }
+  if (error instanceof HttpResponseError) {
+    return error.status >= 500 && error.status <= 599;
+  }
   if (error instanceof TypeError) {
     // fetch 網路失敗：TypeError: Failed to fetch / NetworkError
     return true;
-  }
-  if (error instanceof Error) {
-    const msg = error.message.toLowerCase();
-    // 後端回傳 5xx 暫時性錯誤
-    if (msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("504")) {
-      return true;
-    }
   }
   return false;
 }
 
 /**
  * 帶有 retry budget 的 PATCH 執行器。
- * 在 TUS_RETRY_BUDGET_MS 內遭遇可重試錯誤時，會以 exponential backoff 持續重試。
+ * 在累計等待時間不超過 TUS_RETRY_BUDGET_MS 時，遭遇可重試錯誤會以 exponential backoff 持續重試。
+ * PATCH 本身可能需要較長時間，不能把網路傳輸耗時算進等待預算，否則長請求在斷線後無法恢復。
  * 每次等待期間回呼 onReconnecting（傳入預計重試的時間戳）。
  */
 async function patchTusUploadWithRetry(
@@ -172,7 +260,7 @@ async function patchTusUploadWithRetry(
   chunk: Blob,
   options?: Pick<UploadDatasetOptions, "onReconnecting" | "onReconnected">
 ): Promise<number> {
-  const budgetDeadline = Date.now() + TUS_RETRY_BUDGET_MS;
+  let waitedMs = 0;
   let delay = TUS_RETRY_BASE_DELAY_MS;
   let isFirstAttempt = true;
 
@@ -189,15 +277,17 @@ async function patchTusUploadWithRetry(
         throw error;
       }
 
-      const now = Date.now();
-      const retryAt = now + delay;
-      if (retryAt > budgetDeadline) {
-        // 超出重試預算，直接拋出
+      const remainingBudgetMs = TUS_RETRY_BUDGET_MS - waitedMs;
+      if (remainingBudgetMs <= 0) {
+        // 已用完累計等待預算，直接拋出
         throw error;
       }
 
+      const waitMs = Math.min(delay, remainingBudgetMs);
+      const retryAt = Date.now() + waitMs;
       options?.onReconnecting?.(retryAt);
-      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+      waitedMs += waitMs;
       delay = Math.min(delay * 2, TUS_RETRY_MAX_DELAY_MS);
       isFirstAttempt = false;
     }
@@ -215,8 +305,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message ?? response.statusText);
+    throw await createHttpResponseError(response);
   }
 
   return response.json() as Promise<T>;
@@ -239,7 +328,7 @@ export const api = {
     let offset = 0;
 
     if (uploadUrl) {
-      const headResult = await headTusUpload(uploadUrl);
+      const headResult = await headTusUpload(uploadUrl, file.size);
       if (headResult.exists) {
         offset = headResult.offset;
       } else {
@@ -252,6 +341,9 @@ export const api = {
       const created = await createTusUpload(file, datasetName);
       uploadUrl = created.uploadUrl;
       offset = created.offset;
+      if (offset > file.size) {
+        throw new Error("Upload creation returned an offset beyond file size");
+      }
       storage?.setItem(fingerprint, uploadUrl);
     }
 
@@ -281,7 +373,7 @@ export const api = {
       });
 
       if (!response.ok) {
-        throw new Error(await parseRequestError(response));
+        throw await createHttpResponseError(response);
       }
 
       const body = (await response.json()) as { item?: DatasetRecord };

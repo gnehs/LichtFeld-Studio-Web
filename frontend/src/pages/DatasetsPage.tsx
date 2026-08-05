@@ -282,7 +282,9 @@ function UploadStatusPanel({
             ? draft.error ?? "上傳失敗，請重新選擇 ZIP。"
             : speed && speed !== "—"
               ? `目前傳輸速度約 ${speed}`
-              : "正在建立傳輸連線...";
+              : draft.uploadedBytes === 0
+                ? "正在上傳第一個資料分段..."
+                : "正在上傳下一個資料分段...";
 
   return (
     <div
@@ -535,8 +537,7 @@ export function DatasetsPage({
     },
   });
 
-  const uploadBusy =
-    uploadDraft.status === "uploading" || uploadDraft.status === "processing";
+  const uploadBusy = isUploadInFlight(uploadDraft.status);
   const uploadDatasetConflictName = useMemo(
     () => getUploadDatasetConflictName(uploadDraft.name, datasetFolders),
     [datasetFolders, uploadDraft.name],

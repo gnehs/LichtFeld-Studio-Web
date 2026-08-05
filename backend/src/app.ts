@@ -13,6 +13,7 @@ import { authRouter } from "./routes/auth.js";
 import { datasetsRouter } from "./routes/datasets.js";
 import { jobsRouter } from "./routes/jobs.js";
 import { systemRouter } from "./routes/system.js";
+import { modalInternalRouter } from "./routes/modalInternal.js";
 import { requireAuth } from "./middleware/auth.js";
 
 /** HTTP request logger middleware */
@@ -89,6 +90,9 @@ export function createApp() {
   app.use(requestLogger);
 
   app.use(express.json({ limit: "15mb" }));
+  // Modal trainer callbacks authenticate with their own bearer token and must
+  // not depend on a browser session cookie.
+  app.use("/api/internal/modal", modalInternalRouter);
   app.use(
     session({
       name: "lfs.sid",

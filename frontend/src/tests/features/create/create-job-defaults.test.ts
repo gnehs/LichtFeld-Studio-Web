@@ -1,11 +1,22 @@
 import { describe, expect, test } from "vitest";
 import {
   applyVisibleStrategyDefaults,
+  CREATE_JOB_ITERATIONS_MAX,
+  CREATE_JOB_ITERATIONS_MIN,
+  CREATE_JOB_MAX_CAP_MAX,
+  CREATE_JOB_MAX_CAP_MIN,
   getStrategyDefaults,
   shouldShowMaskSettings,
 } from "@/features/create/create-job-defaults";
 
 describe("create job strategy defaults", () => {
+  test("exposes direct-input bounds for core training controls", () => {
+    expect(CREATE_JOB_ITERATIONS_MIN).toBe(1);
+    expect(CREATE_JOB_ITERATIONS_MAX).toBe(1_000_000);
+    expect(CREATE_JOB_MAX_CAP_MIN).toBe(100_000);
+    expect(CREATE_JOB_MAX_CAP_MAX).toBe(1_000_000_000);
+  });
+
   test("returns upstream-inspired presets per strategy", () => {
     expect(getStrategyDefaults("mrnf")).toMatchObject({
       strategy: "mrnf",

@@ -26,6 +26,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   applyVisibleStrategyDefaults,
+  CREATE_JOB_ITERATIONS_MAX,
+  CREATE_JOB_ITERATIONS_MIN,
+  CREATE_JOB_MAX_CAP_MAX,
+  CREATE_JOB_MAX_CAP_MIN,
   getStrategyDefaults,
   shouldShowMaskSettings,
   UPSTREAM_MASK_FOLDERS,
@@ -661,32 +665,42 @@ export function CreateJobWizard({
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
-                  <Label>Iterations</Label>
-                  <input
-                    type="range"
-                    min={5000}
-                    max={200000}
-                    step={1000}
+                  <Label htmlFor="create-job-iterations">Iterations</Label>
+                  <Input
+                    id="create-job-iterations"
+                    className="mt-2"
+                    type="number"
+                    min={CREATE_JOB_ITERATIONS_MIN}
+                    max={CREATE_JOB_ITERATIONS_MAX}
+                    step={1}
+                    inputMode="numeric"
                     value={form.iterations}
                     onChange={(e) =>
                       updateForm("iterations", Number(e.target.value))
                     }
-                    className="range-dark mt-3 w-full"
                   />
+                  <FieldHint>
+                    訓練步數（整數），可直接輸入 1–1,000,000（1M）。
+                  </FieldHint>
                 </div>
                 <div className="glass-panel rounded-[1rem] border-0 bg-black/30 p-4">
-                  <Label>Max Cap</Label>
-                  <input
-                    type="range"
-                    min={100000}
-                    max={10000000}
-                    step={50000}
+                  <Label htmlFor="create-job-max-cap">Max Cap</Label>
+                  <Input
+                    id="create-job-max-cap"
+                    className="mt-2"
+                    type="number"
+                    min={CREATE_JOB_MAX_CAP_MIN}
+                    max={CREATE_JOB_MAX_CAP_MAX}
+                    step={1}
+                    inputMode="numeric"
                     value={form.maxCap}
                     onChange={(e) =>
                       updateForm("maxCap", Number(e.target.value))
                     }
-                    className="range-dark mt-3 w-full"
                   />
+                  <FieldHint>
+                    高斯數上限（整數），可直接輸入 100,000–1,000,000,000（100K–1000M）。
+                  </FieldHint>
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">

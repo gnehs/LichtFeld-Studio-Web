@@ -49,26 +49,31 @@ jobsRouter.get("/:id", (req, res) => {
   return res.json({ item });
 });
 
-jobsRouter.post("/", (req, res) => {
+jobsRouter.post("/", async (req, res) => {
   const parsed = createJobSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: parsed.error.message });
   }
 
   try {
-    const item = jobService.createJob(parsed.data);
+    const item = await jobService.createJob(parsed.data);
     return res.json({ item });
   } catch (error) {
-    return res.status(400).json({ message: (error as Error).message });
+    const status = config.trainingExecutor === "modal" ? 502 : 400;
+    return res.status(status).json({ message: (error as Error).message });
   }
 });
 
-jobsRouter.post("/:id/stop", (req, res) => {
-  const stopped = jobService.stopJob(req.params.id, "stopped");
-  if (!stopped) {
-    return res.status(404).json({ message: "Job not found or not stoppable" });
+jobsRouter.post("/:id/stop", async (req, res) => {
+  try {
+    const stopped = await jobService.stopJob(req.params.id, "stopped");
+    if (!stopped) {
+      return res.status(404).json({ message: "Job not found or not stoppable" });
+    }
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(502).json({ message: `Failed to stop remote job: ${(error as Error).message}` });
   }
-  return res.json({ success: true });
 });
 
 jobsRouter.delete("/:id", (req, res) => {

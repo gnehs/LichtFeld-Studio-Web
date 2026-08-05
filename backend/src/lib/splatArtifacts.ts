@@ -9,6 +9,7 @@ import { config } from "../config.js";
 const execFileAsync = promisify(execFile);
 
 const PREVIEW_DIR_NAME = ".web-preview";
+const MODAL_EXPORT_DIR_NAME = "modal-exports";
 const SUPPORTED_SOURCE_EXTENSIONS = new Set([".html", ".ply", ".resume", ".sog", ".spz"]);
 const CONVERTIBLE_SOURCE_EXTENSIONS = new Set([".ply", ".resume", ".sog", ".spz"]);
 const conversionPromises = new Map<string, Promise<void>>();
@@ -155,6 +156,28 @@ function legacyViewerPath(source: SplatSource): string | null {
   return source.type === "html" ? source.path : null;
 }
 
+async function getModalPreparedArtifact(
+  outputRoot: string,
+  format: SplatExportFormat
+): Promise<SplatSource | null> {
+  const preparedPath = path.join(outputRoot, MODAL_EXPORT_DIR_NAME, `model.${format}`);
+  if (!isWithinRoot(preparedPath, outputRoot)) return null;
+
+  try {
+    const stat = await fsPromises.stat(preparedPath);
+    if (!stat.isFile()) return null;
+    return {
+      path: preparedPath,
+      type: format,
+      mtimeMs: stat.mtimeMs,
+      sizeBytes: stat.size,
+      iteration: null
+    };
+  } catch {
+    return null;
+  }
+}
+
 function conversionKey(source: SplatSource, targetPath: string): string {
   return `${path.resolve(source.path)}:${source.mtimeMs}:${source.sizeBytes}->${path.resolve(targetPath)}`;
 }
@@ -211,6 +234,17 @@ export async function getSplatSnapshot(outputPath: string): Promise<SplatSnapsho
       available: false,
       status: "missing",
       message: "Model output not found"
+    };
+  }
+
+  const modalViewer = await getModalPreparedArtifact(outputRoot, "html");
+  if (modalViewer) {
+    return {
+      available: true,
+      status: "ready",
+      source: modalViewer,
+      viewerPath: modalViewer.path,
+      message: null
     };
   }
 
@@ -293,6 +327,11 @@ export async function getSplatExportArtifact(
 ): Promise<SplatExportArtifact | null> {
   const outputRoot = path.resolve(outputPath);
   if (!fs.existsSync(outputRoot)) return null;
+
+  const modalArtifact = await getModalPreparedArtifact(outputRoot, format);
+  if (modalArtifact) {
+    return { path: modalArtifact.path, format, source: modalArtifact };
+  }
 
   const allowedTypes = format === "html"
     ? new Set<SplatSourceType>(["html", "ply", "resume", "sog", "spz"])
