@@ -51,6 +51,7 @@ WEB_PORT = 3000
 VOLUME_HELPER_PORT = 3001
 DEFAULT_TRAINER_TIMEOUT_SECONDS = 86_400
 MAX_TRAINER_TIMEOUT_SECONDS = 86_400
+DEFAULT_TRAINER_MAX_CONTAINERS = 5
 
 
 def _positive_int(name: str, default: int, maximum: int | None = None) -> int:
@@ -824,7 +825,13 @@ def _terminate_process(process: subprocess.Popen[bytes], reason: str) -> None:
     gpu=os.getenv("MODAL_GPU", "A10"),
     volumes={DATA_MOUNT: data_volume},
     min_containers=0,
-    max_containers=1,
+    # Volume v1 supports distinct concurrent writers, but Modal recommends no
+    # more than five at once. Keep that safe default while allowing operators
+    # to tune the cost/concurrency trade-off for their workspace.
+    max_containers=_positive_int(
+        "MODAL_TRAINER_MAX_CONTAINERS",
+        DEFAULT_TRAINER_MAX_CONTAINERS,
+    ),
     scaledown_window=2,
     timeout=_positive_int("MODAL_TRAINER_TIMEOUT", DEFAULT_TRAINER_TIMEOUT_SECONDS, MAX_TRAINER_TIMEOUT_SECONDS),
     secrets=_secret(CALLBACK_SECRET_NAME),
@@ -919,9 +926,8 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
     )
 
     try:
-        # A max-one pool may reuse a warm container for the next queued call;
-        # reload here so a dispatch commit made by the web container is visible
-        # even when Modal does not create a fresh GPU container.
+        # A warm container may be reused for a later call; reload here so a
+        # dispatch commit made by the web container is always visible.
         data_volume.reload()
         volume_loaded = True
 

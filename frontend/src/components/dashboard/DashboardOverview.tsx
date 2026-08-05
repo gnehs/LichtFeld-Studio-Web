@@ -75,6 +75,7 @@ export function DashboardOverview({
 }) {
   const runningCount = jobs.filter((job) => job.status === "running").length;
   const queuedCount = jobs.filter((job) => job.status === "queued").length;
+  const showHardwareMetrics = systemMetrics?.trainingExecutor === "local";
   const gpu = systemMetrics?.gpu.devices[0] ?? null;
   const gpuUtilization = gpu?.utilizationGpu;
 
@@ -155,17 +156,19 @@ export function DashboardOverview({
         ))}
       </div>
 
-      <div className="grid grid-cols-1 justify-center gap-2 max-md:w-full md:flex md:flex-wrap">
-        {usageCards.map((card) => (
-          <UsageCard
-            key={card.label}
-            label={card.label}
-            value={card.value}
-            progress={card.progress}
-            icon={card.icon}
-          />
-        ))}
-      </div>
+      {showHardwareMetrics ? (
+        <div className="grid grid-cols-1 justify-center gap-2 max-md:w-full md:flex md:flex-wrap">
+          {usageCards.map((card) => (
+            <UsageCard
+              key={card.label}
+              label={card.label}
+              value={card.value}
+              progress={card.progress}
+              icon={card.icon}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -43,7 +43,13 @@ export interface DatasetDetail {
   maskSource: "separate_mask" | "alpha" | "mixed" | "none";
 }
 
-export type JobStatus = "queued" | "running" | "completed" | "failed" | "stopped" | "stopped_low_disk";
+export type JobStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "stopped"
+  | "stopped_low_disk";
 
 export interface TimelapseConfig {
   images: string[];
@@ -156,13 +162,19 @@ export interface DiskGuardStatus {
 }
 
 export interface EventMessage {
-  type: "log" | "timelapse.frame.created" | "timelapse.scan.completed" | "job.stopped.low_disk" | "job.status";
+  type:
+    | "log"
+    | "timelapse.frame.created"
+    | "timelapse.scan.completed"
+    | "job.stopped.low_disk"
+    | "job.status";
   jobId: string;
   data: unknown;
   ts: string;
 }
 
 export interface SystemMetrics {
+  trainingExecutor: "local" | "modal";
   memory: {
     totalGb: number;
     usedGb: number;
