@@ -46,11 +46,10 @@ export interface CreateJobStrategyDefaults {
 
 export const UPSTREAM_MASK_FOLDERS = ["masks", "mask", "segmentation", "dynamic_masks"] as const;
 
-const COMMON_DEFAULTS: Omit<CreateJobStrategyDefaults, "strategy" | "maxCap"> = {
+const COMMON_DEFAULTS: Omit<CreateJobStrategyDefaults, "strategy" | "maxCap" | "minOpacity"> = {
   iterations: 30000,
   shDegree: 3,
   shDegreeInterval: 1000,
-  minOpacity: 0.005,
   stepsScaler: 1,
   random: false,
   initNumPts: 100000,
@@ -70,40 +69,52 @@ const COMMON_DEFAULTS: Omit<CreateJobStrategyDefaults, "strategy" | "maxCap"> = 
   noAlphaAsMask: false,
   enableSparsity: false,
   sparsifySteps: 15000,
-  initRho: 0.001,
+  initRho: 0.0005,
   pruneRatio: 0.6,
   enableMip: false,
   bilateralGrid: false,
-  ppisp: true,
+  ppisp: false,
   ppispController: false,
   ppispFreeze: false,
   ppispSidecar: "",
   bgModulation: false,
 };
 
-const STRATEGY_MAX_CAP: Record<CreateJobStrategy, number> = {
-  mrnf: 5000000,
-  mcmc: 1000000,
-  "igs+": 4000000,
+const STRATEGY_DEFAULTS: Record<
+  CreateJobStrategy,
+  Pick<CreateJobStrategyDefaults, "maxCap" | "minOpacity">
+> = {
+  mrnf: {
+    maxCap: 5000000,
+    minOpacity: 1 / 255,
+  },
+  mcmc: {
+    maxCap: 1000000,
+    minOpacity: 0.005,
+  },
+  "igs+": {
+    maxCap: 4000000,
+    minOpacity: 0.005,
+  },
 };
 
 export function getStrategyDefaults(strategy: CreateJobStrategy): CreateJobStrategyDefaults {
   return {
     ...COMMON_DEFAULTS,
     strategy,
-    maxCap: STRATEGY_MAX_CAP[strategy],
+    ...STRATEGY_DEFAULTS[strategy],
   };
 }
 
-export function applyVisibleStrategyDefaults<T extends { strategy: CreateJobStrategy; maxCap: number }>(
-  current: T,
-  strategy: CreateJobStrategy,
-): T {
+export function applyVisibleStrategyDefaults<
+  T extends { strategy: CreateJobStrategy; maxCap: number; minOpacity: number },
+>(current: T, strategy: CreateJobStrategy): T {
   const next = getStrategyDefaults(strategy);
   return {
     ...current,
     strategy,
     maxCap: next.maxCap,
+    minOpacity: next.minOpacity,
   };
 }
 
