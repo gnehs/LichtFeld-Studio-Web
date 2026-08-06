@@ -17,25 +17,31 @@ describe("create job strategy defaults", () => {
     expect(CREATE_JOB_MAX_CAP_MAX).toBe(1_000_000_000);
   });
 
-  test("returns upstream-inspired presets per strategy", () => {
+  test("matches LichtFeld v0.5.3 presets per strategy", () => {
     expect(getStrategyDefaults("mrnf")).toMatchObject({
       strategy: "mrnf",
       maxCap: 5000000,
-      ppisp: true,
+      minOpacity: 1 / 255,
+      initRho: 0.0005,
+      ppisp: false,
       saveEvalImages: true,
     });
 
     expect(getStrategyDefaults("mcmc")).toMatchObject({
       strategy: "mcmc",
       maxCap: 1000000,
-      ppisp: true,
+      minOpacity: 0.005,
+      initRho: 0.0005,
+      ppisp: false,
       saveEvalImages: true,
     });
 
     expect(getStrategyDefaults("igs+")).toMatchObject({
       strategy: "igs+",
       maxCap: 4000000,
-      ppisp: true,
+      minOpacity: 0.005,
+      initRho: 0.0005,
+      ppisp: false,
     });
 
     expect(getStrategyDefaults("mcmc")).not.toHaveProperty("tileMode");
@@ -52,12 +58,14 @@ describe("create job strategy defaults", () => {
     const current = {
       ...getStrategyDefaults("mcmc"),
       maxCap: 1234567,
+      minOpacity: 0.123,
       images: "custom-images",
     };
 
     expect(applyVisibleStrategyDefaults(current, "mrnf")).toMatchObject({
       strategy: "mrnf",
       maxCap: 5000000,
+      minOpacity: 1 / 255,
       images: "custom-images",
     });
   });
