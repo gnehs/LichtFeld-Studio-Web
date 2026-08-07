@@ -1,10 +1,18 @@
 import { useLocation } from "react-router-dom";
 import { CreateJobWizard } from "@/features/create/CreateJobWizard";
 import type { Notice } from "@/lib/app-types";
-import type { DatasetFolderEntry, DatasetRecord, TrainingJob, TrainingParamsForm } from "@/lib/types";
+import type {
+  DatasetFolderEntry,
+  DatasetRecord,
+  SystemMetrics,
+  TrainingJob,
+  TrainingParamsForm,
+} from "@/lib/types";
 import type { CreateJobStrategyDefaults } from "@/features/create/create-job-defaults";
 
-function paramsToWizardValues(params: TrainingParamsForm): Partial<CreateJobStrategyDefaults & { advancedJson: string }> {
+function paramsToWizardValues(
+  params: TrainingParamsForm,
+): Partial<CreateJobStrategyDefaults & { advancedJson: string; gpu?: string }> {
   return {
     ...(params.iterations !== undefined && { iterations: params.iterations }),
     ...(params.strategy !== undefined && { strategy: params.strategy }),
@@ -13,6 +21,7 @@ function paramsToWizardValues(params: TrainingParamsForm): Partial<CreateJobStra
     ...(params.maxCap !== undefined && { maxCap: params.maxCap }),
     ...(params.minOpacity !== undefined && { minOpacity: params.minOpacity }),
     ...(params.stepsScaler !== undefined && { stepsScaler: params.stepsScaler }),
+    ...(params.gpu !== undefined && { gpu: params.gpu }),
     ...(params.random !== undefined && { random: params.random }),
     ...(params.initNumPts !== undefined && { initNumPts: params.initNumPts }),
     ...(params.initExtent !== undefined && { initExtent: params.initExtent }),
@@ -49,7 +58,8 @@ export function CreateJobPage({
   onCancel,
   onCreated,
   onNotice,
-  onRefreshDatasets
+  onRefreshDatasets,
+  systemMetrics,
 }: {
   datasets: DatasetRecord[];
   datasetFolders: DatasetFolderEntry[];
@@ -57,6 +67,7 @@ export function CreateJobPage({
   onCreated: (jobId: string) => Promise<void>;
   onNotice: (notice: Notice) => void;
   onRefreshDatasets: () => Promise<void>;
+  systemMetrics?: SystemMetrics | null;
 }) {
   const location = useLocation();
   const prefillJob = (location.state as { prefillJob?: TrainingJob } | null)?.prefillJob;
@@ -89,6 +100,7 @@ export function CreateJobPage({
         onRefreshDatasets={onRefreshDatasets}
         initialDatasetId={initialDatasetId}
         initialValues={initialValues}
+        systemMetrics={systemMetrics}
       />
     </section>
   );

@@ -50,8 +50,21 @@ export function parseLichtFeldProgressLog(
 function parseIterations(job: TrainingJob | null): number | null {
   if (!job?.paramsJson) return null;
   try {
-    const parsed = JSON.parse(job.paramsJson) as { iterations?: unknown };
-    const value = Number(parsed?.iterations ?? 0);
+    const parsed = JSON.parse(job.paramsJson) as {
+      iterations?: unknown;
+      effectiveIterations?: unknown;
+      stepsScaler?: unknown;
+      enableSparsity?: unknown;
+      sparsifySteps?: unknown;
+    };
+    const base = Number(parsed?.iterations ?? 0);
+    const scaler = Number(parsed?.stepsScaler ?? 1);
+    const sparse = parsed.enableSparsity ? Number(parsed.sparsifySteps ?? 0) : 0;
+    const inferred =
+      (Number.isFinite(base) && base > 0 && Number.isFinite(scaler) && scaler > 0
+        ? Math.round(base * scaler)
+        : base) + (Number.isFinite(sparse) && sparse > 0 ? sparse : 0);
+    const value = Number(parsed?.effectiveIterations ?? inferred);
     if (!Number.isFinite(value) || value <= 0) return null;
     return Math.floor(value);
   } catch {
@@ -64,12 +77,12 @@ export function computeProgress(
   latestIteration: number | null,
   fallbackTargetIterations: number | null = null,
 ) {
-  const targetIterations = parseIterations(job) ?? (
+  const targetIterations = (
     fallbackTargetIterations !== null &&
     Number.isFinite(fallbackTargetIterations) &&
     fallbackTargetIterations > 0
       ? Math.floor(fallbackTargetIterations)
-      : null
+      : parseIterations(job)
   );
   const latest =
     latestIteration !== null && Number.isFinite(latestIteration)

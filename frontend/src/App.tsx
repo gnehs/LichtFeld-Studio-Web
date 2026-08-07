@@ -393,6 +393,7 @@ function App() {
                 onRefreshDatasets={async () => {
                   await datasetsQuery.refetch({ throwOnError: true });
                 }}
+                systemMetrics={systemMetrics}
               />
             }
           />

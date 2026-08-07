@@ -39,7 +39,7 @@ describe("config shared library path", () => {
     };
 
     try {
-      await expect(import("../src/config.js")).rejects.toThrow("PUBLIC_BASE_URL");
+      await expect(import("../src/config.js")).rejects.toThrow("MODAL_CONTROL_URL");
     } finally {
       process.env = originalEnv;
       vi.resetModules();

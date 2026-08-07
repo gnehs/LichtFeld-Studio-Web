@@ -7,6 +7,32 @@ export const CREATE_JOB_ITERATIONS_MAX = 1_000_000;
 export const CREATE_JOB_MAX_CAP_MIN = 100_000;
 export const CREATE_JOB_MAX_CAP_MAX = 1_000_000_000;
 
+/**
+ * Return the number of optimisation steps that the trainer will actually run.
+ *
+ * `stepsScaler` is applied before rounding, while the optional sparsity phase
+ * contributes its own steps after the scaled training iterations.
+ */
+export function getEffectiveTrainingSteps({
+  iterations,
+  stepsScaler,
+  enableSparsity,
+  sparsifySteps,
+}: {
+  iterations: number;
+  stepsScaler: number;
+  enableSparsity: boolean;
+  sparsifySteps: number;
+}): number {
+  const effectiveScaler = Number.isFinite(stepsScaler) && stepsScaler > 0
+    ? stepsScaler
+    : 1;
+  return (
+    Math.max(1, Math.round(iterations * effectiveScaler)) +
+    (enableSparsity ? sparsifySteps : 0)
+  );
+}
+
 export interface CreateJobStrategyDefaults {
   iterations: number;
   strategy: CreateJobStrategy;

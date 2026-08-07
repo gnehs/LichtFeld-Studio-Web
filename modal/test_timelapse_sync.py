@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import shutil
 import sys
 import tempfile
@@ -33,6 +34,42 @@ class ModalTimelapseSyncTests(unittest.TestCase):
             self.assertEqual([frame.file_path for frame in frames], [str(frame_path)])
         finally:
             shutil.rmtree(output_path, ignore_errors=True)
+
+    def test_writes_status_artifact_atomically(self) -> None:
+        output_path = Path(tempfile.mkdtemp(prefix="lichtfeld-status-artifact-"))
+        try:
+            target = APP._write_status_file(output_path, {"status": "running", "startedAt": "now"})
+            self.assertEqual(target.name, ".web-status.json")
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["status"], "running")
+            self.assertEqual(list(output_path.glob("*.tmp")), [])
+        finally:
+            shutil.rmtree(output_path, ignore_errors=True)
+
+    def test_dispatch_uses_only_allowlisted_dynamic_gpu(self) -> None:
+        calls: list[tuple[str, str, list[str]]] = []
+
+        class FakeConfiguredTrainer:
+            def __init__(self, gpu: str) -> None:
+                self.gpu = gpu
+
+            def spawn(self, *, job_id: str, args: list[str]):
+                calls.append((self.gpu, job_id, args))
+                return type("Call", (), {"object_id": "fc-test"})()
+
+        class FakeTrainer:
+            def with_options(self, *, gpu: str) -> FakeConfiguredTrainer:
+                return FakeConfiguredTrainer(gpu)
+
+        original = APP.gpu_trainer
+        APP.gpu_trainer = FakeTrainer()
+        try:
+            result = APP.dispatch_job({"jobId": "job-1", "args": ["--headless"], "gpu": "L40S"})
+            self.assertEqual(result["callId"], "fc-test")
+            self.assertEqual(calls, [("L40S", "job-1", ["--headless"])])
+            with self.assertRaisesRegex(ValueError, "Unsupported Modal GPU"):
+                APP.dispatch_job({"jobId": "job-2", "args": ["--headless"], "gpu": "H100:99"})
+        finally:
+            APP.gpu_trainer = original
 
     def test_retries_frames_after_a_failed_commit(self) -> None:
         output_path = Path(tempfile.mkdtemp(prefix="lichtfeld-timelapse-retry-"))

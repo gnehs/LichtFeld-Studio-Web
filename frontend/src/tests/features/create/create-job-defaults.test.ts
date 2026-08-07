@@ -6,6 +6,7 @@ import {
   CREATE_JOB_MAX_CAP_MAX,
   CREATE_JOB_MAX_CAP_MIN,
   getStrategyDefaults,
+  getEffectiveTrainingSteps,
   shouldShowMaskSettings,
 } from "@/features/create/create-job-defaults";
 
@@ -15,6 +16,17 @@ describe("create job strategy defaults", () => {
     expect(CREATE_JOB_ITERATIONS_MAX).toBe(1_000_000);
     expect(CREATE_JOB_MAX_CAP_MIN).toBe(100_000);
     expect(CREATE_JOB_MAX_CAP_MAX).toBe(1_000_000_000);
+  });
+
+  test("treats a non-positive scaler as LichtFeld's unscaled default", () => {
+    expect(
+      getEffectiveTrainingSteps({
+        iterations: 30_000,
+        stepsScaler: 0,
+        enableSparsity: false,
+        sparsifySteps: 15_000,
+      }),
+    ).toBe(30_000);
   });
 
   test("matches LichtFeld v0.5.3 presets per strategy", () => {
@@ -68,5 +80,25 @@ describe("create job strategy defaults", () => {
       minOpacity: 1 / 255,
       images: "custom-images",
     });
+  });
+
+  test("calculates scaled steps and appends sparsity steps", () => {
+    expect(
+      getEffectiveTrainingSteps({
+        iterations: 1_001,
+        stepsScaler: 1.5,
+        enableSparsity: false,
+        sparsifySteps: 900,
+      }),
+    ).toBe(1_502);
+
+    expect(
+      getEffectiveTrainingSteps({
+        iterations: 1_001,
+        stepsScaler: 1.5,
+        enableSparsity: true,
+        sparsifySteps: 900,
+      }),
+    ).toBe(2_402);
   });
 });

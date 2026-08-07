@@ -23,6 +23,7 @@ const createJobSchema = z.object({
     init: z.string().optional(),
     importCameras: z.string().optional(),
     iterations: z.number().int().positive().optional(),
+    gpu: z.string().trim().min(1).max(32).optional(),
     strategy: z.enum(["mrnf", "mcmc", "igs+"]).optional(),
     maxCap: z.number().int().positive().optional(),
     gut: z.boolean().optional(),
@@ -39,11 +40,24 @@ const createJobSchema = z.object({
 
 export const jobsRouter = Router();
 
-jobsRouter.get("/", (_req, res) => {
+jobsRouter.get("/", async (_req, res) => {
+  try {
+    await jobService.syncRemoteJobs();
+  } catch (error) {
+    logger.warn("Modal artifact sync failed while listing jobs", logger.errFields(error));
+  }
   res.json({ items: jobService.listJobs() });
 });
 
-jobsRouter.get("/:id", (req, res) => {
+jobsRouter.get("/:id", async (req, res) => {
+  try {
+    await jobService.syncRemoteJobs();
+  } catch (error) {
+    logger.warn("Modal artifact sync failed while reading job", {
+      job_id: req.params.id,
+      ...logger.errFields(error)
+    });
+  }
   const item = jobService.getJob(req.params.id);
   if (!item) {
     return res.status(404).json({ message: "Job not found" });

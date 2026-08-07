@@ -3,15 +3,13 @@
 The web process and the trainer intentionally run as separate Modal Functions:
 the API can scale to zero independently, while a GPU container only exists for
 the duration of a training call.  The Node application remains the source of
-truth for jobs; this module only dispatches work and forwards worker events.
+truth for jobs; this module dispatches work and persists trainer artifacts.
 """
 
 from __future__ import annotations
 
 import codecs
 import errno
-import hashlib
-import hmac
 import json
 import os
 import queue
@@ -28,13 +26,8 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Iterable
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
 
 import modal
-from fastapi import FastAPI, HTTPException, Request as FastAPIRequest
-from pydantic import BaseModel, Field
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -42,8 +35,6 @@ APP_NAME = os.getenv("MODAL_APP_NAME", "lichtfeld-studio-web-modal")
 DATA_VOLUME_NAME = os.getenv("MODAL_DATA_VOLUME", "lichtfeld-data")
 STATE_VOLUME_NAME = os.getenv("MODAL_STATE_VOLUME", "lichtfeld-web-state")
 WEB_SECRET_NAME = os.getenv("MODAL_WEB_SECRET_NAME", "lichtfeld-modal-web")
-CONTROL_SECRET_NAME = os.getenv("MODAL_CONTROL_SECRET_NAME", "lichtfeld-modal-control")
-CALLBACK_SECRET_NAME = os.getenv("MODAL_CALLBACK_SECRET_NAME", "lichtfeld-modal-callback")
 
 DATA_MOUNT = "/data"
 STATE_MOUNT = "/state"
@@ -52,6 +43,30 @@ VOLUME_HELPER_PORT = 3001
 DEFAULT_TRAINER_TIMEOUT_SECONDS = 86_400
 MAX_TRAINER_TIMEOUT_SECONDS = 86_400
 DEFAULT_TRAINER_MAX_CONTAINERS = 5
+DEFAULT_MODAL_GPU = "A10"
+WEB_TRAINING_LOG_NAME = ".web-training.log"
+WEB_STATUS_NAME = ".web-status.json"
+
+# Keep this list in lockstep with the backend's public GPU selector.  Values
+# are intentionally exact Modal SKU strings; accepting arbitrary user input
+# would create unbounded dynamic Function variants and can lead to surprises
+# in both capacity and cost.
+MODAL_GPU_OPTIONS = (
+    "T4",
+    "L4",
+    "A10",
+    "L40S",
+    "A100",
+    "A100-40GB",
+    "A100-80GB",
+    "RTX-PRO-6000",
+    "H100",
+    "H100!",
+    "H200",
+    "B200",
+    "B200+",
+    "B300",
+)
 
 
 def _positive_int(name: str, default: int, maximum: int | None = None) -> int:
@@ -89,52 +104,12 @@ def _image_from_dockerfile(env_name: str, dockerfile: Path) -> Any:
     return modal.Image.from_dockerfile(str(dockerfile), context_dir=str(REPO_ROOT))
 
 
-def _control_image() -> Any:
-    registry_ref = os.getenv("MODAL_CONTROL_IMAGE", "").strip()
-    if registry_ref:
-        return modal.Image.from_registry(registry_ref)
-    return (
-        modal.Image.debian_slim(python_version="3.12")
-        .pip_install("fastapi>=0.115,<1", "pydantic>=2.9,<3")
-    )
-
-
 app = modal.App(APP_NAME)
 data_volume = modal.Volume.from_name(DATA_VOLUME_NAME, create_if_missing=True)
 state_volume = modal.Volume.from_name(STATE_VOLUME_NAME, create_if_missing=True)
 
 WEB_IMAGE = _image_from_dockerfile("MODAL_WEB_IMAGE", REPO_ROOT / "modal" / "Dockerfile.web")
 GPU_IMAGE = _image_from_dockerfile("MODAL_GPU_IMAGE", REPO_ROOT / "modal" / "Dockerfile.gpu")
-CONTROL_IMAGE = _control_image()
-
-
-def _bearer_matches(request: FastAPIRequest, env_name: str) -> bool:
-    expected = os.getenv(env_name, "")
-    provided = request.headers.get("authorization", "")
-    if not expected or not provided.lower().startswith("bearer "):
-        return False
-    actual = provided[7:].strip()
-    # Compare fixed-length digests to avoid leaking token length through the
-    # comparison operation.  The token itself is supplied by a Modal Secret.
-    return hmac.compare_digest(
-        hashlib.sha256(actual.encode("utf-8")).digest(),
-        hashlib.sha256(expected.encode("utf-8")).digest(),
-    )
-
-
-def _require_bearer(request: FastAPIRequest, env_name: str) -> None:
-    if not _bearer_matches(request, env_name):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-
-def _validate_callback_base_url(value: str) -> str:
-    callback = value.strip().rstrip("/")
-    parsed = urlsplit(callback)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("callbackBaseUrl must be an absolute http(s) URL")
-    if parsed.query or parsed.fragment:
-        raise ValueError("callbackBaseUrl must not contain a query or fragment")
-    return callback
 
 
 def _utc_now() -> str:
@@ -183,70 +158,85 @@ def _validate_data_paths(args: Iterable[str]) -> None:
             raise ValueError(f"{flag} path must stay under {DATA_MOUNT}") from exc
 
 
-class DispatchRequest(BaseModel):
-    jobId: str = Field(min_length=1, max_length=256)
-    args: list[str] = Field(min_length=1, max_length=512)
-    callbackBaseUrl: str = Field(min_length=1, max_length=2048)
+def _payload_string(payload: dict[str, Any], key: str, *, maximum: int) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value or len(value) > maximum:
+        raise ValueError(f"{key} must be a non-empty string of at most {maximum} characters")
+    return value
 
 
-class CancelRequest(BaseModel):
-    callId: str = Field(min_length=1, max_length=256)
-    jobId: str = Field(min_length=1, max_length=256)
+def _validate_modal_gpu(value: str | None) -> str:
+    candidate = (value or os.getenv("MODAL_GPU", DEFAULT_MODAL_GPU)).strip()
+    if candidate not in MODAL_GPU_OPTIONS:
+        allowed = ", ".join(MODAL_GPU_OPTIONS)
+        raise ValueError(f"Unsupported Modal GPU '{candidate}'. Allowed values: {allowed}")
+    return candidate
 
 
-control_api = FastAPI(title="LichtFeld Modal control plane")
+def dispatch_job(payload: dict[str, Any]) -> dict[str, Any]:
+    """Validate and dispatch one trainer call from the loopback helper.
 
+    This intentionally has no callback URL or bearer token.  The helper only
+    binds to 127.0.0.1 inside the web container, and the trainer writes its
+    durable state/log artifacts directly to the shared Volume instead of
+    waking the web process for every line or timelapse frame.
+    """
 
-@control_api.get("/health")
-async def control_health() -> dict[str, bool]:
-    return {"ok": True}
-
-
-@control_api.post("/jobs/dispatch")
-async def dispatch_job(payload: DispatchRequest, request: FastAPIRequest) -> dict[str, Any]:
-    _require_bearer(request, "MODAL_CONTROL_TOKEN")
+    if not isinstance(payload, dict):
+        raise ValueError("Request body must be a JSON object")
+    job_id = _payload_string(payload, "jobId", maximum=256)
+    args = payload.get("args")
+    if not isinstance(args, list) or not 1 <= len(args) <= 512 or not all(isinstance(arg, str) for arg in args):
+        raise ValueError("args must be a non-empty list of at most 512 strings")
+    if any("\x00" in arg for arg in args):
+        raise ValueError("args must not contain NUL bytes")
     try:
-        callback_base_url = _validate_callback_base_url(payload.callbackBaseUrl)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _validate_data_paths(args)
+    except ValueError:
+        raise
 
-    if any("\x00" in arg for arg in payload.args):
-        raise HTTPException(status_code=400, detail="args must not contain NUL bytes")
-    try:
-        _validate_data_paths(payload.args)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    raw_gpu = payload.get("gpu")
+    if raw_gpu is not None and not isinstance(raw_gpu, str):
+        raise ValueError("gpu must be a Modal GPU SKU string")
+    gpu = _validate_modal_gpu(raw_gpu)
 
     try:
-        call = gpu_trainer.spawn(
-            job_id=payload.jobId,
-            args=payload.args,
-            callback_base_url=callback_base_url,
-        )
+        # Dynamic configuration keeps the base Function GPU-neutral and lets
+        # each request select one allowlisted SKU without accepting arbitrary
+        # user-controlled Modal options.
+        call = gpu_trainer.with_options(gpu=gpu).spawn(job_id=job_id, args=args)
     except Exception as exc:  # Modal SDK errors should be surfaced as 502.
-        raise HTTPException(status_code=502, detail=f"Failed to dispatch trainer: {exc}") from exc
+        raise RuntimeError(f"Failed to dispatch trainer: {exc}") from exc
 
-    return {"accepted": True, "callId": call.object_id, "jobId": payload.jobId}
+    return {"accepted": True, "callId": call.object_id, "jobId": job_id, "gpu": gpu}
 
 
-@control_api.post("/jobs/cancel")
-async def cancel_job(payload: CancelRequest, request: FastAPIRequest) -> dict[str, Any]:
-    _require_bearer(request, "MODAL_CONTROL_TOKEN")
+def cancel_job(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("Request body must be a JSON object")
+    call_id = _payload_string(payload, "callId", maximum=256)
+    job_id = _payload_string(payload, "jobId", maximum=256)
     try:
-        call = modal.FunctionCall.from_id(payload.callId)
-        # Let the trainer's finally block commit the data Volume and report a
-        # terminal status before Modal tears down an idle container.
+        call = modal.FunctionCall.from_id(call_id)
+        # Let the trainer's finally block commit the data Volume before Modal
+        # tears down an idle container.
         call.cancel(terminate_containers=False)
     except Exception as exc:
-        raise HTTPException(status_code=404, detail=f"Unable to cancel trainer call: {exc}") from exc
-    return {"accepted": True, "callId": payload.callId, "jobId": payload.jobId}
+        raise LookupError(f"Unable to cancel trainer call: {exc}") from exc
+    return {"accepted": True, "callId": call_id, "jobId": job_id}
 
 
 class _VolumeHandler(BaseHTTPRequestHandler):
-    """Loopback-only helper used by Node to commit/reload the shared Volume."""
+    """Loopback-only helper for Volume lifecycle and trainer control.
+
+    The server deliberately binds to 127.0.0.1.  It is not a second Modal
+    Function or public control plane; Node talks to it over the same web
+    container network namespace at ``http://127.0.0.1:3001``.
+    """
 
     volume: modal.Volume
     volume_lock = threading.Lock()
+    max_body_bytes = 2 * 1024 * 1024
 
     def _json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -256,16 +246,66 @@ class _VolumeHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _read_json(self) -> dict[str, Any]:
+        raw_length = self.headers.get("Content-Length", "0")
+        try:
+            length = int(raw_length)
+        except ValueError as exc:
+            raise ValueError("Content-Length must be an integer") from exc
+        if length < 0 or length > self.max_body_bytes:
+            raise ValueError("Request body is too large")
+        if length == 0:
+            return {}
+        raw = self.rfile.read(length)
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError("Request body must be valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("Request body must be a JSON object")
+        return payload
+
+    def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        if self.path == "/health":
+            self._json(200, {"ok": True})
+            return
+        self._json(404, {"message": "Not found"})
+
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+        try:
+            payload = self._read_json()
+        except ValueError as exc:
+            self._json(400, {"message": str(exc)})
+            return
+
+        if self.path == "/jobs/dispatch":
+            try:
+                self._json(200, dispatch_job(payload))
+            except ValueError as exc:
+                self._json(400, {"message": str(exc)})
+            except RuntimeError as exc:
+                self._json(502, {"message": str(exc)})
+            return
+
+        if self.path == "/jobs/cancel":
+            try:
+                self._json(200, cancel_job(payload))
+            except ValueError as exc:
+                self._json(400, {"message": str(exc)})
+            except LookupError as exc:
+                self._json(404, {"message": str(exc)})
+            return
+
+        if self.path not in {"/data/commit", "/data/reload"}:
+            self._json(404, {"message": "Not found"})
+            return
+
         try:
             with self.volume_lock:
                 if self.path == "/data/commit":
                     self.volume.commit()
-                elif self.path == "/data/reload":
-                    self.volume.reload()
                 else:
-                    self._json(404, {"message": "Not found"})
-                    return
+                    self.volume.reload()
         except Exception as exc:
             self._json(500, {"message": str(exc)})
             return
@@ -290,7 +330,7 @@ def _start_volume_helper() -> ThreadingHTTPServer:
     max_containers=1,
     scaledown_window=2,
     timeout=300,
-    secrets=_secrets(WEB_SECRET_NAME, CONTROL_SECRET_NAME, CALLBACK_SECRET_NAME),
+    secrets=_secret(WEB_SECRET_NAME),
 )
 @modal.concurrent(max_inputs=100)
 @modal.web_server(WEB_PORT)
@@ -299,18 +339,10 @@ def web_server() -> None:
 
     helper = _start_volume_helper()
     node_env = os.environ.copy()
-    public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
-    modal_control_url = os.getenv("MODAL_CONTROL_URL", "").strip().rstrip("/")
-    if not public_base_url:
-        web_url = web_server.get_web_url()
-        if not web_url:
-            raise RuntimeError("Modal did not provide the web_server URL")
-        public_base_url = web_url.rstrip("/")
-    if not modal_control_url:
-        control_url = control_server.get_web_url()
-        if not control_url:
-            raise RuntimeError("Modal did not provide the control_server URL")
-        modal_control_url = control_url.rstrip("/")
+    # Dispatch/cancel and Volume commit/reload share one loopback helper.  A
+    # custom external control URL would bypass that helper and is therefore
+    # intentionally ignored.
+    modal_control_url = f"http://127.0.0.1:{VOLUME_HELPER_PORT}"
     node_env.update(
         {
             "DATA_ROOT": DATA_MOUNT,
@@ -322,7 +354,6 @@ def web_server() -> None:
             "PORT": str(WEB_PORT),
             "NODE_ENV": "production",
             "TRAINING_EXECUTOR": "modal",
-            "PUBLIC_BASE_URL": public_base_url,
             "MODAL_CONTROL_URL": modal_control_url,
         }
     )
@@ -343,72 +374,6 @@ def web_server() -> None:
     # Keep the helper reachable for the life of the web server.  Modal probes
     # the declared web port independently, so this function can return.
     _ = helper
-
-
-@app.function(
-    image=CONTROL_IMAGE,
-    min_containers=0,
-    max_containers=1,
-    scaledown_window=2,
-    timeout=300,
-    secrets=_secret(CONTROL_SECRET_NAME),
-)
-@modal.concurrent(max_inputs=32)
-@modal.asgi_app()
-def control_server() -> FastAPI:
-    return control_api
-
-
-def _callback_url(callback_base_url: str, job_id: str) -> str:
-    return f"{callback_base_url.rstrip('/')}/api/internal/modal/jobs/{quote(job_id, safe='')}"
-
-
-def _post_callback(callback_base_url: str, job_id: str, event_type: str, data: dict[str, Any]) -> None:
-    payload = {
-        "type": event_type,
-        "ts": _utc_now(),
-        "data": data,
-    }
-    body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    request = Request(
-        _callback_url(callback_base_url, job_id) + "/events",
-        data=body,
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {os.getenv('MODAL_CALLBACK_TOKEN', '')}",
-            "Content-Type": "application/json",
-            "User-Agent": "lichtfeld-modal-trainer/1",
-        },
-    )
-    attempts = _positive_int("MODAL_CALLBACK_ATTEMPTS", 3, maximum=8)
-    last_error: Exception | None = None
-    for attempt in range(attempts):
-        try:
-            with urlopen(request, timeout=10) as response:
-                if response.status < 200 or response.status >= 300:
-                    raise RuntimeError(f"callback returned HTTP {response.status}")
-            return
-        except (HTTPError, URLError, TimeoutError, OSError, RuntimeError) as exc:
-            last_error = exc
-            if attempt + 1 < attempts:
-                time.sleep(min(2**attempt, 8))
-    if last_error is not None:
-        raise last_error
-
-
-def _safe_callback(
-    callback_base_url: str,
-    job_id: str,
-    event_type: str,
-    data: dict[str, Any],
-    errors: list[str],
-) -> None:
-    try:
-        _post_callback(callback_base_url, job_id, event_type, data)
-    except Exception as exc:
-        message = f"{event_type} callback failed: {exc}"
-        errors.append(message)
-        print(message, flush=True)
 
 
 def _arg_value(args: Iterable[str], flag: str) -> str | None:
@@ -569,6 +534,34 @@ def _format_bytes(value: int) -> str:
             return f"{amount:.1f} {unit}"
         amount /= 1024
     return f"{amount:.1f} TiB"
+
+
+def _training_log_path(output_path: Path) -> Path:
+    return output_path / WEB_TRAINING_LOG_NAME
+
+
+def _status_path(output_path: Path) -> Path:
+    return output_path / WEB_STATUS_NAME
+
+
+def _write_status_file(output_path: Path, payload: dict[str, Any]) -> Path:
+    """Atomically publish the current job state inside the shared Volume."""
+
+    output_path.mkdir(parents=True, exist_ok=True)
+    target = _status_path(output_path)
+    temporary = output_path / f".{WEB_STATUS_NAME}.{os.getpid()}.{threading.get_ident()}.tmp"
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+    temporary.write_text(encoded, encoding="utf-8")
+    os.replace(temporary, target)
+    return target
+
+
+def _append_training_log(log_file: Any, line: str) -> None:
+    """Write one decoded process record as UTF-8 and flush it promptly."""
+
+    log_file.write(line)
+    log_file.write("\n")
+    log_file.flush()
 
 
 _FRAME_RE = re.compile(r"(?P<iteration>\d+)\.(?:jpg|jpeg|png)$", re.IGNORECASE)
@@ -732,10 +725,10 @@ class _StreamDone:
 def _iter_records(chunks: Iterable[str]) -> Iterable[str]:
     """Split decoded chunks on CR/LF, including delimiters at chunk edges.
 
-    A carriage return is emitted immediately so progress indicators can reach
-    the callback while the process is still running.  If the next chunk starts
-    with a line feed, it is consumed as the second half of CRLF rather than
-    producing an empty callback record.
+    A carriage return is emitted immediately so progress indicators are
+    retained in the durable training log while the process is still running.
+    If the next chunk starts with a line feed, it is consumed as the second
+    half of CRLF rather than producing an extra empty record.
     """
 
     record_parts: list[str] = []
@@ -791,18 +784,18 @@ def _reader(stream_name: str, stream: Any, events: queue.Queue[tuple[str, str] |
 
     try:
         for record in _iter_records(decoded_chunks(stream.fileno())):
-            if not record:
-                continue
-            try:
-                # Modal's log collector commonly groups output by newline.
-                # Normalize every parsed record to one line so CR-only progress
-                # updates remain visible while preserving ANSI escape content.
-                output.write(record + "\n")
-                output.flush()
-            except (OSError, ValueError):
-                # A closed/invalid container log stream must not prevent the
-                # callback reader from forwarding the subprocess output.
-                pass
+            if record:
+                try:
+                    # Modal's log collector commonly groups output by newline.
+                    # Normalize every parsed record to one line so CR-only
+                    # progress updates remain visible while preserving ANSI
+                    # escape content.
+                    output.write(record + "\n")
+                    output.flush()
+                except (OSError, ValueError):
+                    # A closed/invalid container log stream must not prevent
+                    # the durable log writer from receiving the record.
+                    pass
             events.put((stream_name, record))
     finally:
         events.put(_StreamDone(stream_name))
@@ -822,7 +815,6 @@ def _terminate_process(process: subprocess.Popen[bytes], reason: str) -> None:
 
 @app.function(
     image=GPU_IMAGE,
-    gpu=os.getenv("MODAL_GPU", "A10"),
     volumes={DATA_MOUNT: data_volume},
     min_containers=0,
     # Volume v1 supports distinct concurrent writers, but Modal recommends no
@@ -834,25 +826,28 @@ def _terminate_process(process: subprocess.Popen[bytes], reason: str) -> None:
     ),
     scaledown_window=2,
     timeout=_positive_int("MODAL_TRAINER_TIMEOUT", DEFAULT_TRAINER_TIMEOUT_SECONDS, MAX_TRAINER_TIMEOUT_SECONDS),
-    secrets=_secret(CALLBACK_SECRET_NAME),
 )
-def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[str, Any]:
-    """Execute one LichtFeld training process and stream durable job events."""
+def gpu_trainer(job_id: str, args: list[str]) -> dict[str, Any]:
+    """Execute one training process and persist durable per-job artifacts.
+
+    The web process is intentionally not called for progress updates.  Every
+    decoded stdout/stderr record is appended to ``.web-training.log`` and the
+    current lifecycle state is atomically replaced in ``.web-status.json``.
+    The final Volume commit makes both files visible to the API, which can
+    reload and read them on demand.
+    """
 
     if not job_id or not isinstance(job_id, str):
         raise ValueError("job_id is required")
     if not isinstance(args, list) or not all(isinstance(arg, str) for arg in args):
         raise ValueError("args must be a list of strings")
     _validate_data_paths(args)
-    callback_base_url = _validate_callback_base_url(callback_base_url)
     binary = os.getenv("LFS_BIN_PATH", "/opt/lichtfeld/bin/LichtFeld-Studio")
     output_arg = _arg_value(args, "--output-path")
     output_path = Path(output_arg or f"{DATA_MOUNT}/outputs/job-{job_id}")
     if not output_path.is_absolute():
         output_path = Path.cwd() / output_path
 
-    callback_errors: list[str] = []
-    seen_frames: set[tuple[str, int, str]] = set()
     stop_reason: str | None = None
     process: subprocess.Popen[bytes] | None = None
     exit_code: int | None = None
@@ -863,86 +858,35 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
     staged_dataset: StagedDataset | None = None
     event_queue: queue.Queue[tuple[str, str] | _StreamDone] = queue.Queue()
     done_streams: set[str] = set()
-    batches: dict[str, list[str]] = {"stdout": [], "stderr": []}
-    last_flush = time.monotonic()
-    last_scan = time.monotonic()
-    batch_limit = _positive_int("MODAL_LOG_BATCH_LINES", 20, maximum=500)
-    scan_interval = max(0.5, float(os.getenv("MODAL_TIMELAPSE_SCAN_SECONDS", "2")))
-
-    def flush_logs() -> None:
-        for stream_name, lines in batches.items():
-            if not lines:
-                continue
-            _safe_callback(
-                callback_base_url,
-                job_id,
-                "log",
-                {"stream": stream_name, "lines": list(lines)},
-                callback_errors,
-            )
-            lines.clear()
-
-    def scan_frames() -> None:
-        nonlocal last_scan
-        now = time.monotonic()
-        if now - last_scan < scan_interval:
-            return
-        last_scan = now
-        try:
-            frames = _scan_and_commit_timelapse(output_path, seen_frames, data_volume.commit)
-        except Exception as exc:
-            message = f"timelapse Volume commit failed: {exc}"
-            callback_errors.append(message)
-            print(message, flush=True)
-            return
-        for frame in frames:
-            _safe_callback(
-                callback_base_url,
-                job_id,
-                "timelapse.frame.created",
-                {
-                    "cameraName": frame.camera_name,
-                    "iteration": frame.iteration,
-                    "filePath": frame.file_path,
-                    "sizeBytes": frame.size_bytes,
-                    "createdAt": frame.created_at,
-                },
-                callback_errors,
-            )
-        _safe_callback(
-            callback_base_url,
-            job_id,
-            "timelapse.scan.completed",
-            {"scanned": len(seen_frames), "created": len(frames)},
-            callback_errors,
-        )
-
-    _safe_callback(
-        callback_base_url,
-        job_id,
-        "job.status",
-        {"status": "running", "startedAt": _utc_now()},
-        callback_errors,
-    )
+    training_log: Any | None = None
+    started_at = _utc_now()
 
     try:
         # A warm container may be reused for a later call; reload here so a
         # dispatch commit made by the web container is always visible.
         data_volume.reload()
         volume_loaded = True
+        output_path.mkdir(parents=True, exist_ok=True)
+        training_log = _training_log_path(output_path).open("a", encoding="utf-8")
+        _write_status_file(
+            output_path,
+            {
+                "status": "running",
+                "startedAt": started_at,
+                "finishedAt": None,
+                "exitCode": None,
+                "errorMessage": None,
+                "stopReason": None,
+            },
+        )
 
         data_arg = _arg_value(args, "--data-path")
         process_args = list(args)
         if data_arg is not None:
             staging_started_line = f"Staging dataset from {data_arg} to container-local SSD..."
             print(staging_started_line, flush=True)
-            _safe_callback(
-                callback_base_url,
-                job_id,
-                "log",
-                {"stream": "stdout", "lines": [staging_started_line]},
-                callback_errors,
-            )
+            assert training_log is not None
+            _append_training_log(training_log, staging_started_line)
 
             def report_staging_progress(file_count: int, size_bytes: int, elapsed_seconds: float) -> None:
                 progress_line = (
@@ -950,13 +894,8 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
                     f"copied in {elapsed_seconds:.0f}s"
                 )
                 print(progress_line, flush=True)
-                _safe_callback(
-                    callback_base_url,
-                    job_id,
-                    "log",
-                    {"stream": "stdout", "lines": [progress_line]},
-                    callback_errors,
-                )
+                if training_log is not None:
+                    _append_training_log(training_log, progress_line)
 
             staged_dataset = _stage_dataset_locally(Path(data_arg), report_staging_progress)
             process_args = _replace_arg_value(args, "--data-path", str(staged_dataset.data_path))
@@ -966,13 +905,8 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
                 f"{staged_dataset.elapsed_seconds:.1f}s"
             )
             print(staging_completed_line, flush=True)
-            _safe_callback(
-                callback_base_url,
-                job_id,
-                "log",
-                {"stream": "stdout", "lines": [staging_completed_line]},
-                callback_errors,
-            )
+            assert training_log is not None
+            _append_training_log(training_log, staging_completed_line)
 
         process = subprocess.Popen(
             [binary, *process_args],
@@ -999,20 +933,12 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
             if isinstance(event, _StreamDone):
                 done_streams.add(event.stream_name)
             elif event is not None:
-                stream_name, line = event
-                batches[stream_name].append(line)
-                if len(batches[stream_name]) >= batch_limit:
-                    flush_logs()
-
-            if time.monotonic() - last_flush >= 1:
-                flush_logs()
-                last_flush = time.monotonic()
-            scan_frames()
+                _stream_name, line = event
+                if training_log is not None:
+                    _append_training_log(training_log, line)
 
         process.wait()
         exit_code = process.returncode
-        flush_logs()
-        scan_frames()
 
         if stop_reason == "stopped_low_disk":
             status = "stopped_low_disk"
@@ -1027,14 +953,11 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
 
         if status == "completed":
             preview_warnings, preview_logs = _prepare_splat_exports(binary, output_path)
-            if preview_logs:
-                _safe_callback(
-                    callback_base_url,
-                    job_id,
-                    "log",
-                    {"stream": "stdout", "lines": preview_logs},
-                    callback_errors,
-                )
+            if training_log is not None:
+                for line in preview_logs:
+                    _append_training_log(training_log, line)
+                for warning in preview_warnings:
+                    _append_training_log(training_log, f"preview warning: {warning}")
     except KeyboardInterrupt:
         stop_reason = stop_reason or "cancelled"
         status = "stopped"
@@ -1044,6 +967,8 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
     except Exception as exc:
         status = "failed"
         error_message = str(exc)
+        if training_log is not None:
+            _append_training_log(training_log, f"[trainer-error] {error_message}")
         if process is not None:
             _terminate_process(process, "runner_error")
     finally:
@@ -1052,31 +977,51 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
                 shutil.rmtree(staged_dataset.scratch_path)
             except OSError as exc:
                 cleanup_warning = f"local dataset cleanup failed: {exc}"
-                callback_errors.append(cleanup_warning)
+                if training_log is not None:
+                    _append_training_log(training_log, f"[cleanup-warning] {cleanup_warning}")
                 print(cleanup_warning, flush=True)
 
-        # The shared Volume must be committed before the API receives a
-        # terminal event; the API reloads it when processing that event.
-        if volume_loaded:
-            try:
-                data_volume.commit()
-            except Exception as exc:
-                callback_errors.append(f"data Volume commit failed: {exc}")
-                if status == "completed":
-                    status = "failed"
-                    error_message = f"data Volume commit failed: {exc}"
+        if training_log is not None:
+            training_log.close()
+            training_log = None
 
+        finished_at = _utc_now()
         terminal_data: dict[str, Any] = {
             "status": status,
+            "startedAt": started_at,
+            "finishedAt": finished_at,
             "exitCode": exit_code,
             "errorMessage": error_message,
             "stopReason": stop_reason,
         }
-        if preview_warnings:
-            terminal_data["previewWarnings"] = preview_warnings
-        if callback_errors:
-            terminal_data["callbackErrors"] = callback_errors[-10:]
-        _safe_callback(callback_base_url, job_id, "job.status", terminal_data, callback_errors)
+        try:
+            _write_status_file(output_path, terminal_data)
+        except Exception as exc:
+            status = "failed"
+            error_message = f"status file write failed: {exc}"
+            terminal_data.update({"status": status, "errorMessage": error_message})
+
+        # The shared Volume must be committed after all output files are closed
+        # so a subsequent reload never observes an open Volume file.
+        commit_error: Exception | None = None
+        if volume_loaded:
+            try:
+                data_volume.commit()
+            except Exception as exc:
+                commit_error = exc
+
+        if commit_error is not None:
+            status = "failed"
+            error_message = f"data Volume commit failed: {commit_error}"
+            terminal_data.update({"status": status, "errorMessage": error_message})
+            try:
+                _write_status_file(output_path, terminal_data)
+                if volume_loaded:
+                    # A retry makes the failure itself durable when the first
+                    # commit failed transiently (for example, contention).
+                    data_volume.commit()
+            except Exception as retry_error:
+                print(f"{error_message}; retry failed: {retry_error}", flush=True)
 
     return {
         "jobId": job_id,
@@ -1084,4 +1029,6 @@ def gpu_trainer(job_id: str, args: list[str], callback_base_url: str) -> dict[st
         "exitCode": exit_code,
         "errorMessage": error_message,
         "stopReason": stop_reason,
+        "logPath": str(_training_log_path(output_path)),
+        "statusPath": str(_status_path(output_path)),
     }

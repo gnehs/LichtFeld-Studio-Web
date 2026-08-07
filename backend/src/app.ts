@@ -90,8 +90,8 @@ export function createApp() {
   app.use(requestLogger);
 
   app.use(express.json({ limit: "15mb" }));
-  // Modal trainer callbacks authenticate with their own bearer token and must
-  // not depend on a browser session cookie.
+  // Retained for rolling upgrades from older callback-based Modal trainers.
+  // Current trainers publish artifacts to the shared Volume instead.
   app.use("/api/internal/modal", modalInternalRouter);
   app.use(
     session({

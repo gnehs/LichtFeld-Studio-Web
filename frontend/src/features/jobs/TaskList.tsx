@@ -116,7 +116,18 @@ function buildJobMetrics(
 ): ParsedJobMetrics {
   if (job.status === "completed") return { progress: 1, etaMs: 0 };
   const params = parseJobParams(job);
-  const targetIterations = Number(params.iterations ?? 0);
+  const baseIterations = Number(params.iterations ?? 0);
+  const stepsScaler = Number(params.stepsScaler ?? 1);
+  const inferredIterations =
+    Number.isFinite(baseIterations) && baseIterations > 0 &&
+    Number.isFinite(stepsScaler) && stepsScaler > 0
+      ? Math.round(baseIterations * stepsScaler)
+      : baseIterations;
+  const sparseIterations = params.enableSparsity ? Number(params.sparsifySteps ?? 0) : 0;
+  const targetIterations = Number(
+    params.effectiveIterations ??
+      (inferredIterations + (Number.isFinite(sparseIterations) && sparseIterations > 0 ? sparseIterations : 0)),
+  );
   const latestIteration = Number(insight?.latestIteration ?? 0);
   if (targetIterations <= 0 || latestIteration <= 0)
     return { progress: null, etaMs: null };

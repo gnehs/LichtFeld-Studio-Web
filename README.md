@@ -88,7 +88,7 @@ docker compose up -d --build
 
 ## Modal 雲端部署（CPU Web + GPU trainer）
 
-`modal/app.py` 提供三個 Modal Function：CPU `web_server`、CPU `control_server` 與 GPU `gpu_trainer`。Node API 透過 `MODAL_CONTROL_URL` 呼叫 control server，trainer 再以 callback 將狀態、log 與 timelapse 回傳給 `PUBLIC_BASE_URL`。這條路徑可與上面的 Docker 部署並存；不使用 Modal 時維持 `TRAINING_EXECUTOR=local` 即可。
+`modal/app.py` 提供兩個 Modal Function：CPU `web_server` 與 GPU `gpu_trainer`。dispatch/cancel 已整合進 `web_server` 容器內的 loopback helper，不再需要獨立的 `control_server`。trainer 會把狀態與 log 寫進該 job 的 output，Web 僅在使用者讀取任務資料時 reload Volume 並同步，因此訓練本身不會持續以 callback 喚醒 scale-to-zero 的 Web container。這條路徑可與上面的 Docker 部署並存；不使用 Modal 時維持 `TRAINING_EXECUTOR=local` 即可。
 
 ### 建立 Modal 資源
 
@@ -107,20 +107,12 @@ modal setup
 - Volume `lichtfeld-data`：掛載到 `/data`，放置 datasets 與 outputs，供 Web wrapper 與 GPU trainer 共用。
 - Volume `lichtfeld-web-state`：掛載到 `/state`，放置 Web-only 的 SQLite/session 狀態與 logs。
 - Secret `lichtfeld-modal-web`：提供 Web wrapper 的 `SESSION_SECRET` 與 `ADMIN_PASSWORD_HASH`。
-- Secret `lichtfeld-modal-control`：提供 control API 驗證用的 `MODAL_CONTROL_TOKEN`。
-- Secret `lichtfeld-modal-callback`：提供 trainer callback 驗證用的 `MODAL_CALLBACK_TOKEN`。
 
-需要改名時可在執行 `modal deploy` 的環境設定 `MODAL_APP_NAME`、`MODAL_DATA_VOLUME`、`MODAL_STATE_VOLUME`、`MODAL_WEB_SECRET_NAME`、`MODAL_CONTROL_SECRET_NAME` 與 `MODAL_CALLBACK_SECRET_NAME`；名稱必須與實際建立的 App/Volume/Secret 一致。
+需要改名時可在執行 `modal deploy` 的環境設定 `MODAL_APP_NAME`、`MODAL_DATA_VOLUME`、`MODAL_STATE_VOLUME` 與 `MODAL_WEB_SECRET_NAME`；名稱必須與實際建立的 App/Volume/Secret 一致。
 
 ```bash
 modal volume create lichtfeld-data
 modal volume create lichtfeld-web-state
-
-# 先在本機產生隨機值，再以 Modal Secret 保存；不要把 token 寫入 repo。
-CONTROL_TOKEN="$(openssl rand -hex 32)"
-CALLBACK_TOKEN="$(openssl rand -hex 32)"
-modal secret create lichtfeld-modal-control MODAL_CONTROL_TOKEN="$CONTROL_TOKEN"
-modal secret create lichtfeld-modal-callback MODAL_CALLBACK_TOKEN="$CALLBACK_TOKEN"
 
 # Web wrapper 的登入密碼與 session secret。
 WEB_SESSION_SECRET="$(openssl rand -hex 32)"
@@ -137,29 +129,27 @@ modal deploy modal/app.py
 # 開發時可用：modal serve modal/app.py
 ```
 
-部署輸出的 `web_server` URL 是 Web 控制台；`control_server` URL 提供 `/jobs/dispatch` 與 `/jobs/cancel`。使用內建 Web wrapper 時，wrapper 會透過 `get_web_url()` 自動注入 `PUBLIC_BASE_URL` 與 `MODAL_CONTROL_URL`，不需要手動複製部署輸出的 URL。後端 callback 路徑固定為 `/api/internal/modal/jobs/:id/events`。
+部署輸出的 `web_server` URL 就是 Web 控制台。內建 wrapper 會把 `MODAL_CONTROL_URL` 與 `MODAL_VOLUME_HELPER_URL` 都指向同一容器內的 `http://127.0.0.1:3001` helper，不需要公開 control URL 或 token。
 
-若改用自訂 Modal Web wrapper，才需要自行設定 `PUBLIC_BASE_URL`（必須是 Modal trainer 可連線的公開 HTTPS base URL）與 `MODAL_CONTROL_URL`（`control_server` 的 HTTPS URL），並將 control/callback token 填入該 backend 的環境變數。Backend 必須仍掛載同一個 Modal data Volume；一般本機或外部 Docker 無法直接讀寫 Modal Volume，本專案目前沒有提供額外的資料同步橋接：
+若改用自訂 Modal Web wrapper，必須在相同容器提供相容的 loopback helper 並設定 `MODAL_CONTROL_URL` 與 `MODAL_VOLUME_HELPER_URL`。Backend 仍須掛載同一個 Modal data Volume；一般本機或外部 Docker 無法直接讀寫 Modal Volume，本專案目前沒有提供額外的資料同步橋接：
 
 將建立 Secret 時使用的同一組隨機值填入後端 `.env`（下列尖括號是佔位符，不要照抄）：
 
 ```dotenv
 TRAINING_EXECUTOR=modal
-PUBLIC_BASE_URL=https://your-public-backend.example
-MODAL_CONTROL_URL=https://your-control-server.example
-MODAL_CONTROL_TOKEN=<value-used-in-lichtfeld-modal-control>
-MODAL_CALLBACK_TOKEN=<value-used-in-lichtfeld-modal-callback>
+MODAL_CONTROL_URL=http://127.0.0.1:3001
+MODAL_VOLUME_HELPER_URL=http://127.0.0.1:3001
 ```
 
-Modal Web wrapper 會在同一個容器啟動 volume helper，並自動注入 `MODAL_VOLUME_HELPER_URL=http://127.0.0.1:3001`。helper 的 `/data/commit` 會在 dispatch 前提交 Volume；`/data/reload` 會在 terminal callback 與即時 frame 首次讀取失敗時重新載入。這個 loopback URL 不應對外公開；若是自訂 wrapper 才需要覆寫它。
+Modal Web wrapper 會在同一個容器啟動 helper。`/data/commit` 會在 dispatch 前提交 Volume，`/data/reload` 會在 Web 端按需同步 worker 寫入的 `.web-status.json`、`.web-training.log` 與 timelapse。`/jobs/dispatch`、`/jobs/cancel` 則直接操作 Modal FunctionCall。這個 loopback URL 不應對外公開。
 
 ### Autoscaling、限制與費用
 
-- `web_server` 與 `control_server` 都使用 `min_containers=0`、`scaledown_window=2`：沒有請求時 CPU container 會縮到零，新的請求需要承擔 cold start 延遲（[autoscaling](https://modal.com/docs/guide/scale)）。
+- `web_server` 使用 `min_containers=0`、`scaledown_window=2`：沒有請求時 CPU container 會縮到零，新的請求需要承擔 cold start 延遲（[autoscaling](https://modal.com/docs/guide/scale)）。
 - 瀏覽器開著 job log 的 SSE 連線時仍屬於活躍請求，`web_server` 不會在連線期間縮到零；關閉頁面或連線結束後，才會進入上述 idle 縮容窗口。
-- GPU worker 發現新的 timelapse frame 時會先 commit shared Volume；web container 第一次讀不到該 frame 時會 reload Volume 後重試，讓訓練中的即時預覽不必等到任務結束。
+- GPU worker 將訓練 artifact 寫入 shared Volume；瀏覽器正在讀取任務時，Web 端既有的低頻查詢會按需 reload 並同步狀態、log 與 timelapse，不會由 trainer 主動喚醒 Web。
 - `gpu_trainer` 會依獨立的訓練輸入自動擴容，預設最多同時啟動 5 個 GPU container（可用 `MODAL_TRAINER_MAX_CONTAINERS` 調整），因此新任務不必等待上一個任務結束。這個預設同時遵循 Modal Volume v1 對少量並行 writer 的建議；提高上限會增加 GPU 成本與 Volume commit contention。
-- GPU `gpu_trainer` 僅在有訓練呼叫時啟動，預設使用 A10；單次 Function execution 最長 24 小時（可用 `MODAL_TRAINER_TIMEOUT` 調低，但不能超過上限，見 [timeouts](https://modal.com/docs/guide/timeouts)）。超過 24 小時的工作需自行 checkpoint、重試或拆成多次呼叫。
+- GPU `gpu_trainer` 僅在有訓練呼叫時啟動；可在建立任務頁選擇 Modal GPU 型號（預設 A10），每個 job 透過 Modal dynamic Function configuration 取得所選資源。單次 Function execution 最長 24 小時（可用 `MODAL_TRAINER_TIMEOUT` 調低，但不能超過上限，見 [timeouts](https://modal.com/docs/guide/timeouts)）。超過 24 小時的工作需自行 checkpoint、重試或拆成多次呼叫。
 - `gpu_trainer` 啟動 LichtFeld-Studio 前，會把 `--data-path` 指向的完整資料集複製到容器本機 `/tmp/lichtfeld-datasets`，降低 Modal Volume 大量小檔案存取的延遲；`--output-path` 仍指向 `/data/outputs`，完成、失敗或取消後都會清除該次本機暫存。複製需要容器暫存磁碟同時容納一份完整資料集；Modal 預設 ephemeral disk 配額為 512 GiB，超過時需調高 Function 的 `ephemeral_disk`（[CPU、記憶體與磁碟設定](https://modal.com/docs/guide/resources)）。
 - scale-to-zero 只代表 compute container 不常駐；Persistent Volumes 的儲存、映像建置/儲存與網路流量仍可能產生費用。Volume 刪除資料後，依 Modal 文件仍可能在最多約四天內計入儲存處理費（[Volumes pricing](https://modal.com/docs/guide/volumes)）。
 
@@ -171,7 +161,7 @@ Modal Web wrapper 會在同一個容器啟動 volume helper，並自動注入 `M
 
 - `SESSION_SECRET`: session secret
 - `ADMIN_PASSWORD_HASH`: 管理者密碼的 bcrypt hash
-- `TRAINING_EXECUTOR=modal` 且使用自訂 Modal Web wrapper 時，還必須設定 `PUBLIC_BASE_URL`、`MODAL_CONTROL_URL`、`MODAL_CONTROL_TOKEN` 與 `MODAL_CALLBACK_TOKEN`；內建 wrapper 會自動注入
+- `TRAINING_EXECUTOR=modal` 且使用自訂 Modal Web wrapper 時，還必須設定 loopback `MODAL_CONTROL_URL` 與 `MODAL_VOLUME_HELPER_URL`；內建 wrapper 會自動注入
 
 常用選填：
 
@@ -182,7 +172,7 @@ Modal Web wrapper 會在同一個容器啟動 volume helper，並自動注入 `M
 - `LFS_REF`: Docker build 使用的 LichtFeld-Studio git ref，預設 `v0.5.3`
 - `TRAINING_EXECUTOR`: `local`（預設）或 `modal`
 - `MODAL_VOLUME_HELPER_URL`: 自訂 Modal wrapper 的 volume helper URL；標準 wrapper 會自動注入 loopback URL
-- `MODAL_GPU`、`MODAL_TRAINER_TIMEOUT`: Modal trainer 的 GPU 型號與單次執行 timeout（預設 A10、86400 秒）
+- `MODAL_GPU`、`MODAL_TRAINER_TIMEOUT`: Modal trainer 的預設 GPU 型號與單次執行 timeout（預設 A10、86400 秒）；前端可逐 job 覆寫 GPU 型號
 - `MODAL_TRAINER_MAX_CONTAINERS`: Modal trainer 的並行 GPU container 上限（預設 `5`）；每個同時執行的訓練各自使用一個 container
 - `MODAL_STAGING_WORKERS`: Modal trainer 從 Volume 複製資料集到本機 SSD 時的平行 worker 數（預設 32，最大 64）
 - `MODAL_GPU_IMAGE`: 選填的 GPU registry image；設定後會略過 `modal/Dockerfile.gpu`，因此該映像必須自行包含 Python、`modal/requirements.txt` 套件、OpenMesh shared libraries，並重新以 `ldd` 驗證。未設定時會使用本專案已驗證的 Dockerfile 建置流程。

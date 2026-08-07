@@ -7,6 +7,9 @@ import { config } from "../config.js";
 import { repo } from "../db.js";
 import { buildAutoTimelapse } from "../lib/autoTimelapse.js";
 import { buildLfsArgs } from "../lib/cliBuilder.js";
+import { computeEffectiveIterations } from "../lib/trainingParams.js";
+import { normalizeTrainingGpu } from "../lib/gpuSelection.js";
+import { logger } from "../lib/logger.js";
 import { scanTimelapseDir, toTimelapseFrame } from "../lib/timelapse.js";
 import { emitJobEvent } from "../sse.js";
 import {
@@ -22,6 +25,9 @@ export interface CreateJobInput {
 }
 
 const LOG_LIMIT = 5000;
+const REMOTE_STATUS_FILE = ".web-status.json";
+const REMOTE_LOG_FILE = ".web-training.log";
+const REMOTE_SYNC_INTERVAL_MS = 2_000;
 const checkDiskSpace = checkDiskSpaceModule.default as unknown as (directoryPath: string) => Promise<{
   diskPath: string;
   free: number;
@@ -47,6 +53,9 @@ class JobService {
   private timelapseMaxIterations = new Map<string, number>(); // jobId -> max iteration seen so far
   private diskGuardIntervals = new Map<string, NodeJS.Timeout>();
   private stopReasons = new Map<string, string>();
+  private remoteTimelapseMaxIterations = new Map<string, number>();
+  private remoteSyncPromise: Promise<void> | null = null;
+  private lastRemoteSyncAt = 0;
 
   listJobs() {
     return repo.listJobs();
@@ -83,6 +92,81 @@ class JobService {
     return [];
   }
 
+  /**
+   * Pull worker-authored artifacts only while the web app is already serving
+   * a user request. The GPU worker never has to wake the scale-to-zero web
+   * container just to deliver progress.
+   */
+  async syncRemoteJobs(): Promise<void> {
+    if (config.trainingExecutor !== "modal") return;
+    if (Date.now() - this.lastRemoteSyncAt < REMOTE_SYNC_INTERVAL_MS) return;
+    if (this.remoteSyncPromise) return this.remoteSyncPromise;
+
+    this.remoteSyncPromise = (async () => {
+      await reloadModalDataVolume();
+      this.lastRemoteSyncAt = Date.now();
+      const jobs = repo.listJobs().filter(
+        (job) => job.executor === "modal" && !["completed", "failed", "stopped", "stopped_low_disk"].includes(job.status)
+      );
+      await Promise.all(jobs.map((job) => this.ingestRemoteArtifacts(job)));
+    })().finally(() => {
+      this.remoteSyncPromise = null;
+    });
+    return this.remoteSyncPromise;
+  }
+
+  private async ingestRemoteArtifacts(job: JobRecord): Promise<void> {
+    const statusPath = path.join(job.outputPath, REMOTE_STATUS_FILE);
+    if (fs.existsSync(statusPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(statusPath, "utf-8")) as Record<string, unknown>;
+        const status = data.status;
+        if (
+          typeof status === "string" &&
+          ["queued", "running", "completed", "failed", "stopped", "stopped_low_disk"].includes(status)
+        ) {
+          const current = repo.getJob(job.id);
+          if (current?.status !== status) {
+            this.recordRemoteStatus(job.id, status as JobStatus, data);
+          }
+        }
+      } catch (error) {
+        logger.warn("Unable to read Modal worker status artifact", {
+          job_id: job.id,
+          ...logger.errFields(error)
+        });
+      }
+    }
+
+    const remoteLogPath = path.join(job.outputPath, REMOTE_LOG_FILE);
+    const persistedLogPath = path.join(config.logsDir, `${job.id}.log`);
+    if (fs.existsSync(remoteLogPath)) {
+      const copiedBytes = fs.existsSync(persistedLogPath) ? fs.statSync(persistedLogPath).size : 0;
+      const remoteBytes = fs.readFileSync(remoteLogPath);
+      if (remoteBytes.length > copiedBytes) {
+        const appended = remoteBytes.subarray(copiedBytes).toString("utf-8");
+        this.appendRemoteLog(job.id, appended.split(/\r?\n/));
+      }
+    }
+
+    const sinceIteration = this.remoteTimelapseMaxIterations.get(job.id) ?? -1;
+    const frames = await scanTimelapseDir(job.outputPath, sinceIteration);
+    let newestIteration = sinceIteration;
+    for (const frame of frames) {
+      const inserted = repo.insertTimelapseFrame(toTimelapseFrame(job.id, frame));
+      if (inserted) {
+        emitJobEvent({
+          type: "timelapse.frame.created",
+          jobId: job.id,
+          ts: new Date().toISOString(),
+          data: inserted
+        });
+      }
+      newestIteration = Math.max(newestIteration, frame.iteration);
+    }
+    this.remoteTimelapseMaxIterations.set(job.id, newestIteration);
+  }
+
   clearLogLines(jobId: string) {
     this.logs.delete(jobId);
   }
@@ -92,6 +176,7 @@ class JobService {
     const dataset = input.datasetId ? repo.getDataset(input.datasetId) : null;
     const isModalExecutor = config.trainingExecutor === "modal";
     const params: TrainingParamsForm = { ...input.params };
+    params.gpu = normalizeTrainingGpu(params.gpu, config.trainingExecutor);
 
     if (!params.dataPath && dataset) {
       params.dataPath = dataset.path;
@@ -110,6 +195,7 @@ class JobService {
       every: params.timelapse?.every,
       existingImages: params.timelapse?.images
     });
+    params.effectiveIterations = computeEffectiveIterations(params);
 
     let configPathToWrite: string | null = null;
     if (isModalExecutor) {
@@ -172,9 +258,8 @@ class JobService {
   private async startModalJob(job: JobRecord): Promise<JobRecord> {
     try {
       const { callId } = await dispatchModalJob(job);
-      // A trainer can emit its first callback before the control plane returns
-      // the FunctionCall ID. Preserve that callback's status while persisting
-      // the ID instead of regressing a running/terminal job back to queued.
+      // Preserve any state already synchronized from the worker artifact while
+      // persisting the FunctionCall ID.
       const current = repo.getJob(job.id);
       const status = current?.status ?? job.status;
       const updated = repo.updateJobStatus(job.id, status, {
@@ -291,6 +376,12 @@ class JobService {
 
   private startJob(job: JobRecord) {
     const args = JSON.parse(job.argsJson) as string[];
+    let selectedGpu: string | undefined;
+    try {
+      selectedGpu = (JSON.parse(job.paramsJson) as TrainingParamsForm).gpu;
+    } catch {
+      selectedGpu = undefined;
+    }
     const logPath = path.join(config.logsDir, `${job.id}.log`);
     const logStream = fs.createWriteStream(logPath, { flags: "a" });
     let spawnErrorMessage: string | null = null;
@@ -304,7 +395,8 @@ class JobService {
       cwd: process.cwd(),
       env: {
         ...process.env,
-        LOG_LEVEL: config.lfsDefaultLogLevel
+        LOG_LEVEL: config.lfsDefaultLogLevel,
+        ...(selectedGpu ? { CUDA_VISIBLE_DEVICES: selectedGpu } : {})
       }
     });
 

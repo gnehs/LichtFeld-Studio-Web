@@ -24,7 +24,7 @@ function configureModalEnv() {
 }
 
 describe("modal training executor", () => {
-  it("dispatches a job with callback base URL and stores the remote call ID", async () => {
+  it("dispatches a job with its selected GPU and stores the remote call ID", async () => {
     vi.resetModules();
     const originalEnv = process.env;
     const root = configureModalEnv();
@@ -55,7 +55,7 @@ describe("modal training executor", () => {
       expect(JSON.parse(String(init.body))).toMatchObject({
         jobId: job.id,
         args: expect.arrayContaining(["--headless", "--train"]),
-        callbackBaseUrl: "https://control.example.test",
+        gpu: "A10",
       });
       const args = JSON.parse(String(init.body)).args as string[];
       const outputPathIndex = args.indexOf("--output-path");

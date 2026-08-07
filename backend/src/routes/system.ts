@@ -2,6 +2,7 @@ import { Router } from "express";
 import { jobService } from "../services/jobService.js";
 import { readSystemMetrics } from "../lib/systemMetrics.js";
 import { config } from "../config.js";
+import { getTrainingGpuOptions } from "../lib/gpuSelection.js";
 
 export const systemRouter = Router();
 
@@ -18,8 +19,13 @@ systemRouter.get("/disk", async (_req, res) => {
 
 systemRouter.get("/metrics", (_req, res) => {
   try {
+    const metrics = readSystemMetrics();
     res.json({
-      ...readSystemMetrics(),
+      ...metrics,
+      gpu: {
+        ...metrics.gpu,
+        ...getTrainingGpuOptions(config.trainingExecutor)
+      },
       trainingExecutor: config.trainingExecutor,
     });
   } catch (error) {

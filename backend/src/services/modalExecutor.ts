@@ -20,8 +20,10 @@ function modalUrl(pathname: string): string {
 
 function authHeaders(): Record<string, string> {
   return {
-    Authorization: `Bearer ${config.modalControlToken}`,
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    ...(config.modalControlToken
+      ? { Authorization: `Bearer ${config.modalControlToken}` }
+      : {})
   };
 }
 
@@ -90,10 +92,17 @@ export async function dispatchModalJob(job: JobRecord): Promise<{ callId: string
   await commitModalDataVolume();
 
   let args: string[];
+  let params: { gpu?: unknown } = {};
   try {
     args = JSON.parse(job.argsJson) as string[];
   } catch {
     throw new Error(`Job ${job.id} has invalid args JSON`);
+  }
+
+  try {
+    params = JSON.parse(job.paramsJson) as { gpu?: unknown };
+  } catch {
+    throw new Error(`Job ${job.id} has invalid params JSON`);
   }
 
   if (!Array.isArray(args) || !args.every((arg) => typeof arg === "string")) {
@@ -103,7 +112,7 @@ export async function dispatchModalJob(job: JobRecord): Promise<{ callId: string
   const payload = await postJson<DispatchResponse>(modalUrl("/jobs/dispatch"), {
     jobId: job.id,
     args,
-    callbackBaseUrl: config.publicBaseUrl
+    ...(typeof params.gpu === "string" && { gpu: params.gpu })
   });
 
   if (!payload?.accepted || typeof payload.callId !== "string" || payload.callId.length === 0) {

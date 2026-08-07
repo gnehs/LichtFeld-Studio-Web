@@ -9,6 +9,7 @@ import type { Notice } from "@/lib/app-types";
 import type {
   DatasetFolderEntry,
   DatasetRecord,
+  SystemMetrics,
   TrainingParamsForm,
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import {
   CREATE_JOB_ITERATIONS_MIN,
   CREATE_JOB_MAX_CAP_MAX,
   CREATE_JOB_MAX_CAP_MIN,
+  getEffectiveTrainingSteps,
   getStrategyDefaults,
   shouldShowMaskSettings,
   UPSTREAM_MASK_FOLDERS,
@@ -83,6 +85,12 @@ function DatasetFolderPreview({
 
 interface CreateWizardValues extends CreateJobStrategyDefaults {
   advancedJson: string;
+  gpu?: string;
+}
+
+interface TrainingGpuOption {
+  value: string;
+  label: string;
 }
 
 function DatasetStructureGuide() {
@@ -237,6 +245,7 @@ export function CreateJobWizard({
   onRefreshDatasets,
   initialDatasetId,
   initialValues,
+  systemMetrics,
 }: {
   datasets: DatasetRecord[];
   datasetFolders: DatasetFolderEntry[];
@@ -246,6 +255,7 @@ export function CreateJobWizard({
   onRefreshDatasets: () => Promise<void>;
   initialDatasetId?: string;
   initialValues?: Partial<CreateWizardValues>;
+  systemMetrics?: SystemMetrics | null;
 }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2>(initialDatasetId ? 2 : 1);
@@ -305,6 +315,40 @@ export function CreateJobWizard({
       null,
     [datasetFolders, selectedDatasetId],
   );
+
+  const gpuOptions = useMemo<TrainingGpuOption[]>(() => {
+    const configuredOptions = systemMetrics?.gpu.trainingOptions;
+    if (configuredOptions && configuredOptions.length > 0) {
+      return configuredOptions;
+    }
+
+    // Older metrics responses did not include trainingOptions. Keep local
+    // execution usable by deriving choices from the reported device indices.
+    if (systemMetrics?.trainingExecutor === "local") {
+      return systemMetrics.gpu.devices.map((device) => ({
+        value: String(device.index),
+        label: `GPU ${device.index} · ${device.name}`,
+      }));
+    }
+
+    return [];
+  }, [systemMetrics]);
+
+  const gpuDefaultSelection = useMemo(() => {
+    const requested = systemMetrics?.gpu.defaultSelection;
+    if (requested && gpuOptions.some((option) => option.value === requested)) {
+      return requested;
+    }
+    return gpuOptions[0]?.value ?? "";
+  }, [gpuOptions, systemMetrics?.gpu.defaultSelection]);
+
+  const effectiveTrainingSteps = getEffectiveTrainingSteps({
+    iterations: form.iterations,
+    stepsScaler: form.stepsScaler,
+    enableSparsity: form.enableSparsity,
+    sparsifySteps: form.sparsifySteps,
+  });
+
   const showMaskSettings = shouldShowMaskSettings(
     selectedDatasetFolder?.hasMasks ?? false,
     selectedDatasetFolder?.hasAlphaImages ?? false,
@@ -365,6 +409,18 @@ export function CreateJobWizard({
     });
   }, [showMaskSettings]);
 
+  useEffect(() => {
+    setForm((prev) => {
+      if (prev.gpu && gpuOptions.some((option) => option.value === prev.gpu)) {
+        return prev;
+      }
+      if (prev.gpu === gpuDefaultSelection) {
+        return prev;
+      }
+      return { ...prev, gpu: gpuDefaultSelection || undefined };
+    });
+  }, [gpuDefaultSelection, gpuOptions]);
+
   const goStepTwo = async () => {
     if (!selectedDatasetId) {
       onNotice({ tone: "error", text: "請先選擇一個 dataset" });
@@ -415,6 +471,7 @@ export function CreateJobWizard({
         maxCap: form.maxCap,
         minOpacity: form.minOpacity,
         stepsScaler: form.stepsScaler,
+        gpu: form.gpu || undefined,
         random: form.random,
         initNumPts: form.initNumPts || undefined,
         initExtent: form.initExtent || undefined,
@@ -633,14 +690,62 @@ export function CreateJobWizard({
             </ParameterPanel>
 
             <ParameterPanel
+              title="訓練資源"
+              description="依目前的訓練執行器選擇要使用的 GPU。建立任務時會把選擇送入 params.gpu。"
+            >
+              <div>
+                <Label htmlFor="create-job-gpu">GPU</Label>
+                <Select
+                  items={gpuOptions}
+                  value={form.gpu ?? null}
+                  onValueChange={(value) => updateForm("gpu", value ?? "")}
+                  disabled={gpuOptions.length === 0}
+                >
+                  <SelectTrigger
+                    id="create-job-gpu"
+                    className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10"
+                  >
+                    <SelectValue placeholder="請選擇 GPU" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>
+                        {systemMetrics?.trainingExecutor === "modal"
+                          ? "Modal GPU SKU"
+                          : "Local GPU device"}
+                      </SelectLabel>
+                      {gpuOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <FieldHint>
+                  {systemMetrics?.trainingExecutor === "modal"
+                    ? "Modal 預設使用 A10；較高階 SKU 會提高費用，且仍受 workspace 容量與即時供應限制。"
+                    : systemMetrics
+                      ? "Local executor 會以 nvidia-smi 回報的 GPU index 執行。"
+                      : "正在讀取可用的 GPU 選項。"}
+                </FieldHint>
+              </div>
+              {gpuOptions.length === 0 ? (
+                <p className="glass-panel rounded-[1rem] border-0 bg-black/20 p-3 text-sm text-zinc-400">
+                  目前沒有可選的 GPU；請確認系統資訊已載入，或先啟動可用的 GPU。
+                </p>
+              ) : null}
+            </ParameterPanel>
+
+            <ParameterPanel
               title="核心訓練參數"
               description="先決定主要訓練強度與資料讀取策略，維持高頻操作的清楚度。"
             >
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <ParameterMetric
-                  label="iterations"
-                  value={form.iterations.toLocaleString()}
-                  hint="steps"
+                  label="steps"
+                  value={effectiveTrainingSteps.toLocaleString()}
+                  hint={`round(${form.iterations.toLocaleString()} × ${form.stepsScaler})${form.enableSparsity ? ` + ${form.sparsifySteps.toLocaleString()} sparsity` : ""}`}
                 />
                 <ParameterMetric
                   label="max cap"
@@ -776,7 +881,7 @@ export function CreateJobWizard({
                   <Input
                     className="mt-2"
                     type="number"
-                    min={0}
+                    min={0.1}
                     step="0.1"
                     value={form.stepsScaler}
                     onChange={(e) =>
@@ -1151,9 +1256,23 @@ export function CreateJobWizard({
                   <span className="text-zinc-100">{form.strategy}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                  <span className="text-zinc-500">steps</span>
+                  <span className="text-zinc-100">
+                    {effectiveTrainingSteps.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
                   <span className="text-zinc-500">iterations</span>
                   <span className="text-zinc-100">
                     {form.iterations.toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
+                  <span className="text-zinc-500">gpu</span>
+                  <span className="max-w-[60%] truncate text-right text-zinc-100">
+                    {gpuOptions.find((option) => option.value === form.gpu)?.label ??
+                      form.gpu ??
+                      "未選擇"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">

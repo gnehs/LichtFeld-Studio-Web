@@ -65,6 +65,8 @@ export interface TrainingParamsForm {
   init?: string;
   importCameras?: string;
   iterations?: number;
+  effectiveIterations?: number;
+  gpu?: string;
   strategy?: "mrnf" | "mcmc" | "igs+";
   shDegree?: number;
   shDegreeInterval?: number;
@@ -191,6 +193,13 @@ export interface SystemMetrics {
       memoryUsedPercent: number | null;
       temperatureC: number | null;
     }>;
+    /** GPU choices exposed by the configured training executor. */
+    trainingOptions?: Array<{
+      value: string;
+      label: string;
+    }>;
+    /** Executor-provided initial GPU choice, if one is available. */
+    defaultSelection?: string | null;
   };
   ts: string;
 }

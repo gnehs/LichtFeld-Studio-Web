@@ -74,22 +74,12 @@ if (trainingExecutorRaw !== "local" && trainingExecutorRaw !== "modal") {
 
 const trainingExecutor = trainingExecutorRaw as TrainingExecutor;
 const modalControlUrl = process.env.MODAL_CONTROL_URL ? normalizeBaseUrl(process.env.MODAL_CONTROL_URL) : "";
-const publicBaseUrl = process.env.PUBLIC_BASE_URL ? normalizeBaseUrl(process.env.PUBLIC_BASE_URL) : "";
 const modalControlToken = process.env.MODAL_CONTROL_TOKEN?.trim() ?? "";
 const modalCallbackToken = process.env.MODAL_CALLBACK_TOKEN?.trim() ?? "";
 
 if (trainingExecutor === "modal") {
-  if (!publicBaseUrl) {
-    throw new Error("Missing env: PUBLIC_BASE_URL (required when TRAINING_EXECUTOR=modal)");
-  }
   if (!modalControlUrl) {
     throw new Error("Missing env: MODAL_CONTROL_URL (required when TRAINING_EXECUTOR=modal)");
-  }
-  if (!modalControlToken) {
-    throw new Error("Missing env: MODAL_CONTROL_TOKEN (required when TRAINING_EXECUTOR=modal)");
-  }
-  if (!modalCallbackToken) {
-    throw new Error("Missing env: MODAL_CALLBACK_TOKEN (required when TRAINING_EXECUTOR=modal)");
   }
 }
 
@@ -109,7 +99,6 @@ export const config = {
   dbPath,
   allowedDatasetRoots: allowedRootsRaw.split(",").map((s) => path.resolve(s.trim())).filter(Boolean),
   trainingExecutor,
-  publicBaseUrl,
   modalControlUrl,
   modalControlToken,
   modalCallbackToken,

@@ -87,6 +87,10 @@ export interface TrainingParamsForm {
   init?: string;
   importCameras?: string;
   iterations?: number;
+  /** Actual iteration target after LichtFeld applies stepsScaler. */
+  effectiveIterations?: number;
+  /** Local CUDA device index or Modal GPU type selected for this job. */
+  gpu?: string;
   strategy?: "mrnf" | "mcmc" | "igs+";
   shDegree?: number;
   shDegreeInterval?: number;

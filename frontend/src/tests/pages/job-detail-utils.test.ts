@@ -26,6 +26,26 @@ describe("job detail utils", () => {
     expect(result.ratio).toBe(0.25);
   });
 
+  test("uses effective scaled iterations and prefers the runtime log target", () => {
+    const scaledJob: TrainingJob = {
+      id: "scaled",
+      status: "running",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      outputPath: "/tmp/out",
+      stopReason: null,
+      paramsJson: JSON.stringify({
+        iterations: 1000,
+        stepsScaler: 2,
+        effectiveIterations: 2000,
+      }),
+    };
+    expect(computeProgress(scaledJob, 500).ratio).toBe(0.25);
+    expect(computeProgress(scaledJob, 500, 2500).ratio).toBe(0.2);
+  });
+
   test("returns null ratio when iterations unavailable", () => {
     const job: TrainingJob = {
       id: "j2",
