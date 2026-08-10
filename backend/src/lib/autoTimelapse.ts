@@ -3,7 +3,7 @@ import path from "node:path";
 import type { TimelapseConfig } from "../types/models.js";
 import { listColmapDatasetImageNames, listDatasetImageRelativePaths } from "./datasetImages.js";
 
-const DEFAULT_TIMELAPSE_EVERY = 100;
+const DEFAULT_TIMELAPSE_EVERY = 1000;
 const DEFAULT_TIMELAPSE_IMAGE_COUNT = 2;
 type RandomSource = () => number;
 

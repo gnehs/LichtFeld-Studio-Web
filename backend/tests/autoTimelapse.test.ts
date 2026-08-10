@@ -148,7 +148,7 @@ describe("autoTimelapse", () => {
 
     expect(config).toEqual({
       images: ["A.JPG", "B.JPG"],
-      every: 100
+      every: 1000
     });
   });
 

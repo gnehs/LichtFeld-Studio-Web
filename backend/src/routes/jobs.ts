@@ -32,7 +32,7 @@ const createJobSchema = z.object({
     timelapse: z
       .object({
         images: z.array(z.string().min(1)).default([]),
-        every: z.number().int().positive().default(50)
+        every: z.number().int().positive().default(1000)
       })
       .optional()
   }).passthrough()
