@@ -30,6 +30,7 @@ interface TusUploadRecord {
 
 const tusUploadDir = path.join(config.datasetsDir, "_uploads", "tus");
 const finalizeInFlight = new Map<string, Promise<DatasetRecord>>();
+const uploadingIds = new Set<string>();
 
 fs.mkdirSync(tusUploadDir, { recursive: true });
 
@@ -59,6 +60,13 @@ function writeUploadRecord(record: TusUploadRecord) {
 function removeUploadArtifacts(record: Pick<TusUploadRecord, "id" | "filePath">) {
   fs.rmSync(getUploadRecordPath(record.id), { force: true });
   fs.rmSync(record.filePath, { force: true });
+}
+
+function withUploadIdInFlight<T>(id: string, fn: () => Promise<T>): Promise<T> {
+  uploadingIds.add(id);
+  return fn().finally(() => {
+    uploadingIds.delete(id);
+  });
 }
 
 function getExpirationBaseMs(record: TusUploadRecord): number {
@@ -147,6 +155,10 @@ export function formatTusMetadata(metadata: Record<string, string | undefined>):
 }
 
 export const tusUploadStore = {
+  isUploadInProgress() {
+    return uploadingIds.size > 0;
+  },
+
   cleanupExpiredUploads(nowMs = Date.now()) {
     if (!fs.existsSync(tusUploadDir)) {
       return;
@@ -229,56 +241,57 @@ export const tusUploadStore = {
       throw new Error("Upload exceeds declared length");
     }
 
-    let bytesReceived = 0;
-    const meter = new Transform({
-      transform(chunk, _encoding, callback) {
-        bytesReceived += Buffer.byteLength(chunk);
-        callback(null, chunk);
-      }
-    });
-
-    try {
-      await pipeline(
-        request,
-        meter,
-        fs.createWriteStream(record.filePath, {
-          flags: "r+",
-          start: record.uploadOffset
-        })
-      );
-    } catch (err) {
-      logger.error("tus chunk pipeline failed", {
-        upload_id: id,
-        offset: record.uploadOffset,
-        bytes_received_so_far: bytesReceived,
-        ...logger.errFields(err)
+    return withUploadIdInFlight(id, async () => {
+      let bytesReceived = 0;
+      const meter = new Transform({
+        transform(chunk, _encoding, callback) {
+          bytesReceived += Buffer.byteLength(chunk);
+          callback(null, chunk);
+        }
       });
-      throw err;
-    }
+      try {
+        await pipeline(
+          request,
+          meter,
+          fs.createWriteStream(record.filePath, {
+            flags: "r+",
+            start: record.uploadOffset
+          })
+        );
+      } catch (err) {
+        logger.error("tus chunk pipeline failed", {
+          upload_id: id,
+          offset: record.uploadOffset,
+          bytes_received_so_far: bytesReceived,
+          ...logger.errFields(err)
+        });
+        throw err;
+      }
 
-    if (record.uploadOffset + bytesReceived > record.uploadLength) {
-      throw new Error("Upload exceeds declared length");
-    }
+      if (record.uploadOffset + bytesReceived > record.uploadLength) {
+        throw new Error("Upload exceeds declared length");
+      }
 
-    record.uploadOffset += bytesReceived;
-    record.lastActivityAt = new Date().toISOString();
-    if (record.uploadOffset === record.uploadLength && !record.completedAt) {
-      record.completedAt = new Date().toISOString();
-    }
-    record.errorMessage = null;
-    writeUploadRecord(record);
+      record.uploadOffset += bytesReceived;
+      record.lastActivityAt = new Date().toISOString();
+      if (record.uploadOffset === record.uploadLength && !record.completedAt) {
+        record.completedAt = new Date().toISOString();
+      }
+      record.errorMessage = null;
+      writeUploadRecord(record);
 
-    logger.debug("tus chunk received", {
-      upload_id: id,
-      bytes_received: bytesReceived,
-      upload_offset: record.uploadOffset,
-      upload_length: record.uploadLength,
-      pct: record.uploadLength > 0
-        ? Math.round((record.uploadOffset / record.uploadLength) * 100)
-        : null
+      logger.debug("tus chunk received", {
+        upload_id: id,
+        bytes_received: bytesReceived,
+        upload_offset: record.uploadOffset,
+        upload_length: record.uploadLength,
+        pct: record.uploadLength > 0
+          ? Math.round((record.uploadOffset / record.uploadLength) * 100)
+          : null
+      });
+
+      return record;
     });
-
-    return record;
   },
 
   async completeUpload(id: string) {
@@ -289,42 +302,44 @@ export const tusUploadStore = {
     }
 
     const finalizePromise = (async () => {
-      const record = requireUploadRecord(id);
-      if (record.dataset) {
-        logger.info("tus upload already finalized, returning cached result", { upload_id: id });
-        return record.dataset;
-      }
-      if (record.uploadOffset < record.uploadLength) {
-        throw new Error("Upload is not complete yet");
-      }
+      return withUploadIdInFlight(id, async () => {
+        const record = requireUploadRecord(id);
+        if (record.dataset) {
+          logger.info("tus upload already finalized, returning cached result", { upload_id: id });
+          return record.dataset;
+        }
+        if (record.uploadOffset < record.uploadLength) {
+          throw new Error("Upload is not complete yet");
+        }
 
-      logger.info("tus upload finalizing", {
-        upload_id: id,
-        upload_length: record.uploadLength,
-        filename: record.metadata.filename ?? null,
-        dataset_name: record.metadata.datasetName ?? null
+        logger.info("tus upload finalizing", {
+          upload_id: id,
+          upload_length: record.uploadLength,
+          filename: record.metadata.filename ?? null,
+          dataset_name: record.metadata.datasetName ?? null
+        });
+
+        const item = await datasetService.createFromUpload({
+          originalName: record.metadata.filename?.trim() || `${record.id}.zip`,
+          zipPath: record.filePath,
+          datasetName: record.metadata.datasetName?.trim() || undefined
+        });
+
+        record.dataset = item;
+        record.finalizedAt = new Date().toISOString();
+        record.lastActivityAt = record.finalizedAt;
+        record.completedAt ??= record.finalizedAt;
+        record.errorMessage = null;
+        writeUploadRecord(record);
+
+        logger.info("tus upload finalized", {
+          upload_id: id,
+          dataset_id: item.id,
+          dataset_name: item.name
+        });
+
+        return item;
       });
-
-      const item = await datasetService.createFromUpload({
-        originalName: record.metadata.filename?.trim() || `${record.id}.zip`,
-        zipPath: record.filePath,
-        datasetName: record.metadata.datasetName?.trim() || undefined
-      });
-
-      record.dataset = item;
-      record.finalizedAt = new Date().toISOString();
-      record.lastActivityAt = record.finalizedAt;
-      record.completedAt ??= record.finalizedAt;
-      record.errorMessage = null;
-      writeUploadRecord(record);
-
-      logger.info("tus upload finalized", {
-        upload_id: id,
-        dataset_id: item.id,
-        dataset_name: item.name
-      });
-
-      return item;
     })()
       .catch((error) => {
         logger.error("tus upload finalize failed", {

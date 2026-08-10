@@ -1,5 +1,7 @@
 import { config } from "../config.js";
 import type { JobRecord } from "../types/models.js";
+import { logger } from "../lib/logger.js";
+import { tusUploadStore } from "../lib/tusUploadStore.js";
 
 interface DispatchResponse {
   accepted?: boolean;
@@ -85,6 +87,10 @@ export async function commitModalDataVolume(): Promise<void> {
  * from being recorded.
  */
 export async function reloadModalDataVolume(): Promise<void> {
+  if (tusUploadStore.isUploadInProgress()) {
+    logger.debug("Skipping modal volume reload because a TUS upload is in progress");
+    return;
+  }
   await postVolumeHelper("/data/reload");
 }
 
