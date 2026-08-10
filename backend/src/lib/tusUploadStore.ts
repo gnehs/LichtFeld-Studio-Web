@@ -30,7 +30,7 @@ interface TusUploadRecord {
 
 const tusUploadDir = path.join(config.datasetsDir, "_uploads", "tus");
 const finalizeInFlight = new Map<string, Promise<DatasetRecord>>();
-const uploadingIds = new Set<string>();
+const uploadingIds = new Map<string, number>();
 
 fs.mkdirSync(tusUploadDir, { recursive: true });
 
@@ -63,9 +63,14 @@ function removeUploadArtifacts(record: Pick<TusUploadRecord, "id" | "filePath">)
 }
 
 function withUploadIdInFlight<T>(id: string, fn: () => Promise<T>): Promise<T> {
-  uploadingIds.add(id);
+  uploadingIds.set(id, (uploadingIds.get(id) ?? 0) + 1);
   return fn().finally(() => {
-    uploadingIds.delete(id);
+    const next = (uploadingIds.get(id) ?? 1) - 1;
+    if (next <= 0) {
+      uploadingIds.delete(id);
+      return;
+    }
+    uploadingIds.set(id, next);
   });
 }
 
@@ -157,6 +162,31 @@ export function formatTusMetadata(metadata: Record<string, string | undefined>):
 export const tusUploadStore = {
   isUploadInProgress() {
     return uploadingIds.size > 0;
+  },
+
+  hasUnfinishedUploads() {
+    if (!fs.existsSync(tusUploadDir)) {
+      return false;
+    }
+
+    const entries = fs.readdirSync(tusUploadDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) {
+        continue;
+      }
+
+      const id = entry.name.slice(0, -5);
+      const record = readUploadRecord(id);
+      if (!record || isUploadExpired(record)) {
+        continue;
+      }
+
+      if (!record.finalizedAt) {
+        return true;
+      }
+    }
+
+    return false;
   },
 
   cleanupExpiredUploads(nowMs = Date.now()) {

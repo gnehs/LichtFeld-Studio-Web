@@ -87,8 +87,8 @@ export async function commitModalDataVolume(): Promise<void> {
  * from being recorded.
  */
 export async function reloadModalDataVolume(): Promise<void> {
-  if (tusUploadStore.isUploadInProgress()) {
-    logger.debug("Skipping modal volume reload because a TUS upload is in progress");
+  if (tusUploadStore.isUploadInProgress() || tusUploadStore.hasUnfinishedUploads()) {
+    logger.debug("Skipping modal volume reload because a TUS upload is unfinished");
     return;
   }
   await postVolumeHelper("/data/reload");
