@@ -347,6 +347,10 @@ def web_server() -> None:
         {
             "DATA_ROOT": DATA_MOUNT,
             "DATASETS_DIR": f"{DATA_MOUNT}/datasets",
+            # Stage TUS uploads in container-local storage instead of the shared
+            # Volume: a Volume reload/commit or container recycle must never
+            # destroy an in-flight upload that has not been committed yet.
+            "TUS_UPLOAD_DIR": os.path.join(os.getenv("TMPDIR", "/tmp"), "lfs-tus"),
             "OUTPUTS_DIR": f"{DATA_MOUNT}/outputs",
             "LOGS_DIR": f"{STATE_MOUNT}/logs",
             "DB_PATH": f"{STATE_MOUNT}/db/app.db",

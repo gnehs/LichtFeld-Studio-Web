@@ -166,6 +166,42 @@ describe("modal training executor", () => {
     }
   });
 
+  it("skips the modal volume reload while a tus upload is unfinished", async () => {
+    vi.resetModules();
+    const originalEnv = process.env;
+    const root = configureModalEnv();
+    process.env.MODAL_VOLUME_HELPER_URL = "http://127.0.0.1:3001";
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const { config } = await import("../src/config.js");
+      const { tusUploadStore } = await import("../src/lib/tusUploadStore.js");
+      const { reloadModalDataVolume } = await import("../src/services/modalExecutor.js");
+
+      // While an unfinished upload exists, a reload must never reach the helper.
+      const upload = tusUploadStore.createUpload({ uploadLength: 100, metadata: {} });
+      await reloadModalDataVolume();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(tusUploadStore.hasUnfinishedUploads()).toBe(true);
+
+      // Once the upload artifacts are gone, the reload is allowed again.
+      fs.rmSync(path.join(config.tusUploadDir, `${upload.id}.json`), { force: true });
+      fs.rmSync(path.join(config.tusUploadDir, `${upload.id}.zip`), { force: true });
+      await reloadModalDataVolume();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(String(fetchMock.mock.calls[0][0])).toBe("http://127.0.0.1:3001/data/reload");
+    } finally {
+      vi.unstubAllGlobals();
+      delete process.env.MODAL_VOLUME_HELPER_URL;
+      process.env = originalEnv;
+      fs.rmSync(root, { recursive: true, force: true });
+      vi.resetModules();
+    }
+  });
+
   it("cancels a remote call through the control plane", async () => {
     vi.resetModules();
     const originalEnv = process.env;

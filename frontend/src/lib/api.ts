@@ -13,6 +13,8 @@ const TUS_RETRY_BASE_DELAY_MS = 1_000;
 const TUS_RETRY_MAX_DELAY_MS = 10_000;
 /** 單一 PATCH chunk 允許的最長傳輸時間（ms） */
 const TUS_PATCH_TIMEOUT_MS = 120_000;
+/** 伺服器端遺失 upload 記錄後，最多自動重建並重新上傳的次數 */
+const TUS_UPLOAD_MAX_RECREATES = 3;
 
 interface UploadDatasetOptions {
   onProgress?: (progress: number) => void;
@@ -37,6 +39,14 @@ class TusPatchTimeoutError extends Error {
     super(`PATCH request timed out after ${TUS_PATCH_TIMEOUT_MS}ms`);
     this.name = "TusPatchTimeoutError";
   }
+}
+
+/**
+ * 伺服器端已遺失 upload 記錄（例如 volume reload 或容器回收後暫存檔消失）。
+ * 這不是重試可解決的暫時性錯誤，需要重新建立 upload。
+ */
+function isMissingUploadError(error: unknown): boolean {
+  return error instanceof HttpResponseError && error.status === 404;
 }
 
 async function parseRequestError(response: Response): Promise<string> {
@@ -322,71 +332,87 @@ export const api = {
   uploadDataset: async (file: File, datasetName?: string, options?: UploadDatasetOptions) => {
     const storage = getUploadStorage();
     const fingerprint = getTusUploadFingerprint(file, datasetName);
-    options?.onPhaseChange?.("preparing");
+    const restoredUploadUrl = storage?.getItem(fingerprint) ?? null;
 
-    let uploadUrl = storage?.getItem(fingerprint) ?? null;
-    let offset = 0;
+    let recreateCount = 0;
 
-    if (uploadUrl) {
-      const headResult = await headTusUpload(uploadUrl, file.size);
-      if (headResult.exists) {
-        offset = headResult.offset;
-      } else {
+    // 外層迴圈：當伺服器端因暫存檔消失回傳 404 時，自動重建 upload 並重新上傳，
+    // 避免一次 volume reload / 容器回收就讓整筆上傳直接失敗。
+    while (recreateCount <= TUS_UPLOAD_MAX_RECREATES) {
+      options?.onPhaseChange?.("preparing");
+
+      let uploadUrl: string | null = recreateCount === 0 ? restoredUploadUrl : null;
+      let offset = 0;
+
+      if (uploadUrl) {
+        const headResult = await headTusUpload(uploadUrl, file.size);
+        if (headResult.exists) {
+          offset = headResult.offset;
+        } else {
+          storage?.removeItem(fingerprint);
+          uploadUrl = null;
+        }
+      }
+
+      if (!uploadUrl) {
+        const created = await createTusUpload(file, datasetName);
+        uploadUrl = created.uploadUrl;
+        offset = created.offset;
+        if (offset > file.size) {
+          throw new Error("Upload creation returned an offset beyond file size");
+        }
+        storage?.setItem(fingerprint, uploadUrl);
+      }
+
+      try {
+        while (offset < file.size) {
+          options?.onPhaseChange?.("uploading");
+          const chunk = file.slice(offset, offset + TUS_UPLOAD_CHUNK_SIZE);
+          const nextOffset = await patchTusUploadWithRetry(uploadUrl, offset, chunk, {
+            onReconnecting: options?.onReconnecting,
+            onReconnected: options?.onReconnected
+          });
+          if (nextOffset <= offset) {
+            throw new Error("Upload did not make progress");
+          }
+          offset = nextOffset;
+          options?.onBytesProgress?.(offset, file.size);
+          options?.onProgress?.(file.size > 0 ? offset / file.size : 0);
+        }
+
+        options?.onPhaseChange?.("processing");
+        options?.onBytesProgress?.(file.size, file.size);
+        options?.onProgress?.(1);
+
+        const response = await fetch(getTusUploadCompletePath(uploadUrl), {
+          method: "POST",
+          credentials: "include"
+        });
+
+        if (!response.ok) {
+          throw await createHttpResponseError(response);
+        }
+
+        const body = (await response.json()) as { item?: DatasetRecord };
+        if (!body.item) {
+          throw new Error("Upload succeeded but response is missing dataset item");
+        }
+
         storage?.removeItem(fingerprint);
-        uploadUrl = null;
+        options?.onPhaseChange?.("complete");
+        return { item: body.item };
+      } catch (error) {
+        if (isMissingUploadError(error) && recreateCount < TUS_UPLOAD_MAX_RECREATES) {
+          recreateCount += 1;
+          storage?.removeItem(fingerprint);
+          options?.onReconnecting?.(Date.now());
+          continue;
+        }
+        throw error instanceof Error ? error : new Error(String(error));
       }
     }
 
-    if (!uploadUrl) {
-      const created = await createTusUpload(file, datasetName);
-      uploadUrl = created.uploadUrl;
-      offset = created.offset;
-      if (offset > file.size) {
-        throw new Error("Upload creation returned an offset beyond file size");
-      }
-      storage?.setItem(fingerprint, uploadUrl);
-    }
-
-    while (offset < file.size) {
-      options?.onPhaseChange?.("uploading");
-      const chunk = file.slice(offset, offset + TUS_UPLOAD_CHUNK_SIZE);
-      const nextOffset = await patchTusUploadWithRetry(uploadUrl, offset, chunk, {
-        onReconnecting: options?.onReconnecting,
-        onReconnected: options?.onReconnected
-      });
-      if (nextOffset <= offset) {
-        throw new Error("Upload did not make progress");
-      }
-      offset = nextOffset;
-      options?.onBytesProgress?.(offset, file.size);
-      options?.onProgress?.(file.size > 0 ? offset / file.size : 0);
-    }
-
-    options?.onPhaseChange?.("processing");
-    options?.onBytesProgress?.(file.size, file.size);
-    options?.onProgress?.(1);
-
-    try {
-      const response = await fetch(getTusUploadCompletePath(uploadUrl), {
-        method: "POST",
-        credentials: "include"
-      });
-
-      if (!response.ok) {
-        throw await createHttpResponseError(response);
-      }
-
-      const body = (await response.json()) as { item?: DatasetRecord };
-      if (!body.item) {
-        throw new Error("Upload succeeded but response is missing dataset item");
-      }
-
-      storage?.removeItem(fingerprint);
-      options?.onPhaseChange?.("complete");
-      return { item: body.item };
-    } catch (error) {
-      throw error instanceof Error ? error : new Error(String(error));
-    }
+    throw new Error("Upload failed after multiple restarts");
   },
   registerDatasetPath: (datasetName: string, targetPath: string) =>
     request<{ item: DatasetRecord }>("/api/datasets/register-path", {

@@ -172,6 +172,7 @@ Modal Web wrapper 會在同一個容器啟動 helper。`/data/commit` 會在 dis
 - `LFS_REF`: Docker build 使用的 LichtFeld-Studio git ref，預設 `v0.5.3`
 - `TRAINING_EXECUTOR`: `local`（預設）或 `modal`
 - `MODAL_VOLUME_HELPER_URL`: 自訂 Modal wrapper 的 volume helper URL；標準 wrapper 會自動注入 loopback URL
+- `TUS_UPLOAD_DIR`: tus 上傳的暫存目錄。預設為 datasets 目錄下的 `_uploads/tus`（與資料相同 volume）。Modal 部署時內建 wrapper 會自動改為 container 本機路徑（`TMPDIR`/`/tmp` 下），確保在上傳期間的 volume reload/commit 或 container 回收不會清除尚未提交的上傳進度，並讓「已完成但尚未解壓縮」的暫存 ZIP 只占用容器本機磁碟
 - `MODAL_GPU`、`MODAL_TRAINER_TIMEOUT`: Modal trainer 的預設 GPU 型號與單次執行 timeout（預設 A10、86400 秒）；前端可逐 job 覆寫 GPU 型號
 - `MODAL_TRAINER_MAX_CONTAINERS`: Modal trainer 的並行 GPU container 上限（預設 `5`）；每個同時執行的訓練各自使用一個 container
 - `MODAL_STAGING_WORKERS`: Modal trainer 從 Volume 複製資料集到本機 SSD 時的平行 worker 數（預設 32，最大 64）

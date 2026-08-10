@@ -28,7 +28,7 @@ interface TusUploadRecord {
   isPart?: boolean;
 }
 
-const tusUploadDir = path.join(config.datasetsDir, "_uploads", "tus");
+const tusUploadDir = config.tusUploadDir;
 const finalizeInFlight = new Map<string, Promise<DatasetRecord>>();
 const uploadingIds = new Map<string, number>();
 

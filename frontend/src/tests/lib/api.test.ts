@@ -616,4 +616,184 @@ describe("uploadDataset", () => {
 
     await expect(api.uploadDataset(file, "garden-v2")).rejects.toThrow("zip invalid");
   });
+
+  test("recreates the upload from scratch when a PATCH reports the upload is missing", async () => {
+    const file = createFakeFile(CHUNK_SIZE, []);
+    const storage = createStorageMock();
+    vi.stubGlobal("localStorage", storage);
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          status: 201,
+          headers: {
+            Location: "/api/datasets/upload/tus/upload-lost",
+            "Upload-Offset": "0"
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: false,
+          status: 404,
+          statusText: "Not Found",
+          json: { message: "Upload not found: upload-lost" }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          status: 201,
+          headers: {
+            Location: "/api/datasets/upload/tus/upload-recreated",
+            "Upload-Offset": "0"
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          status: 204,
+          headers: { "Upload-Offset": String(CHUNK_SIZE) }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          json: {
+            item: {
+              id: "ds-recreated",
+              name: "recreated-dataset",
+              type: "upload",
+              path: "/data/datasets/recreated-dataset",
+              createdAt: "2026-03-25T00:00:00.000Z"
+            }
+          }
+        })
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+    const onReconnecting = vi.fn();
+
+    const result = await api.uploadDataset(file, "recreated-dataset", { onReconnecting });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/datasets/upload/tus/upload-lost",
+      expect.objectContaining({ method: "PATCH" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/datasets/upload/tus",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/datasets/upload/tus/upload-recreated",
+      expect.objectContaining({ method: "PATCH", headers: expect.objectContaining({ "Upload-Offset": "0" }) })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "/api/datasets/upload/tus/upload-recreated/complete",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(onReconnecting).toHaveBeenCalledTimes(1);
+    expect(result.item.id).toBe("ds-recreated");
+    expect(storage.dump()).toEqual({});
+  });
+
+  test("recreates and re-uploads when the complete step reports the upload is missing", async () => {
+    const file = createFakeFile(CHUNK_SIZE, []);
+    const storage = createStorageMock();
+    vi.stubGlobal("localStorage", storage);
+
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          status: 201,
+          headers: {
+            Location: "/api/datasets/upload/tus/upload-gone",
+            "Upload-Offset": "0"
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          status: 204,
+          headers: { "Upload-Offset": String(CHUNK_SIZE) }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: false,
+          status: 404,
+          json: { message: "Upload not found: upload-gone" }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          status: 201,
+          headers: {
+            Location: "/api/datasets/upload/tus/upload-round-2",
+            "Upload-Offset": "0"
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          status: 204,
+          headers: { "Upload-Offset": String(CHUNK_SIZE) }
+        })
+      )
+      .mockResolvedValueOnce(
+        createResponse({
+          ok: true,
+          json: {
+            item: {
+              id: "ds-round-2",
+              name: "round-2-dataset",
+              type: "upload",
+              path: "/data/datasets/round-2-dataset",
+              createdAt: "2026-03-25T00:00:00.000Z"
+            }
+          }
+        })
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+    const onReconnecting = vi.fn();
+
+    const result = await api.uploadDataset(file, "round-2-dataset", { onReconnecting });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/datasets/upload/tus/upload-gone/complete",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/datasets/upload/tus",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "/api/datasets/upload/tus/upload-round-2",
+      expect.objectContaining({ method: "PATCH", headers: expect.objectContaining({ "Upload-Offset": "0" }) })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "/api/datasets/upload/tus/upload-round-2/complete",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(onReconnecting).toHaveBeenCalledTimes(1);
+    expect(result.item.id).toBe("ds-round-2");
+    expect(storage.dump()).toEqual({});
+  });
 });

@@ -54,6 +54,9 @@ function ensureDir(dirPath: string): string {
 }
 
 const datasetsDir = ensureDir(required("DATASETS_DIR", path.join(dataRoot, "datasets")));
+const tusUploadDir = process.env.TUS_UPLOAD_DIR
+  ? ensureDir(path.resolve(process.env.TUS_UPLOAD_DIR))
+  : path.join(datasetsDir, "_uploads", "tus");
 const outputsDir = ensureDir(required("OUTPUTS_DIR", path.join(dataRoot, "outputs")));
 const logsDir = ensureDir(required("LOGS_DIR", path.join(dataRoot, "logs")));
 const dbPath = required("DB_PATH", path.join(dataRoot, "db", "app.db"));
@@ -94,6 +97,7 @@ export const config = {
   timelapseMinFreeGb: Number(process.env.TIMELAPSE_MIN_FREE_GB ?? 5),
   diskGuardIntervalMs: Number(process.env.DISK_GUARD_INTERVAL_MS ?? 15000),
   datasetsDir,
+  tusUploadDir,
   outputsDir,
   logsDir,
   dbPath,

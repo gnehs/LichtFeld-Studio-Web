@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 describe("config shared library path", () => {
@@ -43,6 +46,52 @@ describe("config shared library path", () => {
     } finally {
       process.env = originalEnv;
       vi.resetModules();
+    }
+  });
+
+  it("honors TUS_UPLOAD_DIR for tus staging", async () => {
+    vi.resetModules();
+
+    const originalEnv = process.env;
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lfs-config-tus-"));
+    process.env = {
+      ...originalEnv,
+      SESSION_SECRET: "test-secret",
+      ADMIN_PASSWORD_HASH: "test-hash",
+      DATA_ROOT: root,
+      TUS_UPLOAD_DIR: path.join(root, "staging", "tus")
+    };
+
+    try {
+      const { config } = await import("../src/config.js");
+      expect(config.tusUploadDir).toBe(path.join(root, "staging", "tus"));
+      expect(fs.existsSync(config.tusUploadDir)).toBe(true);
+    } finally {
+      process.env = originalEnv;
+      vi.resetModules();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("defaults tus staging to the datasets directory", async () => {
+    vi.resetModules();
+
+    const originalEnv = process.env;
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lfs-config-tus-default-"));
+    process.env = {
+      ...originalEnv,
+      SESSION_SECRET: "test-secret",
+      ADMIN_PASSWORD_HASH: "test-hash",
+      DATA_ROOT: root
+    };
+
+    try {
+      const { config } = await import("../src/config.js");
+      expect(config.tusUploadDir).toBe(path.join(root, "datasets", "_uploads", "tus"));
+    } finally {
+      process.env = originalEnv;
+      vi.resetModules();
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 });
