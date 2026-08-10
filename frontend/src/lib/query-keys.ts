@@ -15,7 +15,4 @@ export const queryKeys = {
     timelapseOverview: (id: string) => ["jobs", id, "timelapse", "overview"] as const,
     timelapseFrames: (id: string, camera: string) => ["jobs", id, "timelapse", "frames", camera] as const,
   },
-  system: {
-    metrics: ["system", "metrics"] as const,
-  },
 };

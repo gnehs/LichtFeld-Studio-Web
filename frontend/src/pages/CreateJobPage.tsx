@@ -4,7 +4,6 @@ import type { Notice } from "@/lib/app-types";
 import type {
   DatasetFolderEntry,
   DatasetRecord,
-  SystemMetrics,
   TrainingJob,
   TrainingParamsForm,
 } from "@/lib/types";
@@ -59,7 +58,6 @@ export function CreateJobPage({
   onCreated,
   onNotice,
   onRefreshDatasets,
-  systemMetrics,
 }: {
   datasets: DatasetRecord[];
   datasetFolders: DatasetFolderEntry[];
@@ -67,7 +65,6 @@ export function CreateJobPage({
   onCreated: (jobId: string) => Promise<void>;
   onNotice: (notice: Notice) => void;
   onRefreshDatasets: () => Promise<void>;
-  systemMetrics?: SystemMetrics | null;
 }) {
   const location = useLocation();
   const prefillJob = (location.state as { prefillJob?: TrainingJob } | null)?.prefillJob;
@@ -100,7 +97,6 @@ export function CreateJobPage({
         onRefreshDatasets={onRefreshDatasets}
         initialDatasetId={initialDatasetId}
         initialValues={initialValues}
-        systemMetrics={systemMetrics}
       />
     </section>
   );

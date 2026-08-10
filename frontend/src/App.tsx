@@ -18,7 +18,7 @@ import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { JobInsight, Notice } from "@/lib/app-types";
-import type { DatasetRecord, SystemMetrics, TrainingJob, TrainingParamsForm } from "@/lib/types";
+import type { DatasetRecord, TrainingJob, TrainingParamsForm } from "@/lib/types";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
@@ -34,13 +34,11 @@ function isUnauthorizedError(error: unknown): boolean {
 function DashboardShell({
   datasets,
   jobs,
-  systemMetrics,
   onLogout,
   logoutPending,
 }: {
   datasets: DatasetRecord[];
   jobs: TrainingJob[];
-  systemMetrics: SystemMetrics | null;
   onLogout: () => Promise<void>;
   logoutPending: boolean;
 }) {
@@ -57,7 +55,6 @@ function DashboardShell({
             <DashboardOverview
               jobs={jobs}
               datasetCount={datasets.length}
-              systemMetrics={systemMetrics}
             />
         ) : null}
         <Outlet />
@@ -120,17 +117,9 @@ function App() {
     refetchInterval: 5_000,
   });
 
-  const systemMetricsQuery = useQuery({
-    queryKey: queryKeys.system.metrics,
-    queryFn: () => guardAuth(() => api.systemMetrics()),
-    enabled: authed,
-    refetchInterval: 5_000,
-  });
-
   const jobs = jobsQuery.data?.items ?? [];
   const datasets = datasetsQuery.data?.items ?? [];
   const datasetFolders = datasetsQuery.data?.folders ?? [];
-  const systemMetrics = systemMetricsQuery.data ?? null;
 
   const insightQueries = useQueries({
     queries: jobs.map((job) => ({
@@ -175,7 +164,6 @@ function App() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.me });
       queryClient.removeQueries({ queryKey: queryKeys.jobs.all });
       queryClient.removeQueries({ queryKey: queryKeys.datasets.all });
-      queryClient.removeQueries({ queryKey: queryKeys.system.metrics });
     },
     onError: (error) => {
       setNoticeText({
@@ -260,19 +248,6 @@ function App() {
     }
   }, [jobsQuery.error, jobsQuery.errorUpdatedAt, setNoticeText]);
 
-  useEffect(() => {
-    if (systemMetricsQuery.error) {
-      setNoticeText({
-        tone: "error",
-        text: `讀取系統資訊失敗：${(systemMetricsQuery.error as Error).message}`,
-      });
-    }
-  }, [
-    setNoticeText,
-    systemMetricsQuery.error,
-    systemMetricsQuery.errorUpdatedAt,
-  ]);
-
   if (meQuery.isPending) {
     return <div className="p-8 text-zinc-300">Loading...</div>;
   }
@@ -296,7 +271,6 @@ function App() {
             <DashboardShell
               datasets={datasets}
               jobs={jobs}
-              systemMetrics={systemMetrics}
               onLogout={async () => {
                 await logoutMutation.mutateAsync();
               }}
@@ -393,7 +367,6 @@ function App() {
                 onRefreshDatasets={async () => {
                   await datasetsQuery.refetch({ throwOnError: true });
                 }}
-                systemMetrics={systemMetrics}
               />
             }
           />

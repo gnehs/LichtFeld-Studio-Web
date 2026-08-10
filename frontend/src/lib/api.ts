@@ -1,4 +1,4 @@
-import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, SplatSnapshot, SystemMetrics, TimelapseFrame, TrainingJob } from "./types";
+import type { DatasetFolderEntry, DatasetRecord, DiskGuardStatus, SplatSnapshot, TimelapseFrame, TrainingJob } from "./types";
 
 export type UploadDatasetPhase = "preparing" | "uploading" | "processing" | "complete";
 
@@ -421,5 +421,4 @@ export const api = {
   getTimelapseLatest: (id: string) => request<{ items: TimelapseFrame[]; disk: DiskGuardStatus }>(`/api/jobs/${id}/timelapse/latest`),
   getSplatLatest: (id: string) => request<SplatSnapshot>(`/api/jobs/${id}/splat/latest`),
   disk: () => request<DiskGuardStatus>("/api/system/disk"),
-  systemMetrics: () => request<SystemMetrics>("/api/system/metrics")
 };

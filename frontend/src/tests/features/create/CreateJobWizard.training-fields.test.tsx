@@ -6,7 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { CreateJobWizard } from "@/features/create/CreateJobWizard";
-import type { DatasetFolderEntry, DatasetRecord, SystemMetrics } from "@/lib/types";
+import type { DatasetFolderEntry, DatasetRecord } from "@/lib/types";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -45,7 +45,6 @@ function mountWizard(options: {
     enableSparsity?: boolean;
     sparsifySteps?: number;
   };
-  systemMetrics?: SystemMetrics;
 } = {}) {
   const queryClient = new QueryClient();
   const container = document.createElement("div");
@@ -69,7 +68,6 @@ function mountWizard(options: {
                 onNotice={vi.fn()}
                 onRefreshDatasets={vi.fn(async () => {})}
                 initialValues={options.initialValues}
-                systemMetrics={options.systemMetrics}
               />
             </MemoryRouter>
           </QueryClientProvider>,
@@ -137,34 +135,13 @@ describe("CreateJobWizard core training fields", () => {
     expect(container.querySelector('input[type="range"]')).toBeNull();
   });
 
-  test("shows effective scaled steps and the selected local GPU", async () => {
+  test("shows effective scaled steps and a static Modal GPU SKU datalist", async () => {
     const mounted = mountWizard({
       initialValues: {
         iterations: 1_001,
         stepsScaler: 1.5,
         enableSparsity: true,
         sparsifySteps: 7,
-      },
-      systemMetrics: {
-        trainingExecutor: "local",
-        gpu: {
-          available: true,
-          devices: [
-            {
-              index: 2,
-              name: "RTX 4090",
-              utilizationGpu: null,
-              memoryUsedMiB: null,
-              memoryTotalMiB: null,
-              memoryUsedPercent: null,
-              temperatureC: null,
-            },
-          ],
-          trainingOptions: [{ value: "2", label: "GPU 2 · RTX 4090" }],
-          defaultSelection: "2",
-        },
-        memory: { totalGb: 64, usedGb: 1, usedPercent: 1.6 },
-        ts: "2026-08-07T00:00:00.000Z",
       },
     });
     container = mounted.container;
@@ -176,6 +153,7 @@ describe("CreateJobWizard core training fields", () => {
     });
 
     expect(container.textContent).toContain("1,509");
-    expect(container.textContent).toContain("GPU 2 · RTX 4090");
+    expect(container.querySelector("#create-job-gpu")).not.toBeNull();
+    expect(container.querySelector("#create-job-gpu-skus")).not.toBeNull();
   });
 });

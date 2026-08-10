@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
-import type { SystemMetrics, TrainingJob } from "@/lib/types";
+import type { TrainingJob } from "@/lib/types";
 
 describe("DashboardOverview", () => {
   test("renders job and system summary cards from props", () => {
@@ -31,37 +31,9 @@ describe("DashboardOverview", () => {
       },
     ];
 
-    const systemMetrics: SystemMetrics = {
-      trainingExecutor: "local",
-      gpu: {
-        devices: [
-          {
-            index: 0,
-            name: "RTX 4090",
-            utilizationGpu: 87,
-            temperatureC: 60,
-            memoryTotalMiB: 24576,
-            memoryUsedMiB: 12288,
-            memoryUsedPercent: 50,
-          },
-        ],
-        available: true,
-      },
-      memory: {
-        totalGb: 64,
-        usedGb: 48.2,
-        usedPercent: 75,
-      },
-      ts: "2026-03-26T00:00:00.000Z",
-    };
-
     const markup = renderToStaticMarkup(
       <MemoryRouter>
-        <DashboardOverview
-          jobs={jobs}
-          datasetCount={3}
-          systemMetrics={systemMetrics}
-        />
+        <DashboardOverview jobs={jobs} datasetCount={3} />
       </MemoryRouter>,
     );
 
@@ -69,88 +41,17 @@ describe("DashboardOverview", () => {
     expect(markup).toContain(">1<");
     expect(markup).toContain("佇列");
     expect(markup).toContain("資料集");
-    expect(markup).toContain("RTX 4090");
-    expect(markup).toContain("12.0");
-    expect(markup).toContain("24.0GB");
-    expect(markup).toContain("48.2");
-    expect(markup).toContain("64GB");
   });
 
-  test("renders GPU utilization as 0% when usage is zero", () => {
-    const systemMetrics: SystemMetrics = {
-      trainingExecutor: "local",
-      gpu: {
-        devices: [
-          {
-            index: 0,
-            name: "RTX 4090",
-            utilizationGpu: 0,
-            temperatureC: 42,
-            memoryTotalMiB: 24576,
-            memoryUsedMiB: 0,
-            memoryUsedPercent: 0,
-          },
-        ],
-        available: true,
-      },
-      memory: {
-        totalGb: 64,
-        usedGb: 32,
-        usedPercent: 50,
-      },
-      ts: "2026-03-26T00:00:00.000Z",
-    };
-
+  test("does not render host hardware metrics", () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter>
-        <DashboardOverview
-          jobs={[]}
-          datasetCount={0}
-          systemMetrics={systemMetrics}
-        />
-      </MemoryRouter>,
-    );
-
-    expect(markup).toMatch(/RTX 4090<\/p><div[^>]*>0%<\/div>/);
-  });
-
-  test("hides host hardware metrics when training runs on Modal", () => {
-    const systemMetrics: SystemMetrics = {
-      trainingExecutor: "modal",
-      gpu: {
-        devices: [
-          {
-            index: 0,
-            name: "Web container GPU",
-            utilizationGpu: 25,
-            temperatureC: 42,
-            memoryTotalMiB: 24576,
-            memoryUsedMiB: 4096,
-            memoryUsedPercent: 16.7,
-          },
-        ],
-        available: true,
-      },
-      memory: {
-        totalGb: 16,
-        usedGb: 8,
-        usedPercent: 50,
-      },
-      ts: "2026-08-06T00:00:00.000Z",
-    };
-
-    const markup = renderToStaticMarkup(
-      <MemoryRouter>
-        <DashboardOverview
-          jobs={[]}
-          datasetCount={2}
-          systemMetrics={systemMetrics}
-        />
+        <DashboardOverview jobs={[]} datasetCount={2} />
       </MemoryRouter>,
     );
 
     expect(markup).toContain("資料集");
-    expect(markup).not.toContain("Web container GPU");
+    expect(markup).not.toContain("GPU");
     expect(markup).not.toContain("VRAM");
     expect(markup).not.toContain("RAM");
   });

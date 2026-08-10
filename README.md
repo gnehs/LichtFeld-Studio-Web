@@ -15,7 +15,7 @@ LichtFeld-Studio 的簡易 Web 控制台，提供 React + Tailwind 前端與 Nod
 - 也可直接選用伺服器上的 dataset
 - 建立、停止、刪除訓練任務
 - 刪除任務時會一併移除該任務的 output、timelapse 與 log，無法復原
-- 查看 timelapse、Splat 預覽、模型輸出與系統資源資訊
+- 查看 timelapse、Splat 預覽與模型輸出
 - 模型下載預設匯出為 SOG，也可在任務頁選擇 PLY、SPZ 或 HTML
 - 低磁碟空間自動停止任務（Disk Guard）
 

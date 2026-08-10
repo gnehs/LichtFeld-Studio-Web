@@ -174,32 +174,3 @@ export interface EventMessage {
   data: unknown;
   ts: string;
 }
-
-export interface SystemMetrics {
-  trainingExecutor: "local" | "modal";
-  memory: {
-    totalGb: number;
-    usedGb: number;
-    usedPercent: number;
-  };
-  gpu: {
-    available: boolean;
-    devices: Array<{
-      index: number;
-      name: string;
-      utilizationGpu: number | null;
-      memoryUsedMiB: number | null;
-      memoryTotalMiB: number | null;
-      memoryUsedPercent: number | null;
-      temperatureC: number | null;
-    }>;
-    /** GPU choices exposed by the configured training executor. */
-    trainingOptions?: Array<{
-      value: string;
-      label: string;
-    }>;
-    /** Executor-provided initial GPU choice, if one is available. */
-    defaultSelection?: string | null;
-  };
-  ts: string;
-}

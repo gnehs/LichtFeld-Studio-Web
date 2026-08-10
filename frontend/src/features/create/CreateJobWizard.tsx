@@ -9,7 +9,6 @@ import type { Notice } from "@/lib/app-types";
 import type {
   DatasetFolderEntry,
   DatasetRecord,
-  SystemMetrics,
   TrainingParamsForm,
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -88,10 +87,22 @@ interface CreateWizardValues extends CreateJobStrategyDefaults {
   gpu?: string;
 }
 
-interface TrainingGpuOption {
-  value: string;
-  label: string;
-}
+const MODAL_GPU_SKUS = [
+  "T4",
+  "L4",
+  "A10",
+  "L40S",
+  "A100",
+  "A100-40GB",
+  "A100-80GB",
+  "RTX-PRO-6000",
+  "H100",
+  "H100!",
+  "H200",
+  "B200",
+  "B200+",
+  "B300",
+] as const;
 
 function DatasetStructureGuide() {
   return (
@@ -245,7 +256,6 @@ export function CreateJobWizard({
   onRefreshDatasets,
   initialDatasetId,
   initialValues,
-  systemMetrics,
 }: {
   datasets: DatasetRecord[];
   datasetFolders: DatasetFolderEntry[];
@@ -255,7 +265,6 @@ export function CreateJobWizard({
   onRefreshDatasets: () => Promise<void>;
   initialDatasetId?: string;
   initialValues?: Partial<CreateWizardValues>;
-  systemMetrics?: SystemMetrics | null;
 }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<1 | 2>(initialDatasetId ? 2 : 1);
@@ -315,32 +324,6 @@ export function CreateJobWizard({
       null,
     [datasetFolders, selectedDatasetId],
   );
-
-  const gpuOptions = useMemo<TrainingGpuOption[]>(() => {
-    const configuredOptions = systemMetrics?.gpu.trainingOptions;
-    if (configuredOptions && configuredOptions.length > 0) {
-      return configuredOptions;
-    }
-
-    // Older metrics responses did not include trainingOptions. Keep local
-    // execution usable by deriving choices from the reported device indices.
-    if (systemMetrics?.trainingExecutor === "local") {
-      return systemMetrics.gpu.devices.map((device) => ({
-        value: String(device.index),
-        label: `GPU ${device.index} · ${device.name}`,
-      }));
-    }
-
-    return [];
-  }, [systemMetrics]);
-
-  const gpuDefaultSelection = useMemo(() => {
-    const requested = systemMetrics?.gpu.defaultSelection;
-    if (requested && gpuOptions.some((option) => option.value === requested)) {
-      return requested;
-    }
-    return gpuOptions[0]?.value ?? "";
-  }, [gpuOptions, systemMetrics?.gpu.defaultSelection]);
 
   const effectiveTrainingSteps = getEffectiveTrainingSteps({
     iterations: form.iterations,
@@ -408,18 +391,6 @@ export function CreateJobWizard({
       };
     });
   }, [showMaskSettings]);
-
-  useEffect(() => {
-    setForm((prev) => {
-      if (prev.gpu && gpuOptions.some((option) => option.value === prev.gpu)) {
-        return prev;
-      }
-      if (prev.gpu === gpuDefaultSelection) {
-        return prev;
-      }
-      return { ...prev, gpu: gpuDefaultSelection || undefined };
-    });
-  }, [gpuDefaultSelection, gpuOptions]);
 
   const goStepTwo = async () => {
     if (!selectedDatasetId) {
@@ -691,50 +662,27 @@ export function CreateJobWizard({
 
             <ParameterPanel
               title="訓練資源"
-              description="依目前的訓練執行器選擇要使用的 GPU。建立任務時會把選擇送入 params.gpu。"
+              description="Modal 執行器請選擇 GPU SKU；Local 執行器請直接輸入 CUDA GPU index（例如 0）。建立任務時會把選擇送入 params.gpu。"
             >
               <div>
                 <Label htmlFor="create-job-gpu">GPU</Label>
-                <Select
-                  items={gpuOptions}
-                  value={form.gpu ?? null}
-                  onValueChange={(value) => updateForm("gpu", value ?? "")}
-                  disabled={gpuOptions.length === 0}
-                >
-                  <SelectTrigger
-                    id="create-job-gpu"
-                    className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10"
-                  >
-                    <SelectValue placeholder="請選擇 GPU" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel>
-                        {systemMetrics?.trainingExecutor === "modal"
-                          ? "Modal GPU SKU"
-                          : "Local GPU device"}
-                      </SelectLabel>
-                      {gpuOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                <Input
+                  id="create-job-gpu"
+                  list="create-job-gpu-skus"
+                  className="mt-2 h-10 w-full rounded-xl bg-black/30 hover:bg-black/10"
+                  placeholder="A10（或輸入 local GPU index）"
+                  value={form.gpu ?? ""}
+                  onChange={(event) => updateForm("gpu", event.target.value)}
+                />
+                <datalist id="create-job-gpu-skus">
+                  {MODAL_GPU_SKUS.map((sku) => (
+                    <option key={sku} value={sku} />
+                  ))}
+                </datalist>
                 <FieldHint>
-                  {systemMetrics?.trainingExecutor === "modal"
-                    ? "Modal 預設使用 A10；較高階 SKU 會提高費用，且仍受 workspace 容量與即時供應限制。"
-                    : systemMetrics
-                      ? "Local executor 會以 nvidia-smi 回報的 GPU index 執行。"
-                      : "正在讀取可用的 GPU 選項。"}
+                  留空時由後端依執行器套用預設（Modal 預設 A10）。較高階 SKU 會提高費用，且仍受 workspace 容量與即時供應限制。
                 </FieldHint>
               </div>
-              {gpuOptions.length === 0 ? (
-                <p className="glass-panel rounded-[1rem] border-0 bg-black/20 p-3 text-sm text-zinc-400">
-                  目前沒有可選的 GPU；請確認系統資訊已載入，或先啟動可用的 GPU。
-                </p>
-              ) : null}
             </ParameterPanel>
 
             <ParameterPanel
@@ -1270,9 +1218,7 @@ export function CreateJobWizard({
                 <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">
                   <span className="text-zinc-500">gpu</span>
                   <span className="max-w-[60%] truncate text-right text-zinc-100">
-                    {gpuOptions.find((option) => option.value === form.gpu)?.label ??
-                      form.gpu ??
-                      "未選擇"}
+                    {form.gpu || "未選擇"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-white/8 bg-black/30 px-3 py-3">

@@ -1,4 +1,3 @@
-import { readSystemMetrics } from "./systemMetrics.js";
 import type { TrainingExecutor } from "../types/models.js";
 
 export const MODAL_GPU_OPTIONS = [
@@ -37,28 +36,5 @@ export function normalizeTrainingGpu(
   if (!/^\d+$/.test(candidate)) {
     throw new Error("Local GPU must be a CUDA device index");
   }
-  const index = Number(candidate);
-  const devices = readSystemMetrics().gpu.devices;
-  if (!Number.isSafeInteger(index) || !devices.some((device) => device.index === index)) {
-    throw new Error(`Local GPU ${candidate} is not available`);
-  }
-  return String(index);
-}
-
-export function getTrainingGpuOptions(executor: TrainingExecutor) {
-  if (executor === "modal") {
-    return {
-      trainingOptions: MODAL_GPU_OPTIONS.map((value) => ({ value, label: value })),
-      defaultSelection: "A10"
-    };
-  }
-
-  const devices = readSystemMetrics().gpu.devices;
-  return {
-    trainingOptions: devices.map((device) => ({
-      value: String(device.index),
-      label: `GPU ${device.index} · ${device.name}`
-    })),
-    defaultSelection: devices[0] ? String(devices[0].index) : null
-  };
+  return candidate;
 }
