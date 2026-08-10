@@ -328,7 +328,7 @@ def _start_volume_helper() -> ThreadingHTTPServer:
     volumes={DATA_MOUNT: data_volume, STATE_MOUNT: state_volume},
     min_containers=0,
     max_containers=1,
-    scaledown_window=2,
+    scaledown_window=300,
     timeout=300,
     secrets=_secret(WEB_SECRET_NAME),
 )
