@@ -67,6 +67,7 @@ export interface TrainingParamsForm {
   iterations?: number;
   effectiveIterations?: number;
   gpu?: string;
+  retryOfJobId?: string;
   strategy?: "mrnf" | "mcmc" | "igs+";
   shDegree?: number;
   shDegreeInterval?: number;
@@ -125,6 +126,7 @@ export interface TrainingJob {
   stopReason: string | null;
   paramsJson?: string;
   datasetId?: string | null;
+  executor?: "local" | "modal";
 }
 
 export interface TimelapseFrame {

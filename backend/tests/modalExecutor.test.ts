@@ -245,4 +245,115 @@ describe("modal training executor", () => {
       vi.resetModules();
     }
   });
+
+  it("retries a failed job on a larger GPU from its checkpoint", async () => {
+    vi.resetModules();
+    const originalEnv = process.env;
+    const root = configureModalEnv();
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ accepted: true, callId: "fc-retry" }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const { repo } = await import("../src/db.js");
+      const { jobService } = await import("../src/services/jobService.js");
+      const sourceOutput = path.join(root, "outputs", "job-source");
+      const checkpoint = path.join(sourceOutput, "checkpoints", "checkpoint.resume");
+      fs.mkdirSync(path.dirname(checkpoint), { recursive: true });
+      fs.writeFileSync(checkpoint, "checkpoint-data");
+      const now = new Date().toISOString();
+      repo.createJob({
+        id: "job-source",
+        datasetId: null,
+        status: "failed",
+        outputPath: sourceOutput,
+        argsJson: "[]",
+        paramsJson: JSON.stringify({ gpu: "A10", iterations: 30_000, init: "/data/init.ply" }),
+        createdAt: now,
+        updatedAt: now,
+        startedAt: now,
+        finishedAt: now,
+        pid: null,
+        exitCode: 1,
+        errorMessage: "CUDA out of memory",
+        stopReason: null,
+        executor: "modal",
+        remoteCallId: "fc-source"
+      });
+
+      const result = await jobService.retryFailedModalJob("job-source", "L40S");
+      const realCheckpoint = fs.realpathSync(checkpoint);
+      expect(result.resumed).toBe(true);
+      expect(result.item.id).not.toBe("job-source");
+      expect(result.item.outputPath).not.toBe(sourceOutput);
+      const retryParams = JSON.parse(result.item.paramsJson);
+      expect(retryParams).toMatchObject({
+        gpu: "L40S",
+        iterations: 30_000,
+        retryOfJobId: "job-source",
+        resume: realCheckpoint
+      });
+      expect(retryParams).not.toHaveProperty("init");
+      expect(jobService.hasActiveRetryDependents("job-source")).toBe(true);
+      await expect(jobService.retryFailedModalJob("job-source", "H100"))
+        .rejects.toThrow("active checkpoint retry already exists");
+
+      const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const payload = JSON.parse(String(init.body));
+      expect(payload.gpu).toBe("L40S");
+      expect(payload.args).toEqual(expect.arrayContaining(["--resume", realCheckpoint]));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+      process.env = originalEnv;
+      fs.rmSync(root, { recursive: true, force: true });
+      vi.resetModules();
+    }
+  });
+
+  it("does not allocate a GPU when a failed job has no checkpoint", async () => {
+    vi.resetModules();
+    const originalEnv = process.env;
+    const root = configureModalEnv();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const { repo } = await import("../src/db.js");
+      const { jobService } = await import("../src/services/jobService.js");
+      const sourceOutput = path.join(root, "outputs", "job-no-checkpoint");
+      fs.mkdirSync(sourceOutput, { recursive: true });
+      const now = new Date().toISOString();
+      repo.createJob({
+        id: "job-no-checkpoint",
+        datasetId: null,
+        status: "failed",
+        outputPath: sourceOutput,
+        argsJson: "[]",
+        paramsJson: JSON.stringify({ gpu: "A10" }),
+        createdAt: now,
+        updatedAt: now,
+        startedAt: now,
+        finishedAt: now,
+        pid: null,
+        exitCode: 1,
+        errorMessage: "CUDA out of memory",
+        stopReason: null,
+        executor: "modal",
+        remoteCallId: "fc-no-checkpoint"
+      });
+
+      await expect(jobService.retryFailedModalJob("job-no-checkpoint", "L40S"))
+        .rejects.toThrow("No checkpoint is available");
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(jobService.listJobs()).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+      process.env = originalEnv;
+      fs.rmSync(root, { recursive: true, force: true });
+      vi.resetModules();
+    }
+  });
 });

@@ -24,7 +24,7 @@ export function JobsPage({
   onStop: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onOpenDetail: (id: string) => void;
-  onRetry: (job: TrainingJob) => Promise<void>;
+  onRetry: (job: TrainingJob, gpu?: string) => Promise<void>;
   onEdit: (job: TrainingJob) => void;
 }) {
   return (

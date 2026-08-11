@@ -33,10 +33,12 @@ function mountTaskList(jobs: TrainingJob[]) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
+  const onRetry = vi.fn(async () => {});
 
   return {
     container,
     root,
+    onRetry,
     async render() {
       await act(async () => {
         root.render(
@@ -49,7 +51,7 @@ function mountTaskList(jobs: TrainingJob[]) {
             onStop={vi.fn(async () => {})}
             onDelete={vi.fn(async () => {})}
             onOpenDetail={vi.fn()}
-            onRetry={vi.fn(async () => {})}
+            onRetry={onRetry}
             onEdit={vi.fn()}
           />,
         );
@@ -136,5 +138,24 @@ describe("TaskList", () => {
     expect(container.textContent).toContain("job-failed");
     expect(container.textContent).toContain("job-stopped-low-disk");
     expect(container.textContent).not.toContain("job-completed");
+  });
+
+  test("offers a larger GPU for failed Modal jobs", async () => {
+    const failedJob = buildJob("job-modal-failed", "failed");
+    failedJob.executor = "modal";
+    failedJob.paramsJson = JSON.stringify({ iterations: 1000, gpu: "A10" });
+    const mounted = mountTaskList([failedJob]);
+    container = mounted.container;
+    root = mounted.root;
+
+    await mounted.render();
+    await clickButtonByText(container, "升級 GPU 重試");
+
+    expect(container.textContent).toContain("改用更大的 Modal GPU");
+    expect(container.textContent).toContain("目前為 A10");
+    expect(container.textContent).toContain("A100");
+
+    await clickButtonByText(container, "使用此 GPU 重試");
+    expect(mounted.onRetry).toHaveBeenCalledWith(failedJob, "A100");
   });
 });

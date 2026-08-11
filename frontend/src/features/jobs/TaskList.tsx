@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Plus, RefreshCw, Square, Trash2, ListChecks, RotateCcw, Pencil } from "lucide-react";
+import { Plus, RefreshCw, Square, Trash2, ListChecks, RotateCcw, Pencil, Cpu } from "lucide-react";
 import type { JobInsight } from "@/lib/app-types";
 import type { JobStatus, TrainingJob, TrainingParamsForm } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getModalGpuUpgradeOptions, getRecommendedModalGpu, type ModalGpuSku } from "@/lib/modal-gpus";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ParsedJobMetrics {
   progress: number | null;
@@ -206,10 +208,13 @@ export function TaskList({
   onStop: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onOpenDetail: (id: string) => void;
-  onRetry: (job: TrainingJob) => Promise<void>;
+  onRetry: (job: TrainingJob, gpu?: string) => Promise<void>;
   onEdit: (job: TrainingJob) => void;
 }) {
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("all");
+  const [upgradeJobId, setUpgradeJobId] = useState<string | null>(null);
+  const [selectedGpu, setSelectedGpu] = useState<ModalGpuSku | null>(null);
+  const [submittingJobId, setSubmittingJobId] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -302,6 +307,10 @@ export function TaskList({
               ? Math.max(0, endTs - startedAt)
               : null;
             const thumbnail = insight?.latestFramePath;
+            const params = parseJobParams(job);
+            const isFailedModalJob = job.status === "failed" && job.executor === "modal";
+            const gpuUpgradeOptions = isFailedModalJob ? getModalGpuUpgradeOptions(params.gpu) : [];
+            const showGpuUpgrade = upgradeJobId === job.id;
 
             return (
               <article
@@ -368,6 +377,66 @@ export function TaskList({
                     </div>
                   </div>
 
+                  {showGpuUpgrade ? (
+                    <div className="glass-panel mt-4 flex flex-col gap-3 rounded-xl border-0 bg-black/20 p-3">
+                      <div className="flex items-start gap-2">
+                        <Cpu className="mt-0.5 size-4 shrink-0 text-cyan-200" />
+                        <div className="flex flex-col gap-1">
+                          <p className="text-sm font-medium text-zinc-100">改用更大的 Modal GPU</p>
+                          <p className="text-xs leading-5 text-zinc-400">
+                            目前為 {params.gpu ?? "A10"}。新任務會從舊任務的最新 checkpoint 續訓；若尚未產生 checkpoint，系統不會啟動 GPU。較高階 GPU 會增加費用。
+                          </p>
+                        </div>
+                      </div>
+                      {gpuUpgradeOptions.length > 0 && selectedGpu ? (
+                        <Select value={selectedGpu} onValueChange={(value) => setSelectedGpu(value as ModalGpuSku)}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="選擇 GPU" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              {gpuUpgradeOptions.map((gpu) => (
+                                <SelectItem key={gpu} value={gpu}>
+                                  {gpu}{gpu === getRecommendedModalGpu(params.gpu) ? "（建議）" : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="text-xs text-amber-200">
+                          目前沒有與此映像相容、且更高階的 GPU 選項；請改用編輯任務調整設定。
+                        </p>
+                      )}
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setUpgradeJobId(null);
+                            setSelectedGpu(null);
+                          }}
+                        >
+                          取消
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={!selectedGpu || submittingJobId === job.id}
+                          onClick={() => {
+                            if (!selectedGpu || submittingJobId === job.id) return;
+                            setSubmittingJobId(job.id);
+                            void onRetry(job, selectedGpu).finally(() => {
+                              setSubmittingJobId((current) => current === job.id ? null : current);
+                            });
+                          }}
+                        >
+                          <RotateCcw data-icon="inline-start" />
+                          {submittingJobId === job.id ? "正在建立..." : "使用此 GPU 重試"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="mt-4 flex flex-wrap justify-between gap-2 border-t border-white/8 pt-4">
                     <Button
                       variant="destructive"
@@ -388,13 +457,22 @@ export function TaskList({
                       ) : null}
                       {isTerminalStatus(job.status) ? (
                         <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void onRetry(job)}
-                          >
-                            <RotateCcw className="mr-1 h-3.5 w-3.5" /> 重試
-                          </Button>
+                          {isFailedModalJob ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setUpgradeJobId(job.id);
+                                setSelectedGpu(getRecommendedModalGpu(params.gpu));
+                              }}
+                            >
+                              <Cpu data-icon="inline-start" /> 升級 GPU 重試
+                            </Button>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => void onRetry(job)}>
+                              <RotateCcw className="mr-1 h-3.5 w-3.5" /> 重試
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"

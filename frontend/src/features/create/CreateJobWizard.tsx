@@ -47,6 +47,7 @@ import {
 } from "./create-job-dataset-select";
 import { getCreateJobSelectionState } from "./create-job-selection-state";
 import { cn } from "@/lib/utils";
+import { MODAL_GPU_SKUS } from "@/lib/modal-gpus";
 
 function DatasetFolderPreview({
   folder,
@@ -86,23 +87,6 @@ interface CreateWizardValues extends CreateJobStrategyDefaults {
   advancedJson: string;
   gpu?: string;
 }
-
-const MODAL_GPU_SKUS = [
-  "T4",
-  "L4",
-  "A10",
-  "L40S",
-  "A100",
-  "A100-40GB",
-  "A100-80GB",
-  "RTX-PRO-6000",
-  "H100",
-  "H100!",
-  "H200",
-  "B200",
-  "B200+",
-  "B300",
-] as const;
 
 function DatasetStructureGuide() {
   return (

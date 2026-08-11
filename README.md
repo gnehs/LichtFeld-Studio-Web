@@ -150,6 +150,7 @@ Modal Web wrapper 會在同一個容器啟動 helper。`/data/commit` 會在 dis
 - GPU worker 將訓練 artifact 寫入 shared Volume；瀏覽器正在讀取任務時，Web 端既有的低頻查詢會按需 reload 並同步狀態、log 與 timelapse，不會由 trainer 主動喚醒 Web。
 - `gpu_trainer` 會依獨立的訓練輸入自動擴容，預設最多同時啟動 5 個 GPU container（可用 `MODAL_TRAINER_MAX_CONTAINERS` 調整），因此新任務不必等待上一個任務結束。這個預設同時遵循 Modal Volume v1 對少量並行 writer 的建議；提高上限會增加 GPU 成本與 Volume commit contention。
 - GPU `gpu_trainer` 僅在有訓練呼叫時啟動；可在建立任務頁選擇 Modal GPU 型號（預設 A10），每個 job 透過 Modal dynamic Function configuration 取得所選資源。單次 Function execution 最長 24 小時（可用 `MODAL_TRAINER_TIMEOUT` 調低，但不能超過上限，見 [timeouts](https://modal.com/docs/guide/timeouts)）。超過 24 小時的工作需自行 checkpoint、重試或拆成多次呼叫。
+- Modal 任務失敗後可在任務列表選擇更高階 GPU，從舊任務的 `checkpoints/checkpoint.resume` 建立新的續訓任務。若失敗前尚未產生 checkpoint，系統會拒絕啟動 GPU，避免高價資源意外從頭重跑；此時可改用「編輯」重新建立任務。續訓任務仍在佇列或執行時，原任務輸出會受到刪除保護。
 - `gpu_trainer` 啟動 LichtFeld-Studio 前，會把 `--data-path` 指向的完整資料集複製到容器本機 `/tmp/lichtfeld-datasets`，降低 Modal Volume 大量小檔案存取的延遲；`--output-path` 仍指向 `/data/outputs`，完成、失敗或取消後都會清除該次本機暫存。複製需要容器暫存磁碟同時容納一份完整資料集；Modal 預設 ephemeral disk 配額為 512 GiB，超過時需調高 Function 的 `ephemeral_disk`（[CPU、記憶體與磁碟設定](https://modal.com/docs/guide/resources)）。
 - scale-to-zero 只代表 compute container 不常駐；Persistent Volumes 的儲存、映像建置/儲存與網路流量仍可能產生費用。Volume 刪除資料後，依 Modal 文件仍可能在最多約四天內計入儲存處理費（[Volumes pricing](https://modal.com/docs/guide/volumes)）。
 

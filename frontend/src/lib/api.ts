@@ -432,6 +432,7 @@ export const api = {
 
   listJobs: () => request<{ items: TrainingJob[] }>("/api/jobs"),
   createJob: (payload: unknown) => request<{ item: TrainingJob }>("/api/jobs", { method: "POST", body: JSON.stringify(payload) }),
+  retryJob: (id: string, gpu: string) => request<{ item: TrainingJob; resumed: true }>(`/api/jobs/${id}/retry`, { method: "POST", body: JSON.stringify({ gpu }) }),
   getJob: (id: string) => request<{ item: TrainingJob }>(`/api/jobs/${id}`),
   stopJob: (id: string) => request<{ success: boolean }>(`/api/jobs/${id}/stop`, { method: "POST" }),
   deleteJob: (id: string) => request<{ success: boolean }>(`/api/jobs/${id}`, { method: "DELETE" }),

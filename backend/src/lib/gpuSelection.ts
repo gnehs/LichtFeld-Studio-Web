@@ -17,6 +17,25 @@ export const MODAL_GPU_OPTIONS = [
   "B300"
 ] as const;
 
+const MODAL_RETRY_GPU_TIERS: readonly (readonly string[])[] = [
+  ["T4"],
+  ["L4", "A10"],
+  ["A100", "A100-40GB"],
+  ["L40S"],
+  ["A100-80GB"],
+  ["H100", "H100!"],
+  ["RTX-PRO-6000"],
+  ["H200"],
+  ["B200"]
+];
+
+export function isLargerCompatibleModalGpu(current: string | undefined, next: string): boolean {
+  const currentGpu = current?.trim() || "A10";
+  const currentTier = MODAL_RETRY_GPU_TIERS.findIndex((tier) => tier.includes(currentGpu));
+  const nextTier = MODAL_RETRY_GPU_TIERS.findIndex((tier) => tier.includes(next));
+  return currentTier >= 0 && nextTier > currentTier;
+}
+
 export function normalizeTrainingGpu(
   value: string | undefined,
   executor: TrainingExecutor

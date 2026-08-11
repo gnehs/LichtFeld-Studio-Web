@@ -18,7 +18,7 @@ import { Toaster, toast } from "sonner";
 import { api } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { JobInsight, Notice } from "@/lib/app-types";
-import type { DatasetRecord, TrainingJob, TrainingParamsForm } from "@/lib/types";
+import type { DatasetRecord, TrainingJob } from "@/lib/types";
 import { LoginView } from "@/features/auth/LoginView";
 import { JobsPage } from "@/pages/JobsPage";
 import { CreateJobPage } from "@/pages/CreateJobPage";
@@ -193,34 +193,37 @@ function App() {
   });
 
   const retryJobMutation = useMutation({
-    mutationFn: (job: TrainingJob) => {
-      let params: TrainingParamsForm = {};
+    mutationFn: ({ job, gpu }: { job: TrainingJob; gpu?: string }) => {
+      if (gpu) return guardAuth(() => api.retryJob(job.id, gpu));
+
+      let params = {};
       if (job.paramsJson) {
         try {
-          const parsed = JSON.parse(job.paramsJson) as TrainingParamsForm;
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            params = parsed;
-          }
+          const parsed = JSON.parse(job.paramsJson) as unknown;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) params = parsed;
         } catch {
-          // ignore parse error, use empty params
+          // Preserve the legacy retry fallback for malformed records.
         }
       }
-      return guardAuth(() =>
-        api.createJob({ datasetId: job.datasetId ?? undefined, params }),
-      );
+      return guardAuth(() => api.createJob({ datasetId: job.datasetId ?? undefined, params }));
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, variables) => {
       setNoticeText({
         tone: "success",
-        text: `已重新建立任務 ${result.item.id}`,
+        text: variables.gpu && "resumed" in result
+          ? `已使用 ${variables.gpu} 從最新 checkpoint 建立任務 ${result.item.id}`
+          : `已重新建立任務 ${result.item.id}`,
       });
       await queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all });
       navigate("/jobs");
     },
     onError: (error) => {
+      const message = (error as Error).message;
       setNoticeText({
         tone: "error",
-        text: `重試任務失敗：${(error as Error).message}`,
+        text: message === "No checkpoint is available for this failed job"
+          ? "無法續訓：此任務失敗前尚未產生 checkpoint，請使用「編輯」重新建立任務"
+          : `重試任務失敗：${message}`,
       });
     },
   });
@@ -316,9 +319,9 @@ function App() {
                   }
                 }}
                 onOpenDetail={(id) => navigate(`/jobs/${id}`)}
-                onRetry={async (job) => {
+                onRetry={async (job, gpu) => {
                   try {
-                    await retryJobMutation.mutateAsync(job);
+                    await retryJobMutation.mutateAsync({ job, gpu });
                   } catch {
                     // error toast handled in mutation onError
                   }

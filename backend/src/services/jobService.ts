@@ -8,7 +8,8 @@ import { repo } from "../db.js";
 import { buildAutoTimelapse } from "../lib/autoTimelapse.js";
 import { buildLfsArgs } from "../lib/cliBuilder.js";
 import { computeEffectiveIterations } from "../lib/trainingParams.js";
-import { normalizeTrainingGpu } from "../lib/gpuSelection.js";
+import { isLargerCompatibleModalGpu, normalizeTrainingGpu } from "../lib/gpuSelection.js";
+import { findResumeCheckpoint } from "../lib/resumeCheckpoint.js";
 import { logger } from "../lib/logger.js";
 import { scanTimelapseDir, toTimelapseFrame } from "../lib/timelapse.js";
 import { emitJobEvent } from "../sse.js";
@@ -22,6 +23,11 @@ import type { DiskGuardStatus, JobRecord, JobStatus, TrainingParamsForm } from "
 export interface CreateJobInput {
   datasetId?: string;
   params: TrainingParamsForm;
+}
+
+export interface RetryJobResult {
+  item: JobRecord;
+  resumed: true;
 }
 
 const LOG_LIMIT = 5000;
@@ -56,6 +62,7 @@ class JobService {
   private remoteTimelapseMaxIterations = new Map<string, number>();
   private remoteSyncPromise: Promise<void> | null = null;
   private lastRemoteSyncAt = 0;
+  private retryingJobIds = new Set<string>();
 
   listJobs() {
     return repo.listJobs();
@@ -63,6 +70,18 @@ class JobService {
 
   getJob(id: string) {
     return repo.getJob(id);
+  }
+
+  hasActiveRetryDependents(jobId: string): boolean {
+    return repo.listJobs().some((candidate) => {
+      if (candidate.status !== "queued" && candidate.status !== "running") return false;
+      try {
+        const params = JSON.parse(candidate.paramsJson) as TrainingParamsForm;
+        return params.retryOfJobId === jobId;
+      } catch {
+        return false;
+      }
+    });
   }
 
   getLogLines(jobId: string) {
@@ -253,6 +272,55 @@ class JobService {
     this.emitStatus(job.id, "queued", { executor: "local", queueLength: this.queue.length });
     this.maybeStartNext();
     return repo.getJob(job.id)!;
+  }
+
+  async retryFailedModalJob(jobId: string, gpu: string): Promise<RetryJobResult> {
+    const source = repo.getJob(jobId);
+    if (!source) throw new Error("Job not found");
+    if (source.status !== "failed") {
+      throw new Error("Only failed jobs can be retried with a larger GPU");
+    }
+    if (source.executor !== "modal") {
+      throw new Error("GPU upgrades are only available for Modal jobs");
+    }
+    if (config.trainingExecutor !== "modal") {
+      throw new Error("Modal training executor is not available");
+    }
+    if (!isPathWithinRoot(source.outputPath, config.outputsDir)) {
+      throw new Error("Failed job output is outside OUTPUTS_DIR");
+    }
+    if (this.retryingJobIds.has(source.id) || this.hasActiveRetryDependents(source.id)) {
+      throw new Error("An active checkpoint retry already exists for this job");
+    }
+
+    this.retryingJobIds.add(source.id);
+    try {
+      let params: TrainingParamsForm;
+      try {
+        const parsed = JSON.parse(source.paramsJson) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid params");
+        params = { ...(parsed as TrainingParamsForm) };
+      } catch {
+        throw new Error("Failed job has invalid training parameters");
+      }
+
+      const nextGpu = normalizeTrainingGpu(gpu, "modal");
+      if (!nextGpu || !isLargerCompatibleModalGpu(params.gpu, nextGpu)) {
+        throw new Error("Selected GPU is not a larger compatible option");
+      }
+      const resume = await findResumeCheckpoint(source.outputPath);
+      if (!resume) throw new Error("No checkpoint is available for this failed job");
+
+      params.gpu = nextGpu;
+      params.retryOfJobId = source.id;
+      params.resume = resume;
+      delete params.init;
+
+      const item = await this.createJob({ datasetId: source.datasetId ?? undefined, params });
+      return { item, resumed: true };
+    } finally {
+      this.retryingJobIds.delete(source.id);
+    }
   }
 
   private async startModalJob(job: JobRecord): Promise<JobRecord> {

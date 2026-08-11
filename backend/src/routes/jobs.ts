@@ -38,6 +38,10 @@ const createJobSchema = z.object({
   }).passthrough()
 });
 
+const retryJobSchema = z.object({
+  gpu: z.string().trim().min(1).max(32)
+});
+
 export const jobsRouter = Router();
 
 jobsRouter.get("/", async (_req, res) => {
@@ -92,6 +96,27 @@ jobsRouter.post("/:id/stop", async (req, res) => {
   }
 });
 
+jobsRouter.post("/:id/retry", async (req, res) => {
+  const parsed = retryJobSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: parsed.error.message });
+
+  try {
+    return res.json(await jobService.retryFailedModalJob(req.params.id, parsed.data.gpu));
+  } catch (error) {
+    const message = (error as Error).message;
+    if (message === "Job not found") return res.status(404).json({ message });
+    const conflicts = new Set([
+      "Only failed jobs can be retried with a larger GPU",
+      "GPU upgrades are only available for Modal jobs",
+      "No checkpoint is available for this failed job",
+      "Selected GPU is not a larger compatible option",
+      "Modal training executor is not available",
+      "An active checkpoint retry already exists for this job"
+    ]);
+    return res.status(conflicts.has(message) ? 409 : 400).json({ message });
+  }
+});
+
 jobsRouter.delete("/:id", (req, res) => {
   const job = repo.getJob(req.params.id);
   if (!job) {
@@ -100,6 +125,10 @@ jobsRouter.delete("/:id", (req, res) => {
 
   if (job.status === "running") {
     return res.status(409).json({ message: "Running job cannot be deleted" });
+  }
+
+  if (jobService.hasActiveRetryDependents(job.id)) {
+    return res.status(409).json({ message: "Job output is required by an active checkpoint retry" });
   }
 
   const deletedOutput = removeJobOutputDir(job.outputPath, config.outputsDir);

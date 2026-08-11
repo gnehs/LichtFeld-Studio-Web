@@ -91,6 +91,8 @@ export interface TrainingParamsForm {
   effectiveIterations?: number;
   /** Local CUDA device index or Modal GPU type selected for this job. */
   gpu?: string;
+  /** Source job retained for retry auditability; not forwarded to LichtFeld. */
+  retryOfJobId?: string;
   strategy?: "mrnf" | "mcmc" | "igs+";
   shDegree?: number;
   shDegreeInterval?: number;
